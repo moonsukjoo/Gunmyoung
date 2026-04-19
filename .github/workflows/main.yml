@@ -1,0 +1,23 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ "main" ] # 또는 'master'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x' # 플러터 버전
+          channel: 'stable'
+      - run: flutter pub get
+      - run: flutter build apk --release # 여기서 진짜 APK가 만들어집니다.
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v3
+        with:
+          name: release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
