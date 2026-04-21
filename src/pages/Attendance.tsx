@@ -14,6 +14,7 @@ import { useAuth } from '@/src/components/AuthProvider';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { grantRandomShipPart } from '@/src/services/shipService';
 import { 
   format, 
   startOfMonth, 
@@ -110,6 +111,9 @@ export const Attendance: React.FC = () => {
         createdAt: now.toISOString()
       });
       toast.success('출근 등록되었습니다. 좋은 하루 되세요!');
+      if (profile?.uid) {
+        grantRandomShipPart(profile.uid, '출석체크');
+      }
     } catch (error) {
       toast.error('출근 등록 실패');
     }

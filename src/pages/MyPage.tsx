@@ -35,14 +35,19 @@ import {
   Smartphone,
   RefreshCw,
   Eye,
-  Check
+  Check,
+  BookOpen,
+  AlertCircle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { updatePassword } from 'firebase/auth';
 import { auth, db } from '@/src/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { toast } from 'sonner';
+import { TrainingResult } from '@/src/types';
+import { format } from 'date-fns';
+import { ko } from 'date-fns/locale';
 
 import { PinKeypad } from '@/src/components/PinKeypad';
 
@@ -54,24 +59,36 @@ export const MyPage: React.FC = () => {
   const [confirmPin, setConfirmPin] = useState('');
   const [pinStep, setPinStep] = useState(1); // 1: input, 2: confirm
   const [isUpdating, setIsUpdating] = useState(false);
+  const [reAuthPin, setReAuthPin] = useState('');
+  const [isReAuthPending, setIsReAuthPending] = useState(false);
+  const [examHistory, setExamHistory] = useState<TrainingResult[]>([]);
+  const [isExamHistoryOpen, setIsExamHistoryOpen] = useState(false);
+
+  React.useEffect(() => {
+    if (!profile) return;
+    const q = query(
+      collection(db, 'trainingResults'), 
+      where('uid', '==', profile.uid),
+      orderBy('completedAt', 'desc')
+    );
+    const unsubscribe = onSnapshot(q, (snap) => {
+      setExamHistory(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as TrainingResult)));
+    });
+    return () => unsubscribe();
+  }, [profile]);
 
   const handleUpdatePin = async (finalPin: string) => {
     if (!auth.currentUser || !profile) return;
     
-    if (newPin.length < 4) {
+    if (finalPin.length < 4) {
       toast.error('비밀번호는 최소 4자리 이상이어야 합니다.');
       return;
     }
     
-    if (newPin !== confirmPin) {
-      toast.error('비밀번호가 일치하지 않습니다.');
-      return;
-    }
-
     setIsUpdating(true);
     try {
       // 1. Update Firebase Auth password
-      await updatePassword(auth.currentUser, newPin);
+      await updatePassword(auth.currentUser, finalPin);
       
       // 2. Update Firestore profile to mark that PIN is set
       await updateDoc(doc(db, 'users', profile.uid), {
@@ -89,12 +106,16 @@ export const MyPage: React.FC = () => {
       setIsPinModalOpen(false);
       setNewPin('');
       setConfirmPin('');
+      setIsReAuthPending(false);
+      setReAuthPin('');
     } catch (error: any) {
       console.error("PIN update error:", error);
       if (error.code === 'auth/requires-recent-login') {
-        toast.error('보안을 위해 다시 로그인 후 시도해주세요.');
-        await auth.signOut();
-        navigate('/login');
+        setIsReAuthPending(true);
+        setPinStep(1); // Reset step but keep modal open for re-auth
+        setNewPin('');
+        setConfirmPin('');
+        toast.info('보안을 위해 현재 비밀번호를 한 번 더 입력해주세요.');
       } else {
         toast.error('비밀번호 변경 중 오류가 발생했습니다.');
       }
@@ -103,14 +124,46 @@ export const MyPage: React.FC = () => {
     }
   };
 
+  const handleReAuth = async (currentPin: string) => {
+    if (!auth.currentUser || !profile) return;
+    setIsUpdating(true);
+    try {
+      const { signInWithEmailAndPassword } = await import('firebase/auth');
+      await signInWithEmailAndPassword(auth, auth.currentUser.email!, currentPin);
+      setIsReAuthPending(false);
+      setReAuthPin('');
+      toast.success('본인 확인 완료. 새로운 비밀번호를 설정해주세요.');
+    } catch (error: any) {
+      console.error("Re-auth error:", error);
+      toast.error('비밀번호가 일치하지 않습니다.');
+      setReAuthPin('');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   const handlePinInput = (digit: string) => {
+    if (isReAuthPending) {
+      if (reAuthPin.length < 6) {
+        const val = reAuthPin + digit;
+        setReAuthPin(val);
+        if (val.length === 6) {
+          handleReAuth(val);
+        }
+      }
+      return;
+    }
+
     if (pinStep === 1) {
       if (newPin.length < 6) {
         const val = newPin + digit;
         setNewPin(val);
         if (val.length === 6) {
           // Auto transition to confirm step
-          setTimeout(() => setPinStep(2), 300);
+          setTimeout(() => {
+            setPinStep(2);
+            toast.info('비밀번호 확인을 위해 한 번 더 입력해주세요.');
+          }, 300);
         }
       }
     } else {
@@ -122,9 +175,11 @@ export const MyPage: React.FC = () => {
             handleUpdatePin(val);
           } else {
             toast.error('비밀번호가 일치하지 않습니다. 처음부터 다시 입력해주세요.');
-            setPinStep(1);
-            setNewPin('');
-            setConfirmPin('');
+            setTimeout(() => {
+              setPinStep(1);
+              setNewPin('');
+              setConfirmPin('');
+            }, 500);
           }
         }
       }
@@ -132,12 +187,14 @@ export const MyPage: React.FC = () => {
   };
 
   const handlePinDelete = () => {
-    if (pinStep === 1) setNewPin(p => p.slice(0, -1));
+    if (isReAuthPending) setReAuthPin(p => p.slice(0, -1));
+    else if (pinStep === 1) setNewPin(p => p.slice(0, -1));
     else setConfirmPin(p => p.slice(0, -1));
   };
 
   const handlePinClear = () => {
-    if (pinStep === 1) setNewPin('');
+    if (isReAuthPending) setReAuthPin('');
+    else if (pinStep === 1) setNewPin('');
     else setConfirmPin('');
   };
 
@@ -201,12 +258,43 @@ export const MyPage: React.FC = () => {
       bgColor: 'bg-amber-50',
       description: '보유 자격증 및 안전 PPE 점검 현황'
     },
+    { 
+      label: '교육/평가 이수 내역', 
+      icon: BookOpen, 
+      onClick: () => setIsExamHistoryOpen(true),
+      color: 'text-violet-500', 
+      bgColor: 'bg-violet-50',
+      description: '직무 교육 수강 및 평가 결과 확인'
+    },
     // Only show admin link to admins in my page as well if needed, 
     // but usually it's better kept in the Admin page.
   ];
 
+  const tenure = (() => {
+    if (!profile?.joinedAt) return null;
+    const start = new Date(profile.joinedAt);
+    const now = new Date();
+    
+    let years = now.getFullYear() - start.getFullYear();
+    let months = now.getMonth() - start.getMonth();
+    let days = now.getDate() - start.getDate();
+    
+    if (days < 0) {
+      months -= 1;
+      const lastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+      days += lastMonth.getDate();
+    }
+    
+    if (months < 0) {
+      years -= 1;
+      months += 12;
+    }
+    
+    return { years, months, days };
+  })();
+
   return (
-    <div className="w-full max-w-lg mx-auto space-y-8 pb-32 px-4 flex flex-col items-center">
+    <div className="w-full max-w-lg mx-auto space-y-8 pb-32 px-4 flex flex-col items-center overflow-x-hidden">
       <header className="flex flex-col gap-1 items-center text-center w-full">
         <div className="flex items-center gap-3">
           <div className="w-2 h-8 bg-primary rounded-full" />
@@ -247,6 +335,16 @@ export const MyPage: React.FC = () => {
                   <Building2 className="w-3.5 h-3.5" />
                   <span className="text-[10px] font-black uppercase tracking-widest">{profile?.departmentName || '부서 미지정'}</span>
                 </div>
+                {tenure && (
+                  <div className="mt-3 bg-primary/5 px-4 py-2 rounded-2xl border border-primary/10">
+                    <p className="text-[10px] font-black text-primary leading-tight">
+                       <span className="opacity-70">건명기업 입사 후</span><br/>
+                       {tenure.years > 0 && <span>{tenure.years}년 </span>}
+                       {tenure.months > 0 && <span>{tenure.months}개월 </span>}
+                       <span>{tenure.days}일째</span> 근무 중
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -274,10 +372,10 @@ export const MyPage: React.FC = () => {
       <div className="space-y-3">
         <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] ml-4">나의 서비스</h3>
         <div className="grid gap-3">
-          {menuItems.map((item) => (
+          {menuItems.map((item, idx) => (
             <button
-              key={item.to}
-              onClick={() => navigate(item.to)}
+              key={idx}
+              onClick={() => item.onClick ? item.onClick() : navigate(item.to!)}
               className="w-full flex items-center justify-between p-5 bg-white rounded-[2rem] shadow-sm hover:shadow-md transition-all active:scale-[0.98] group border border-transparent hover:border-slate-100"
             >
               <div className="flex items-center gap-4">
@@ -344,48 +442,56 @@ export const MyPage: React.FC = () => {
         }
       }}>
         <DialogTrigger render={
-          <Button variant="ghost" className="w-full h-14 rounded-[2rem] text-slate-400 hover:text-primary hover:bg-white font-black text-xs gap-2 uppercase tracking-widest">
+          <Button variant="ghost" className="w-full h-14 rounded-[2rem] text-slate-400 hover:text-primary hover:bg-white font-black text-xs gap-2 uppercase tracking-widest outline-none">
             <Lock className="w-4 h-4" /> 간편 비밀번호 등록/변경
           </Button>
         } />
         <DialogContent className="sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-none shadow-2xl">
           <div className="bg-white px-8 pt-10 pb-6 flex flex-col items-center gap-6">
             <div className="w-12 h-12 bg-[#0066CC]/10 rounded-2xl flex items-center justify-center text-[#0066CC]">
-              <Smartphone className="w-6 h-6" />
+              {isReAuthPending ? <Lock className="w-6 h-6" /> : <Smartphone className="w-6 h-6" />}
             </div>
             
             <div className="text-center space-y-1">
               <DialogTitle className="text-2xl font-black tracking-tighter text-slate-900 leading-none">
-                {pinStep === 1 ? '새 비밀번호 설정' : '비밀번호 확인'}
+                {isReAuthPending ? '본인 확인' : (pinStep === 1 ? '새 비밀번호 설정' : '비밀번호 확인')}
               </DialogTitle>
               <DialogDescription className="text-xs font-bold text-slate-400">
-                {pinStep === 1 
-                  ? '로그인 시 사용할 6자리 숫자를 입력해주세요.' 
-                  : '정확한 등록을 위해 한 번 더 입력해주세요.'}
+                {isReAuthPending 
+                  ? '현재 사용 중인 비밀번호 6자리를 입력해주세요.'
+                  : (pinStep === 1 
+                      ? '로그인 시 사용할 6자리 숫자를 입력해주세요.' 
+                      : '정확한 등록을 위해 한 번 더 입력해주세요.')}
               </DialogDescription>
             </div>
 
-            {/* PIN Dots */}
-            <div className="flex gap-4">
-              {[...Array(6)].map((_, i) => (
-                <div 
-                  key={i} 
-                  className={cn(
-                    "w-3.5 h-3.5 rounded-full transition-all duration-200 border-2",
-                    (pinStep === 1 ? newPin.length : confirmPin.length) > i 
-                      ? "bg-[#0066CC] border-[#0066CC] scale-110" 
-                      : "bg-slate-50 border-slate-100"
-                  )} 
-                />
-              ))}
-            </div>
-
-            {isUpdating && (
-              <div className="flex items-center gap-2 text-[#0066CC] font-black text-[10px] animate-pulse">
-                <RefreshCw className="w-3 h-3 animate-spin" />
-                정보 저장 중...
+            <div className="flex flex-col items-center gap-6">
+              <div className="flex gap-4 h-5 items-center">
+                {[...Array(6)].map((_, i) => {
+                  const currentLength = isReAuthPending ? reAuthPin.length : (pinStep === 1 ? newPin.length : confirmPin.length);
+                  return (
+                    <div 
+                      key={i} 
+                      className={cn(
+                        "w-3.5 h-3.5 rounded-full transition-all duration-300 border-2",
+                        currentLength > i 
+                          ? "bg-[#0066CC] border-[#0066CC] scale-110 shadow-[0_0_10px_rgba(0,102,204,0.3)]" 
+                          : "bg-slate-50 border-slate-100"
+                      )} 
+                    />
+                  );
+                })}
               </div>
-            )}
+
+              <div className="h-4 flex items-center justify-center">
+                {isUpdating && (
+                  <div className="flex items-center gap-2 text-[#0066CC] font-black text-[10px] animate-pulse">
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                    {isReAuthPending ? '인증 확인 중...' : '정보 저장 중...'}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           <PinKeypad 
@@ -394,6 +500,63 @@ export const MyPage: React.FC = () => {
             onClear={handlePinClear}
             className="rounded-t-[2.5rem]"
           />
+        </DialogContent>
+      </Dialog>
+      {/* Exam History Dialog */}
+      <Dialog open={isExamHistoryOpen} onOpenChange={setIsExamHistoryOpen}>
+        <DialogContent className="bg-white border-none rounded-[3rem] shadow-2xl max-w-2xl w-[95%] p-0 overflow-hidden flex flex-col max-h-[85vh]">
+          <DialogHeader className="p-8 pb-4 bg-violet-50/50 border-b border-violet-100 shrink-0">
+            <div className="flex items-center gap-2 mb-2">
+              <Badge className="bg-violet-500 text-white border-none text-[10px] px-3 font-black tracking-widest uppercase">My Education</Badge>
+            </div>
+            <DialogTitle className="text-3xl font-black tracking-tighter text-slate-900 leading-tight">교육/평가 이수 현황</DialogTitle>
+            <DialogDescription className="text-slate-500 font-bold">지금까지 완료한 직무 교육 및 평가 결과입니다.</DialogDescription>
+          </DialogHeader>
+
+          <div className="p-4 overflow-y-auto no-scrollbar flex-grow bg-slate-50/50">
+            <div className="grid gap-3">
+              {examHistory.map((res) => (
+                <Card key={res.id} className="border-none shadow-sm bg-white rounded-2xl overflow-hidden">
+                  <CardContent className="p-5 flex items-center justify-between">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className={cn(
+                          "font-black text-[9px] px-2 py-0.5 rounded-full border-none",
+                          res.isPassed ? "bg-emerald-100 text-emerald-600" : "bg-red-100 text-red-600"
+                        )}>
+                          {res.isPassed ? '합격' : '불합격'}
+                        </Badge>
+                        <h4 className="text-sm font-black text-slate-900">{res.trainingTitle}</h4>
+                      </div>
+                      <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400">
+                        <span>날짜: {format(new Date(res.completedAt), 'yyyy.MM.dd HH:mm')}</span>
+                        <span>점수: <span className={cn(res.isPassed ? "text-emerald-600" : "text-red-500")}>{res.score}/{res.totalQuestions}</span></span>
+                      </div>
+                    </div>
+                    {res.isPassed ? (
+                      <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-500">
+                        <Trophy className="w-4 h-4" />
+                      </div>
+                    ) : (
+                      <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center text-red-500">
+                        <AlertCircle className="w-4 h-4" />
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+              {examHistory.length === 0 && (
+                <div className="py-20 text-center flex flex-col items-center gap-3 opacity-20 capitalize">
+                  <BookOpen className="w-12 h-12 text-slate-300" />
+                  <p className="text-xs font-black tracking-widest">이수 내역이 없습니다.</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="p-8 pt-4 bg-white border-t border-slate-100 shrink-0">
+             <Button className="w-full h-14 rounded-2xl bg-slate-900 text-white font-black" onClick={() => setIsExamHistoryOpen(false)}>닫기</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

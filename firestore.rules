@@ -32,30 +32,49 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-
-    function hasRole(roles) {
-      return isAuthenticated() && getUserData().role in roles;
-    }
-
-    function isManager() {
-      return isAuthenticated() && getUserData().role != 'EMPLOYEE';
-    }
-
     function isHRManager() {
-      return isAuthenticated() && 
-             (getUserData().role in ['CEO', 'DIRECTOR', 'GENERAL_AFFAIRS', 'GENERAL_MANAGER', 'CLERK', 'SAFETY_MANAGER'] ||
-              (request.auth.token.email == "tjrwnfjqm1@gmail.com" && request.auth.token.email_verified == true));
+      return isAuthenticated() && (
+        (request.auth.token.email == "tjrwnfjqm1@gmail.com" && request.auth.token.email_verified == true) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['CEO', 'DIRECTOR', 'GENERAL_AFFAIRS', 'GENERAL_MANAGER', 'CLERK', 'SAFETY_MANAGER'] ||
+          ('permissions' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data && 
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions != null &&
+           'employee_mgmt' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions)
+        ))
+      );
+    }
+
+    function canManageCoupons() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['CEO', 'SAFETY_MANAGER'] || 
+        ('permissions' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions != null &&
+         'praise_coupon' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions)
+      );
     }
 
     function isSafetyManager() {
-      return isAuthenticated() && getUserData().role == 'SAFETY_MANAGER';
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SAFETY_MANAGER' ||
+        ('permissions' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions != null &&
+         'accident_mgmt' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions)
+      );
     }
 
     function isTeamLeader(deptId) {
-      return isAuthenticated() && getUserData().role == 'TEAM_LEADER' && getUserData().departmentId == deptId;
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'TEAM_LEADER' && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.departmentId == deptId;
+    }
+
+    function canManageTraining() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['CEO', 'SAFETY_MANAGER', 'DIRECTOR'] ||
+        ('permissions' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions != null &&
+         'training_mgmt' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions)
+      );
     }
 
     // ===============================================================
@@ -104,25 +123,47 @@ service cloud.firestore {
              data.time is string;
     }
 
+    function isValidSafetyScoreLog(data) {
+      return data.keys().hasAll(['targetUid', 'targetName', 'adminUid', 'adminName', 'adminRole', 'scoreDelta', 'previousScore', 'newScore', 'reason', 'type', 'createdAt']) &&
+             data.targetUid is string &&
+             data.adminUid is string &&
+             data.scoreDelta is number &&
+             data.previousScore is number &&
+             data.newScore is number &&
+             data.type in ['PENALTY', 'REWARD'] &&
+             data.createdAt is string;
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
 
     match /users/{uid} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && (isOwner(uid) || isHRManager()) && isValidUser(request.resource.data);
-      allow update: if isAuthenticated() && (isOwner(uid) || isHRManager());
-      allow delete: if isHRManager();
+      // Allow unauthenticated read for the login screen's identity/lock check
+      // and allow users to read/update their own profiles (by UID or by matched Email for migration)
+      allow read: if true; 
+      allow create: if isAuthenticated() && (uid == request.auth.uid || isHRManager()) && isValidUser(request.resource.data);
+      allow update: if (isAuthenticated() && (
+        uid == request.auth.uid || 
+        isHRManager() || 
+        canManageCoupons() || // CEO and SAFETY_MANAGER can update safety scores
+        (resource != null && resource.data.email == request.auth.token.email) ||
+        (resource != null && resource.data.employeeId == request.auth.token.email.replace("@shipyard.com", ""))
+      )) || (
+        // Allow unauthenticated update for failed login tracking (Locking)
+        resource != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['failedLoginAttempts', 'isLocked'])
+      );
+      allow delete: if isHRManager() || (isAuthenticated() && resource.data.email == request.auth.token.email);
     }
 
     match /attendance/{attendanceId} {
-      allow read: if isAuthenticated() && (isOwner(resource.data.uid) || isHRManager() || isTeamLeader(resource.data.departmentId));
+      allow read: if isAuthenticated() && (isOwner(resource.data.uid) || isHRManager() || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && isTeamLeader(resource.data.departmentId)));
       allow create: if isAuthenticated() && isOwner(request.resource.data.uid) && isValidAttendance(request.resource.data);
       allow update: if isAuthenticated() && (isOwner(resource.data.uid) || isHRManager());
     }
 
     match /leaveRequests/{requestId} {
-      allow read: if isAuthenticated() && (isOwner(resource.data.uid) || isHRManager() || isTeamLeader(getUserData().departmentId));
+      allow read: if isAuthenticated() && (isOwner(resource.data.uid) || isHRManager() || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && isTeamLeader(get(/databases/$(database)/documents/users/$(resource.data.uid)).data.departmentId)));
       allow create: if isAuthenticated() && isOwner(request.resource.data.uid);
       allow update: if isAuthenticated() && (isOwner(resource.data.uid) || isHRManager());
     }
@@ -136,7 +177,7 @@ service cloud.firestore {
     match /notices/{noticeId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isHRManager();
-      allow update, delete: if isAuthenticated() && (isHRManager() && request.auth.uid == resource.data.authorUid);
+      allow update, delete: if isAuthenticated() && (isHRManager() && (resource == null || request.auth.uid == resource.data.authorUid));
     }
 
     match /departments/{departmentId} {
@@ -146,15 +187,15 @@ service cloud.firestore {
 
     match /notifications/{notificationId} {
       allow read: if isAuthenticated() && isOwner(resource.data.uid);
-      allow create: if isAuthenticated(); // Allow users to send health check notifications to managers
-      allow update: if isAuthenticated() && isOwner(resource.data.uid) && 
-                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
+      allow create: if isAuthenticated(); 
+      allow update: if isAuthenticated() && isOwner(resource.data.uid);
       allow delete: if isAuthenticated() && isOwner(resource.data.uid);
     }
 
     match /lottoHistory/{historyId} {
       allow read: if isAuthenticated() && isOwner(resource.data.uid);
       allow create: if isAuthenticated() && isOwner(request.resource.data.uid);
+      allow update: if isAuthenticated() && isOwner(resource.data.uid);
       allow delete: if isAuthenticated() && isOwner(resource.data.uid);
     }
 
@@ -164,11 +205,34 @@ service cloud.firestore {
     }
 
     match /praiseCoupons/{couponId} {
-      allow read: if isAuthenticated() && (isOwner(resource.data.receiverUid) || isOwner(resource.data.senderUid) || isHRManager());
-      allow create: if isAuthenticated() && (getUserData().role == 'CEO' || getUserData().role == 'SAFETY_MANAGER') && isValidPraiseCoupon(request.resource.data);
+      allow read: if isAuthenticated();
+      allow create: if canManageCoupons() && isValidPraiseCoupon(request.resource.data);
+      allow update, delete: if canManageCoupons();
     }
 
     match /settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isHRManager();
+    }
+
+    match /trainings/{trainingId} {
+      allow read: if isAuthenticated();
+      allow write: if canManageTraining();
+    }
+
+    match /trainingResults/{resultId} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.uid) || canManageTraining());
+      allow create: if isAuthenticated() && isOwner(request.resource.data.uid);
+      allow update, delete: if canManageTraining();
+    }
+
+    match /safetyScoreLogs/{logId} {
+      allow read: if isAuthenticated();
+      allow create: if canManageCoupons() && isValidSafetyScoreLog(request.resource.data);
+      allow update, delete: if canManageCoupons();
+    }
+
+    match /jobRoles/{roleId} {
       allow read: if isAuthenticated();
       allow write: if isHRManager();
     }

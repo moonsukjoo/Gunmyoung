@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '@/src/firebase';
-import { collection, onSnapshot, addDoc, query, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, query, orderBy, Timestamp, getDocs } from 'firebase/firestore';
 import { AccidentCase } from '@/src/types';
 import { useAuth } from '@/src/components/AuthProvider';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { grantRandomShipPart } from '@/src/services/shipService';
 import { 
   ShieldAlert, 
   Plus, 
@@ -53,6 +54,7 @@ export const AccidentReport: React.FC = () => {
     type: 'SAFE' as AccidentCase['type'],
     measures: '',
     imageUrl: '',
+    shouldNotify: true,
   });
 
   useEffect(() => {
@@ -70,12 +72,31 @@ export const AccidentReport: React.FC = () => {
     }
 
     try {
-      await addDoc(collection(db, 'accidentCases'), {
+      const docRef = await addDoc(collection(db, 'accidentCases'), {
         ...newCase,
         reportedBy: profile?.displayName || 'Unknown',
         reportedByUid: profile?.uid || 'Unknown',
         createdAt: new Date().toISOString()
       });
+
+      // If high severity or explicitly checked, send notifications
+      if (newCase.severity === 'HIGH' || newCase.severity === 'CRITICAL' || newCase.shouldNotify) {
+        const usersSnap = await getDocs(collection(db, 'users'));
+        const notificationPromises = usersSnap.docs.map(uDoc => 
+          addDoc(collection(db, 'notifications'), {
+            uid: uDoc.id,
+            title: `🚨 [사고즉보] ${newCase.title}`,
+            message: `[${newCase.location}] ${newCase.description.substring(0, 50)}...`,
+            type: 'EMERGENCY',
+            isRead: false,
+            createdAt: new Date().toISOString(),
+            fromUid: profile?.uid,
+            fromName: profile?.displayName
+          })
+        );
+        await Promise.all(notificationPromises);
+      }
+
       setIsAddOpen(false);
       setNewCase({
         title: '',
@@ -86,8 +107,12 @@ export const AccidentReport: React.FC = () => {
         type: 'SAFE',
         measures: '',
         imageUrl: '',
+        shouldNotify: true,
       });
       toast.success('사고보고서가 등록되었습니다.');
+      if (profile?.uid) {
+        grantRandomShipPart(profile.uid, '사고 즉보');
+      }
     } catch (error) {
       toast.error('등록 중 오류가 발생했습니다.');
     }
@@ -213,6 +238,17 @@ export const AccidentReport: React.FC = () => {
                     className="min-h-[80px] bg-slate-50 border-slate-200 rounded-xl font-bold resize-none"
                   />
                 </div>
+
+                <div className="flex items-center gap-2 p-1">
+                  <input 
+                    type="checkbox" 
+                    id="shouldNotify" 
+                    checked={newCase.shouldNotify}
+                    onChange={(e) => setNewCase({...newCase, shouldNotify: e.target.checked})}
+                    className="w-4 h-4 rounded border-slate-300 text-red-500 focus:ring-red-500"
+                  />
+                  <label htmlFor="shouldNotify" className="text-xs font-black text-slate-600">푸시 알림 발송 (전 직원)</label>
+                </div>
               </div>
               <DialogFooter className="p-8 pt-4 bg-slate-50 border-t border-slate-100 flex flex-row gap-3">
                 <Button variant="outline" className="flex-1 h-12 rounded-xl font-black border-slate-200" onClick={() => setIsAddOpen(false)}>취소</Button>
@@ -246,14 +282,14 @@ export const AccidentReport: React.FC = () => {
       </div>
 
       {/* Search Bar */}
-      <div className="relative">
+      <div className="relative group">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-red-500 transition-colors" />
         <Input 
-          placeholder="사고 내용 또는 위치 검색" 
-          className="h-12 pl-11 bg-white border-slate-200 rounded-2xl text-sm font-bold shadow-sm focus:ring-red-500/10 text-slate-900 placeholder:text-slate-500"
+          placeholder="사고 내용 또는 위치 검색..." 
+          className="h-14 pl-12 bg-white border-2 border-slate-100 focus:border-red-500 rounded-2xl text-base font-black shadow-sm transition-all text-slate-900 placeholder:text-slate-300"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
       </div>
 
       {/* Cases List */}

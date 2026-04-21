@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, onSnapshot, setDoc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, getDoc, updateDoc, query, where, limit, getDocs, collection, deleteDoc } from 'firebase/firestore';
 import { auth, db } from '@/src/firebase';
 import { UserProfile, Role } from '@/src/types';
+import { toast } from 'sonner';
 
 interface AuthContextType {
   user: User | null;
@@ -33,26 +34,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(firebaseUser);
       
       if (firebaseUser) {
-        // Use onSnapshot for real-time profile updates and faster initial load
+        const email = firebaseUser.email || '';
+        const employeeId = email.split('@')[0] || '';
+        const usersRef = collection(db, 'users');
+
+        // Check for manual profile recovery/migration every time at login
+        // But only if we haven't synced in this session to prevent loops
+        const syncPerformed = sessionStorage.getItem(`sync_${firebaseUser.uid}`);
+        if (!syncPerformed) {
+          // Search for existing profiles by employeeId (case-insensitive)
+          const possibleIds = [employeeId, employeeId.toUpperCase(), employeeId.toLowerCase()];
+          const qSync = query(usersRef, where('employeeId', 'in', [...new Set(possibleIds)]));
+          const syncSnapshot = await getDocs(qSync);
+          
+          let manualProfileData: any = null;
+          let manualDocId: string | null = null;
+          
+          syncSnapshot.docs.forEach(d => {
+            if (d.id !== firebaseUser.uid) {
+              const data = d.data();
+              if (!manualProfileData || data.role !== 'EMPLOYEE') {
+                manualProfileData = data;
+                manualDocId = d.id;
+              }
+            }
+          });
+
+          if (manualDocId && manualProfileData) {
+            console.log("Found manual profile to migrate:", manualDocId);
+            const migratedProfile = {
+              ...manualProfileData,
+              uid: firebaseUser.uid,
+              email: email
+            };
+            await setDoc(doc(db, 'users', firebaseUser.uid), migratedProfile);
+            await deleteDoc(doc(db, 'users', manualDocId));
+            sessionStorage.setItem(`sync_${firebaseUser.uid}`, 'true');
+            toast.success('임직원 정보가 동기화되었습니다.');
+          }
+        }
+
+        // Use onSnapshot for real-time profile updates
         unsubscribeProfile = onSnapshot(doc(db, 'users', firebaseUser.uid), async (snapshot) => {
           if (snapshot.exists()) {
             const currentProfile = snapshot.data() as UserProfile;
-            
-            // Set profile immediately to avoid flickering
             setProfile(currentProfile);
             
             // CEO Bootstrap logic
             const isCEOEmail = firebaseUser.email?.toLowerCase() === 'tjrwnfjqm1@gmail.com';
-            
-            // If it's the specific CEO email, ensure they have the CEO role
             if (isCEOEmail && currentProfile.role !== 'CEO') {
-              console.log("Force setting CEO role for", isCEOEmail);
               await updateDoc(doc(db, 'users', firebaseUser.uid), { role: 'CEO' as Role });
             }
           } else {
-            // New user registration
-            const email = firebaseUser.email || '';
-            const employeeId = email.split('@')[0] || '';
+            // Create a fresh profile if still nothing exists
             const isBootstrapCEO = 
               employeeId.toLowerCase() === 'x66626' || 
               email.toLowerCase() === 'tjrwnfjqm1@gmail.com';
@@ -73,6 +107,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setIsAuthReady(true);
         }, (error) => {
           console.error("Profile snapshot error:", error);
+          if (error.code === 'unavailable') {
+            toast.error('데이터베이스 연결에 실패했습니다. 네트워크 상태를 확인하거나 잠시 후 다시 시도해주세요.', {
+              id: 'firestore-unavailable'
+            });
+          }
           setLoading(false);
           setIsAuthReady(true);
         });

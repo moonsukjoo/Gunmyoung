@@ -26,9 +26,30 @@
         "isActive": { "type": "boolean" },
         "hasCustomPin": { "type": "boolean", "description": "Whether the user has set a custom PIN/password" },
         "lastPinChange": { "type": "string", "format": "date-time" },
-        "permissions": { "type": "array", "items": { "type": "string" }, "description": "Dynamic permissions: notice_mgmt, accident_mgmt, leave_mgmt, dept_mgmt, employee_mgmt, praise_coupon" }
+        "permissions": { "type": "array", "items": { "type": "string" }, "description": "Dynamic permissions: notice_mgmt, accident_mgmt, leave_mgmt, dept_mgmt, employee_mgmt, praise_coupon" },
+        "safetyScore": { "type": "number", "description": "Safety performance score starting at 100" },
+        "safetyScoreLastUpdate": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "email", "role", "displayName"]
+    },
+    "SafetyScoreLog": {
+      "title": "Safety Score Log",
+      "description": "Log of safety score adjustments",
+      "type": "object",
+      "properties": {
+        "targetUid": { "type": "string" },
+        "targetName": { "type": "string" },
+        "adminUid": { "type": "string" },
+        "adminName": { "type": "string" },
+        "adminRole": { "type": "string" },
+        "scoreDelta": { "type": "number" },
+        "previousScore": { "type": "number" },
+        "newScore": { "type": "number" },
+        "reason": { "type": "string" },
+        "type": { "type": "string", "enum": ["PENALTY", "REWARD"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["targetUid", "adminUid", "scoreDelta", "previousScore", "newScore", "type", "createdAt"]
     },
     "PraiseCoupon": {
       "title": "Praise Coupon",
@@ -168,6 +189,60 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "type", "createdAt"]
+    },
+    "Training": {
+      "title": "Training Module",
+      "description": "Educational material and quiz for employees",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "content": { "type": "string", "description": "Markdown content" },
+        "videoUrl": { "type": "string" },
+        "targetJobRole": { "type": "string", "description": "Specific job role or empty for all" },
+        "questions": { 
+          "type": "array", 
+          "items": { "$ref": "#/entities/QuizQuestion" } 
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "content", "questions", "createdAt"]
+    },
+    "QuizQuestion": {
+      "title": "Quiz Question",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "question": { "type": "string" },
+        "options": { "type": "array", "items": { "type": "string" } },
+        "correctAnswer": { "type": "number" }
+      }
+    },
+    "TrainingResult": {
+      "title": "Training Result",
+      "description": "Employee's exam completion record",
+      "type": "object",
+      "properties": {
+        "trainingId": { "type": "string" },
+        "trainingTitle": { "type": "string" },
+        "uid": { "type": "string" },
+        "userName": { "type": "string" },
+        "score": { "type": "number" },
+        "totalQuestions": { "type": "number" },
+        "isPassed": { "type": "boolean" },
+        "completedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["trainingId", "uid", "score", "isPassed", "completedAt"]
+    },
+    "JobRole": {
+      "title": "Job Role",
+      "description": "Specific job role definition",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "createdAt"]
     }
   },
   "firestore": {
@@ -206,6 +281,26 @@
     "/emergencyLogs/{logId}": {
       "schema": "EmergencyLog",
       "description": "Emergency SOS logs"
+    },
+    "/praiseCoupons/{couponId}": {
+      "schema": "PraiseCoupon",
+      "description": "Praise coupons given to employees"
+    },
+    "/trainings/{trainingId}": {
+      "schema": "Training",
+      "description": "Training modules and quizzes"
+    },
+    "/trainingResults/{resultId}": {
+      "schema": "TrainingResult",
+      "description": "User training/exam results"
+    },
+    "/safetyScoreLogs/{logId}": {
+      "schema": "SafetyScoreLog",
+      "description": "Logs of safety score adjustments"
+    },
+    "/jobRoles/{roleId}": {
+      "schema": "JobRole",
+      "description": "Job roles management"
     }
   }
 }

@@ -6,6 +6,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './components/AuthProvider';
+import { NotificationHandler } from './components/NotificationHandler';
 import { FontSizeManager } from './components/FontSizeManager';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
@@ -14,12 +15,17 @@ import { EmployeeManagement } from './pages/EmployeeManagement';
 import { Attendance } from './pages/Attendance';
 import { AccidentReport } from './pages/AccidentReport';
 import { Notifications } from './pages/Notifications';
+import { Notices } from './pages/Notices';
 import { Leave } from './pages/Leave';
 import { Coupons } from './pages/Coupons';
 import { Entertainment } from './pages/Entertainment';
 import { Lotto } from './pages/Lotto';
 import { MyPage } from './pages/MyPage';
 import { Qualification } from './pages/Qualification';
+import { ShipAssembly } from './pages/ShipAssembly';
+import { TrainingManagement } from './pages/TrainingManagement';
+import { TrainingList } from './pages/TrainingList';
+import { SafetyRanking } from './pages/SafetyRanking';
 import { Admin } from './pages/Admin';
 import { Toaster } from '@/components/ui/sonner';
 
@@ -60,6 +66,7 @@ const ProtectedRoute = ({ children, roles, permission }: { children: React.React
 export default function App() {
   return (
     <AuthProvider>
+      <NotificationHandler />
       <FontSizeManager />
       <Router>
         <Routes>
@@ -113,6 +120,14 @@ export default function App() {
             } 
           />
           <Route 
+            path="/notices" 
+            element={
+              <ProtectedRoute>
+                <Notices />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
             path="/leave" 
             element={
               <ProtectedRoute>
@@ -153,10 +168,42 @@ export default function App() {
             } 
           />
           <Route 
+            path="/ship-assembly" 
+            element={
+              <ProtectedRoute>
+                <ShipAssembly />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
             path="/qualification" 
             element={
               <ProtectedRoute>
                 <Qualification />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/training" 
+            element={
+              <ProtectedRoute>
+                <TrainingList />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/training-mgmt" 
+            element={
+              <ProtectedRoute roles={['CEO', 'SAFETY_MANAGER']} permission="training_mgmt">
+                <TrainingManagement />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/safety-score" 
+            element={
+              <ProtectedRoute roles={['CEO', 'SAFETY_MANAGER']}>
+                <SafetyRanking />
               </ProtectedRoute>
             } 
           />

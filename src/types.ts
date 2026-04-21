@@ -14,19 +14,83 @@ export interface UserProfile {
   phoneNumber?: string;
   annualLeaveBalance?: number;
   points?: number;
+  birthDate?: string;
   joinedAt?: string;
   resignedAt?: string;
   isActive: boolean;
+  failedLoginAttempts?: number;
+  isLocked?: boolean;
   permissions?: string[]; // permissions for specific features
   hasCustomPin?: boolean;
   lastPinChange?: string;
   elderlyMode?: boolean;
+  shipParts?: string[];
+  completedShips?: number;
+  lastShipPartGrantAt?: string;
+  safetyScore?: number;
+  safetyScoreLastUpdate?: string;
+}
+
+export interface SafetyScoreLog {
+  id: string;
+  targetUid: string;
+  targetName: string;
+  adminUid: string;
+  adminName: string;
+  adminRole: Role;
+  scoreDelta: number;
+  previousScore: number;
+  newScore: number;
+  reason: string;
+  type: 'PENALTY' | 'REWARD';
+  createdAt: string;
 }
 
 export interface Department {
   id: string;
   name: string;
   createdAt: string;
+}
+
+export interface JobRole {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface Training {
+  id: string;
+  title: string;
+  description: string;
+  content: string; // Markdown or simple text
+  fileUrl?: string; // URL to PDF/Excel material
+  fileName?: string; // Name of the uploaded file
+  videoUrl?: string;
+  targetJobRole?: string; // If empty, for everyone
+  questions: QuizQuestion[];
+  questionsPerExam?: number; // Number of random questions to show in exam
+  timeLimit?: number; // Time limit in minutes
+  status: 'DRAFT' | 'PUBLISHED';
+  createdAt: string;
+}
+
+export interface QuizQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  correctAnswer: number; // Index of options
+}
+
+export interface TrainingResult {
+  id: string;
+  trainingId: string;
+  trainingTitle: string;
+  uid: string;
+  userName: string;
+  score: number;
+  totalQuestions: number;
+  isPassed: boolean;
+  completedAt: string;
 }
 
 export interface Attendance {

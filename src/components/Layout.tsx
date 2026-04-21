@@ -14,7 +14,8 @@ import {
   Circle,
   Settings,
   User,
-  ShieldAlert
+  ShieldAlert,
+  ChevronLeft
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { auth, db } from '@/src/firebase';
@@ -165,14 +166,15 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     }
   };
 
-  const canSeePersonnel = profile && (['CEO', 'DIRECTOR', 'GENERAL_AFFAIRS', 'GENERAL_MANAGER', 'CLERK'].includes(profile.role) || profile.permissions?.includes('employee_mgmt'));
   const isManager = profile && profile.role !== 'EMPLOYEE';
   const isAdmin = profile && (['CEO', 'SAFETY_MANAGER'].includes(profile.role) || profile.permissions?.includes('admin'));
 
   const navItems = [
     { to: '/', icon: LayoutDashboard, label: '홈' },
     { to: '/attendance', icon: Clock, label: '근태' },
-    ...(isAdmin ? [{ to: '/admin', icon: Settings, label: '관리' }] : []),
+    isAdmin 
+      ? { to: '/admin', icon: Settings, label: '관리' } 
+      : { to: '/personnel', icon: Users, label: '직원' },
     { to: '/mypage', icon: User, label: '마이' },
   ];
 
@@ -181,19 +183,31 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       {/* Mobile Header */}
       <header className="h-16 bg-white border-b border-slate-100 flex items-center justify-center flex-shrink-0 sticky top-0 z-50 shadow-sm">
         <div className="max-w-screen-sm w-full px-5 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg shadow-primary/20">
-              <HardHat className="w-5 h-5" />
-            </div>
-            <div className="flex flex-col">
-              <span className="font-black text-base tracking-tighter leading-none text-slate-900">건명기업</span>
-              <span className="text-[8px] font-black text-primary uppercase tracking-[0.2em] leading-none mt-0.5">Kunmyung Enterprise</span>
+          <div className="flex items-center gap-1">
+            {location.pathname !== '/' && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate(-1)}
+                className="w-10 h-10 -ml-2 text-slate-400 hover:text-primary hover:bg-slate-50 transition-all rounded-xl"
+              >
+                <ChevronLeft className="w-6 h-6" />
+              </Button>
+            )}
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg shadow-primary/20">
+                <HardHat className="w-5 h-5" />
+              </div>
+              <div className="flex flex-col">
+                <span className="font-black text-base tracking-tighter leading-none text-slate-900">건명기업</span>
+                <span className="text-[8px] font-black text-primary uppercase tracking-[0.2em] leading-none mt-0.5">Kunmyung Enterprise</span>
+              </div>
             </div>
           </div>
 
           <Dialog open={isSOSDialogOpen} onOpenChange={setIsSOSDialogOpen}>
             <DialogTrigger render={
-              <button className="flex flex-col items-center group active:scale-95 transition-all">
+              <button className="flex flex-col items-center group active:scale-95 transition-all outline-none">
                 <div className="w-9 h-9 bg-red-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-red-200 relative overflow-hidden">
                   <div className="absolute inset-0 bg-white/10 animate-pulse" />
                   <ShieldAlert className="w-5 h-5 relative z-10" />
@@ -240,47 +254,47 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             </DialogContent>
           </Dialog>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5 sm:gap-4 shrink-0">
             <div className="relative">
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="w-10 h-10 text-slate-300 hover:text-primary hover:bg-slate-50 transition-all rounded-xl"
+                className="w-8 h-8 sm:w-10 sm:h-10 text-slate-300 hover:text-primary hover:bg-slate-50 transition-all rounded-xl"
                 onClick={() => navigate('/notifications')}
               >
-                <Bell className="w-5 h-5" />
+                <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
               </Button>
               {unreadCount > 0 && (
-                <div className="absolute top-2 right-2 w-4 h-4 bg-red-500 rounded-full border-2 border-white flex items-center justify-center">
-                  <span className="text-[8px] font-black text-white">{unreadCount > 9 ? '9+' : unreadCount}</span>
+                <div className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 w-3.5 h-3.5 sm:w-4 sm:h-4 bg-red-500 rounded-full border-2 border-white flex items-center justify-center">
+                  <span className="text-[7px] sm:text-[8px] font-black text-white">{unreadCount > 9 ? '9+' : unreadCount}</span>
                 </div>
               )}
             </div>
 
-            <div className="text-right">
-              <div className="text-[9px] font-black text-primary uppercase tracking-widest leading-none mb-1">
+            <div className="text-right whitespace-nowrap min-w-[50px] sm:min-w-[60px]">
+              <div className="text-[7px] sm:text-[9px] font-black text-primary uppercase tracking-widest leading-none mb-0.5 sm:mb-1">
                 {profile?.position || '사원'}
               </div>
-              <div className="text-sm font-black text-slate-900 leading-none tracking-tight">
+              <div className="text-[10px] sm:text-xs font-black text-slate-900 leading-none tracking-tight">
                 {profile?.displayName}
               </div>
             </div>
             
             <Button 
-              variant="ghost" 
-              size="icon" 
-              className="w-10 h-10 text-slate-300 hover:text-primary hover:bg-slate-50 transition-all rounded-xl" 
-              onClick={handleLogout}
+                variant="ghost" 
+                size="icon" 
+                className="w-8 h-8 sm:w-10 sm:h-10 text-slate-300 hover:text-primary hover:bg-slate-50 transition-all rounded-xl ml-0.5" 
+                onClick={handleLogout}
             >
-              <LogOut className="w-5 h-5" />
+              <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
           </div>
         </div>
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto p-4 pb-24 bg-[#F8FAFC]">
-        <div className="w-full max-w-4xl mx-auto">
+      <main className="flex-1 overflow-y-auto bg-[#F8FAFC]">
+        <div className="w-full max-w-4xl mx-auto p-4 pb-24">
           {children}
         </div>
       </main>

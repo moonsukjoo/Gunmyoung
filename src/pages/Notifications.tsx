@@ -5,14 +5,25 @@ import { collection, query, where, onSnapshot, orderBy, updateDoc, doc, writeBat
 import { Notification } from '@/src/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Bell, CheckCircle2, Clock, Trash2 } from 'lucide-react';
+import { Bell, CheckCircle2, Clock, Trash2, Activity } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { grantRandomShipPart } from '@/src/services/shipService';
+
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogDescription,
+  DialogFooter
+} from '@/components/ui/dialog';
 
 export const Notifications: React.FC = () => {
   const { profile } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
 
   useEffect(() => {
     if (!profile) return;
@@ -33,6 +44,9 @@ export const Notifications: React.FC = () => {
   const markAsRead = async (id: string) => {
     try {
       await updateDoc(doc(db, 'notifications', id), { isRead: true });
+      if (profile?.uid) {
+        grantRandomShipPart(profile.uid, '알림 확인');
+      }
     } catch (error) {
       console.error("Error marking notification as read:", error);
     }
@@ -74,10 +88,13 @@ export const Notifications: React.FC = () => {
             <Card 
               key={notification.id} 
               className={cn(
-                "border-none shadow-sm rounded-2xl overflow-hidden transition-all active:scale-[0.98]",
-                notification.isRead ? "bg-white/50 opacity-70" : "bg-white border-l-4 border-l-primary"
+                "border-none shadow-sm rounded-2xl overflow-hidden transition-all active:scale-[0.98] cursor-pointer",
+                notification.isRead ? "bg-white/50 opacity-70 hover:opacity-100" : "bg-white border-l-4 border-l-primary hover:shadow-md"
               )}
-              onClick={() => !notification.isRead && markAsRead(notification.id)}
+              onClick={() => {
+                setSelectedNotification(notification);
+                if (!notification.isRead) markAsRead(notification.id);
+              }}
             >
               <CardContent className="p-5">
                 <div className="flex items-start gap-4">
@@ -117,8 +134,39 @@ export const Notifications: React.FC = () => {
           </div>
         )}
       </div>
+
+      <Dialog open={!!selectedNotification} onOpenChange={(open) => !open && setSelectedNotification(null)}>
+        <DialogContent className="bg-white rounded-[2rem] border-none shadow-2xl p-0 overflow-hidden max-w-[90vw] sm:max-w-md">
+          {selectedNotification && (
+            <div className="flex flex-col">
+              <div className="p-8 bg-slate-50 border-b border-slate-100 flex flex-col items-center text-center gap-4">
+                <div className="w-16 h-16 bg-white rounded-2x rounded-[1.5rem] flex items-center justify-center text-primary shadow-sm border border-slate-100">
+                  {selectedNotification.type === 'HEALTH_CHECK' ? <Activity className="w-8 h-8" /> : <Bell className="w-8 h-8" />}
+                </div>
+                <div className="space-y-1">
+                  <DialogTitle className="text-xl font-black tracking-tight text-slate-900">{selectedNotification.title}</DialogTitle>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    {format(new Date(selectedNotification.createdAt), 'yyyy년 MM월 dd일 HH:mm', { locale: ko })}
+                  </p>
+                </div>
+              </div>
+              <div className="p-8">
+                <p className="text-sm font-bold text-slate-600 leading-relaxed whitespace-pre-wrap">
+                  {selectedNotification.message}
+                </p>
+              </div>
+              <div className="p-6 pt-0">
+                <Button 
+                  onClick={() => setSelectedNotification(null)}
+                  className="w-full h-14 bg-slate-900 text-white rounded-2xl font-black tracking-widest active:scale-95 transition-all"
+                >
+                  닫기
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
-
-import { Activity } from 'lucide-react';

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/src/components/AuthProvider';
-import { db } from '@/src/firebase';
+import { auth, db } from '@/src/firebase';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, increment, limit, getDocs, deleteDoc, orderBy } from 'firebase/firestore';
 import { UserProfile, PraiseCoupon } from '@/src/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,12 +24,14 @@ interface RouletteSetting {
 }
 
 const DEFAULT_ROULETTE_SETTINGS: RouletteSetting[] = [
-  { id: '1', label: '꽝', multiplier: 0, probability: 0.4, color: '#94a3b8' },
-  { id: '2', label: '1배', multiplier: 1, probability: 0.3, color: '#3b82f6' },
+  { id: '1', label: '꽝', multiplier: 0, probability: 0.4, color: '#f1f5f9' },
+  { id: '2', label: '1배', multiplier: 1, probability: 0.3, color: '#6366f1' },
   { id: '3', label: '2배', multiplier: 2, probability: 0.2, color: '#10b981' },
   { id: '4', label: '5배', multiplier: 5, probability: 0.08, color: '#f59e0b' },
   { id: '5', label: '10배', multiplier: 10, probability: 0.02, color: '#ef4444' },
 ];
+
+import { ShipAssembly } from './ShipAssembly';
 
 export const Entertainment: React.FC = () => {
   const { profile } = useAuth();
@@ -84,6 +86,8 @@ export const Entertainment: React.FC = () => {
     const unsubscribePraise = onSnapshot(qPraise, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PraiseCoupon));
       setPraiseHistory(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+    }, (error) => {
+      console.error("Entertainment praise history sync error:", error);
     });
 
     // Fetch Game Settings
@@ -94,6 +98,8 @@ export const Entertainment: React.FC = () => {
           setSnailWinPr(data.snailProbabilities);
         }
       }
+    }, (error) => {
+      console.error("Entertainment settings sync error:", error);
     });
 
     // Fetch game history
@@ -107,6 +113,8 @@ export const Entertainment: React.FC = () => {
       const otherGames = sorted.filter(h => !h.lines);
       setLottoHistory(lottoOnly.slice(0, 5));
       setGameHistory(otherGames.slice(0, 5));
+    }, (error) => {
+      console.error("Entertainment game history sync error:", error);
     });
 
     return () => {
@@ -117,33 +125,44 @@ export const Entertainment: React.FC = () => {
   }, [profile]);
 
   const addHistoryItem = async (data: any) => {
-    if (!profile) return;
+    if (!profile || !auth.currentUser) return;
     try {
+      const userUid = auth.currentUser.uid;
       await addDoc(collection(db, 'lottoHistory'), {
         ...data,
+        uid: userUid,
         createdAt: new Date().toISOString()
       });
       
       // Prune history to keep only last 5 for EACH category (Lotto vs Games)
-      // fetch all for user and prune both categories
+      // Removed orderBy to avoid index-dependent "Permission Denied" errors during pruning
       const qAll = query(
         collection(db, 'lottoHistory'), 
-        where('uid', '==', profile.uid), 
-        orderBy('createdAt', 'desc')
+        where('uid', '==', userUid)
       );
       const snapshot = await getDocs(qAll);
       const docs = snapshot.docs;
       
-      const lottoDocs = docs.filter(d => d.data().lines);
-      const gameDocs = docs.filter(d => !d.data().lines);
+      // Sort in JS instead of Firestore index
+      const sortedDocs = [...docs].sort((a, b) => {
+        const timeA = new Date(a.data().createdAt || 0).getTime();
+        const timeB = new Date(b.data().createdAt || 0).getTime();
+        return timeB - timeA;
+      });
+      
+      const lottoDocs = sortedDocs.filter(d => d.data().lines);
+      const gameDocs = sortedDocs.filter(d => !d.data().lines);
       
       const deletions: any[] = [];
       if (lottoDocs.length > 5) lottoDocs.slice(5).forEach(d => deletions.push(deleteDoc(d.ref)));
       if (gameDocs.length > 5) gameDocs.slice(5).forEach(d => deletions.push(deleteDoc(d.ref)));
       
       if (deletions.length > 0) await Promise.all(deletions);
-    } catch (e) {
+    } catch (e: any) {
       console.error("History error:", e);
+      if (e.code === 'permission-denied') {
+        toast.error('기록 저장 권한이 없습니다. 다시 로그인해주세요.');
+      }
     }
   };
 
@@ -168,12 +187,25 @@ export const Entertainment: React.FC = () => {
     }
 
     const result = rouletteSettings[resultIndex];
-    const segmentAngle = 360 / rouletteSettings.length;
+    const numSegments = rouletteSettings.length;
+    const segmentAngle = 360 / numSegments;
+    
+    // Correct rotation math:
+    // 1. Each segment i starts at i * segmentAngle
+    // 2. We want the center of the won segment to be at the TOP (0 degrees)
+    // 3. The wheel's initial state is segment 0 centered at the top (if drawn that way)
+    // 4. In our drawing logic, segment i is at (i * segmentAngle) to ((i+1) * segmentAngle)
+    // 5. To bring segment i to the top, we need to rotate by -(initial_center_of_i)
+    // 6. initial_center_of_i = i * segmentAngle + segmentAngle / 2
+    
     const resultCenterAngle = (resultIndex * segmentAngle) + (segmentAngle / 2);
+    // targetRotation should be relative to 0 (top)
+    // Since CSS rotation is clockwise, we rotate the wheel backwards by the segment's position
     const targetRotation = (360 - resultCenterAngle) % 360;
+    
     const currentRotationMod = rotation % 360;
     const extraShift = (targetRotation - currentRotationMod + 360) % 360;
-    const finalRotation = rotation + 1800 + extraShift;
+    const finalRotation = rotation + (360 * 5) + extraShift; // 5 full spins + correction
     
     setRotation(finalRotation);
     setLastResult(null);
@@ -202,12 +234,17 @@ export const Entertainment: React.FC = () => {
         });
 
         if (result.multiplier > 1) {
-          confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+          confetti({ 
+            particleCount: 150, 
+            spread: 90, 
+            origin: { y: 0.6 },
+            colors: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#ffffff']
+          });
           setResultOverlay({
             isOpen: true,
             type: 'win',
-            title: '축하합니다!',
-            message: `${result.label} 당첨!`,
+            title: '🎉 축하합니다!',
+            message: `${result.label} 당첨! 대박입니다!`,
             amount: winPoints
           });
         } else if (result.multiplier === 1) {
@@ -215,7 +252,7 @@ export const Entertainment: React.FC = () => {
             isOpen: true,
             type: 'info',
             title: '본전입니다',
-            message: '베팅 포인트를 돌려받았습니다.',
+            message: '포인트를 그대로 돌려받았습니다. 한 번 더?',
             amount: winPoints
           });
         } else {
@@ -223,7 +260,7 @@ export const Entertainment: React.FC = () => {
             isOpen: true,
             type: 'loss',
             title: '아쉽네요...',
-            message: '다음 기회를 노려보세요!',
+            message: '다음에 다시 도전해보세요!',
             amount: 0
           });
         }
@@ -379,30 +416,42 @@ export const Entertainment: React.FC = () => {
 
     const interval = setInterval(() => {
       setSnailPositions(prev => {
-        const newPos = prev.map((p, idx) => {
+        const anyFinished = prev.some(p => p >= 100);
+        if (anyFinished) {
+          clearInterval(interval);
+          const winnerIdx = prev.findIndex(p => p >= 100);
+          finishRace(winnerIdx);
+          return prev;
+        }
+
+        return prev.map((p, idx) => {
           if (p >= 100) return p;
           
-          // Weighted speed based on whether they are the target winner
-          // The target winner gets a guaranteed speed advantage
           const isTarget = idx === targetWinnerIdx;
-          const baseSpeed = isTarget ? 3.0 : 1.5;
-          const randomSpeed = Math.random() * 3.0;
           
-          const weight = snailWinPr[idx] || 1;
-          const move = (baseSpeed + randomSpeed) * (weight / 1);
+          // Rhythmic movement to simulate overtaking (back and forth)
+          // Aiming for ~100 ticks (10 seconds) -> average speed ~1.0
+          const rhythm = Math.sin(p * 0.15 + idx) * 0.8; 
+          const baseSpeed = 0.8; 
+          const randomFactor = Math.random() * 0.5;
+          
+          // Advantage for the selected/target winner, ramp up near the finish line
+          const advantage = isTarget ? (p > 75 ? 0.7 : 0.2) : 0;
+          
+          let move = baseSpeed + rhythm + randomFactor + advantage;
+          
+          // Ensure it always moves at least a little bit forward
+          move = Math.max(0.05, move);
+          
+          // Occasionally a snail might slow down for drama (if not the target winner)
+          if (!isTarget && Math.random() < 0.04 && p < 90) {
+            move = 0.05;
+          }
           
           return Math.min(100, p + move);
         });
-
-        const winnerIndex = newPos.findIndex(p => p >= 100);
-        if (winnerIndex !== -1) {
-          clearInterval(interval);
-          finishRace(winnerIndex);
-          return newPos;
-        }
-        return newPos;
       });
-    }, 100);
+    }, 100); // 100ms * 100 ticks = 10s
   };
 
   const finishRace = async (winnerIdx: number) => {
@@ -493,6 +542,7 @@ export const Entertainment: React.FC = () => {
             { id: 'roulette', label: '룰렛' },
             { id: 'lotto', label: '로또' },
             { id: 'snail', label: '달팽이' },
+            { id: 'ship', label: '함선 조립' },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -520,68 +570,151 @@ export const Entertainment: React.FC = () => {
               exit={{ opacity: 0, scale: 0.95 }}
               className="flex flex-col items-center w-full space-y-10"
             >
-              <Card className="border-none shadow-2xl bg-white rounded-[3rem] overflow-hidden w-full max-w-[340px] ring-1 ring-slate-100">
-                <CardContent className="p-8 flex flex-col items-center space-y-8">
-                  <div className="relative flex flex-col items-center w-full">
-                    <div className="absolute top-[-10px] z-30">
-                      <ArrowDown className="w-10 h-10 text-yellow-500 fill-yellow-500 animate-bounce" />
-                    </div>
+              <Card className="border-none shadow-[0_20px_60px_-15px_rgba(0,0,0,0.2)] bg-white rounded-[3rem] overflow-visible w-full max-w-[340px] ring-1 ring-slate-100">
+                <CardContent className="p-8 pb-10 flex flex-col items-center space-y-8">
+                  
+                  {/* Premium Roulette Wheel */}
+                  <div className="relative w-72 h-72 flex items-center justify-center">
                     
+                    {/* Wheel Shadow/Glow */}
+                    <div className="absolute inset-[-10px] rounded-full bg-slate-900/5 blur-3xl" />
+                    
+                    {/* Outer Lights Rim */}
+                    <div className="absolute inset-[-8px] rounded-full border-[6px] border-slate-900 shadow-xl z-10 overflow-hidden">
+                       <div className="absolute inset-0 flex items-center justify-center">
+                         {[...Array(12)].map((_, i) => (
+                           <div 
+                             key={i} 
+                             className={cn(
+                               "absolute w-2 h-2 rounded-full transition-all duration-300",
+                               isSpinning ? (i % 2 === 0 ? "bg-yellow-400 shadow-[0_0_8px_gold]" : "bg-white/40") : "bg-yellow-400"
+                             )}
+                             style={{ transform: `rotate(${i * 30}deg) translateY(-138px)` }}
+                           />
+                         ))}
+                       </div>
+                    </div>
+
+                    {/* The Wheel */}
                     <motion.div 
-                      className="w-60 h-60 rounded-full border-[10px] border-slate-900 relative overflow-hidden shadow-2xl bg-slate-900"
+                      className="w-[264px] h-[264px] rounded-full relative z-0"
+                      initial={false}
                       animate={{ rotate: rotation }}
-                      transition={{ duration: 4, ease: [0.15, 0, 0.1, 1] }}
+                      transition={{ 
+                        duration: 4, 
+                        ease: [0.15, 0.0, 0.1, 1.0] 
+                      }}
                     >
-                      {rouletteSettings.map((s, i) => {
-                        const angle = 360 / rouletteSettings.length;
-                        return (
-                          <div key={s.id} className="absolute top-0 left-1/2 w-1/2 h-full origin-left flex items-start justify-center pt-6"
-                            style={{ 
-                              transform: `rotate(${i * angle}deg)`, 
-                              backgroundColor: s.color, 
-                              clipPath: `polygon(0 0, 100% 0, 100% ${Math.tan((angle * Math.PI) / 360) * 100}%, 0 50%)` 
-                            }}>
-                            <span 
-                              className="text-white font-black text-[9px] tracking-tight" 
-                              style={{ transform: `rotate(${angle / 2}deg) translateY(-2px)` }}
-                            >
-                              {s.label}
-                            </span>
-                          </div>
-                        );
-                      })}
+                      <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-lg">
+                        {rouletteSettings.map((s, i) => {
+                          const angle = 360 / rouletteSettings.length;
+                          const startAngle = i * angle - 90; // -90 to start at 12 o'clock
+                          const endAngle = (i + 1) * angle - 90;
+                          
+                          const x1 = 50 + 50 * Math.cos((Math.PI * startAngle) / 180);
+                          const y1 = 50 + 50 * Math.sin((Math.PI * startAngle) / 180);
+                          const x2 = 50 + 50 * Math.cos((Math.PI * endAngle) / 180);
+                          const y2 = 50 + 50 * Math.sin((Math.PI * endAngle) / 180);
+                          
+                          const d = `M 50 50 L ${x1} ${y1} A 50 50 0 0 1 ${x2} ${y2} Z`;
+                          
+                          return (
+                            <g key={s.id}>
+                              <path 
+                                d={d} 
+                                fill={s.color} 
+                                className="transition-colors duration-500"
+                                stroke="rgba(255,255,255,0.1)"
+                                strokeWidth="0.5"
+                              />
+                              <text 
+                                x="50" 
+                                y="20" 
+                                transform={`rotate(${startAngle + angle / 2 + 90}, 50, 50)`}
+                                fill={s.label === '꽝' ? '#64748b' : 'white'}
+                                textAnchor="middle" 
+                                className="text-[5px] font-black tracking-tighter"
+                              >
+                                {s.label}
+                              </text>
+                            </g>
+                          );
+                        })}
+                        {/* Decorative inner circle */}
+                        <circle cx="50" cy="50" r="12" fill="#0f172a" />
+                      </svg>
                     </motion.div>
 
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
-                      <div className="w-16 h-16 rounded-full bg-slate-900 border-2 border-slate-800 flex flex-col items-center justify-center shadow-2xl">
-                        <div className="text-white font-black text-lg tracking-tighter">
-                          {isSpinning ? "회전" : (showWinOverlay ? `${winMultiplier}x` : "시작")}
+                    {/* Center Hub Button */}
+                    <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+                      <div className="w-16 h-16 rounded-full bg-slate-900 border-4 border-slate-800 flex flex-col items-center justify-center shadow-2xl relative overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
+                        <div className="text-white font-black text-xs tracking-tighter uppercase mb-0.5 opacity-50">Spin</div>
+                        <div className="text-white font-black text-sm tracking-tighter">
+                          {isSpinning ? "???" : (showWinOverlay ? `${winMultiplier}x` : "READY")}
                         </div>
                       </div>
                     </div>
+
+                    {/* The Needle (Top) */}
+                    <motion.div 
+                      className="absolute top-[-15px] left-1/2 -translate-x-1/2 z-[40] origin-top"
+                      animate={isSpinning ? {
+                         rotate: [0, -10, 0, -10, 0],
+                         transition: { repeat: Infinity, duration: 0.15 }
+                      } : { rotate: 0 }}
+                    >
+                      <svg width="40" height="40" viewBox="0 0 40 40" className="drop-shadow-lg text-yellow-500 fill-current">
+                        <path d="M 20 40 L 5 10 Q 20 0 35 10 Z" stroke="#fff" strokeWidth="2" />
+                      </svg>
+                    </motion.div>
                   </div>
 
-                  <div className="w-full space-y-4">
-                    <div className="relative">
-                      <Coins className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                      <Input 
-                        type="number" 
-                        value={pointsToBet} 
-                        onChange={(e) => setPointsToBet(Math.max(1, parseInt(e.target.value) || 1))} 
-                        className="pl-12 h-14 rounded-2xl bg-slate-50 border-slate-200 font-black text-center" 
-                      />
+                  <div className="w-full space-y-5">
+                    <div className="flex flex-col items-center gap-1.5">
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Enter Bet Amount</label>
+                       <div className="relative w-full">
+                         <Coins className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-yellow-500" />
+                         <Input 
+                           type="number" 
+                           value={pointsToBet} 
+                           onChange={(e) => setPointsToBet(Math.max(1, parseInt(e.target.value) || 1))} 
+                           className="pl-14 h-16 rounded-[1.5rem] bg-slate-50 border-slate-100 font-black text-center text-xl shadow-inner focus-visible:ring-primary/20" 
+                         />
+                         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
+                            {[1, 5, 10].map(val => (
+                              <button 
+                                key={val}
+                                onClick={() => setPointsToBet(val)}
+                                className="px-2 py-1 bg-white border border-slate-100 rounded-lg text-[9px] font-black text-slate-400 hover:text-primary transition-colors"
+                              >
+                                {val}P
+                              </button>
+                            ))}
+                         </div>
+                       </div>
                     </div>
+
                     <Button 
                       onClick={spinRoulette} 
                       disabled={isSpinning || (profile?.points || 0) < pointsToBet} 
-                      className="w-full h-14 rounded-2xl font-black bg-primary text-white text-lg shadow-xl shadow-primary/20 transition-all active:scale-95"
+                      className={cn(
+                        "w-full h-16 rounded-[1.5rem] font-black text-lg shadow-xl shadow-primary/20 transition-all active:scale-95",
+                        isSpinning ? "bg-slate-100 text-slate-400" : "bg-primary text-white hover:bg-primary/90"
+                      )}
                     >
-                      {isSpinning ? "회전 중..." : "룰렛 돌리기"}
+                      {isSpinning ? (
+                        <div className="flex items-center gap-2">
+                           <RefreshCw className="w-5 h-5 animate-spin" />
+                           운명에 맡기는 중...
+                        </div>
+                      ) : "행운의 룰렛 돌리기"}
                     </Button>
                   </div>
                 </CardContent>
               </Card>
 
+              {/* Game History List */}
               <div className="w-full max-w-sm space-y-4">
                 <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4">최근 게임 내역</h3>
                 <div className="grid gap-2 px-2">
@@ -766,6 +899,18 @@ export const Entertainment: React.FC = () => {
               </div>
             </motion.div>
           ) /* Snail Race end */}
+
+          {activeTab === 'ship' && (
+            <motion.div
+              key="ship"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="w-full"
+            >
+              <ShipAssembly />
+            </motion.div>
+          )}
 
           {activeTab === 'daily' && (
             <motion.div

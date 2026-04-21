@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '@/src/firebase';
 import { collection, onSnapshot, updateDoc, doc, addDoc, deleteDoc, query, orderBy, increment } from 'firebase/firestore';
-import { UserProfile, Role, Department, PraiseCoupon } from '@/src/types';
+import { UserProfile, Role, Department, PraiseCoupon, JobRole } from '@/src/types';
 import { useAuth } from '@/src/components/AuthProvider';
 import { 
   Table, 
@@ -25,6 +25,7 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import * as XLSX from 'xlsx';
 import { 
   Plus, 
   Trash2, 
@@ -42,7 +43,8 @@ import {
   Gift,
   Clock,
   MapPin,
-  ArrowRight
+  ArrowRight,
+  Download
 } from 'lucide-react';
 import { 
   Dialog,
@@ -69,11 +71,24 @@ const ROLE_LABELS: Record<Role, string> = {
 
 const POSITIONS = ['사장', '소장', '실장', '팀장', '조장', '반장', '사원'];
 
+const PERMISSIONS = [
+  { id: 'notice_mgmt', label: '공지사항 관리' },
+  { id: 'accident_mgmt', label: '사고보고 관리' },
+  { id: 'leave_mgmt', label: '연차/휴가 관리' },
+  { id: 'dept_mgmt', label: '부서/팀 관리' },
+  { id: 'employee_mgmt', label: '인사/사원 관리' },
+  { id: 'training_mgmt', label: '교육/평가 관리' },
+  { id: 'praise_coupon', label: '칭찬쿠폰 발행' },
+];
+
 export const EmployeeManagement: React.FC = () => {
   const { profile } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [jobRoles, setJobRoles] = useState<JobRole[]>([]);
+  const DEFAULT_JOB_ROLES = ['취부', '용접', '사상', '도장', '반장', '조장', '기타'];
   const [newDeptName, setNewDeptName] = useState('');
+  const [newJobRoleName, setNewJobRoleName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'RESIGNED'>('ALL');
   const [deptFilter, setDeptFilter] = useState<string>('ALL');
@@ -104,6 +119,7 @@ export const EmployeeManagement: React.FC = () => {
     jobRole: '',
     workplace: '',
     phoneNumber: '',
+    birthDate: '',
     joinedAt: new Date().toISOString().split('T')[0],
     resignedAt: '',
   });
@@ -118,9 +134,15 @@ export const EmployeeManagement: React.FC = () => {
       setDepartments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Department)));
     });
 
+    const jobRoleQuery = query(collection(db, 'jobRoles'), orderBy('createdAt', 'desc'));
+    const unsubscribeJobRoles = onSnapshot(jobRoleQuery, (snapshot) => {
+      setJobRoles(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as JobRole)));
+    });
+
     return () => {
       unsubscribeUsers();
       unsubscribeDepts();
+      unsubscribeJobRoles();
     };
   }, []);
 
@@ -275,6 +297,29 @@ export const EmployeeManagement: React.FC = () => {
     }
   };
 
+  const handleAddJobRole = async () => {
+    if (!newJobRoleName.trim()) return;
+    try {
+      await addDoc(collection(db, 'jobRoles'), {
+        name: newJobRoleName.trim(),
+        createdAt: new Date().toISOString()
+      });
+      setNewJobRoleName('');
+      toast.success('새 직무가 추가되었습니다.');
+    } catch (error) {
+      toast.error('직무 추가 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleDeleteJobRole = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'jobRoles', id));
+      toast.success('직무가 삭제되었습니다.');
+    } catch (error) {
+      toast.error('직무 삭제 중 오류가 발생했습니다.');
+    }
+  };
+
   const handleAddUser = async () => {
     if (!newUser.displayName || !newUser.employeeId) {
       toast.error('이름과 사번은 필수 입력 사항입니다.');
@@ -305,6 +350,7 @@ export const EmployeeManagement: React.FC = () => {
         jobRole: '',
         workplace: '',
         phoneNumber: '',
+        birthDate: '',
         joinedAt: new Date().toISOString().split('T')[0],
         resignedAt: '',
       });
@@ -389,6 +435,35 @@ export const EmployeeManagement: React.FC = () => {
   const canManageLeave = profile && (['CEO', 'DIRECTOR', 'GENERAL_AFFAIRS', 'GENERAL_MANAGER', 'CLERK'].includes(profile.role) || profile.permissions?.includes('leave_mgmt'));
   const isTeamLeader = profile?.role === 'TEAM_LEADER';
 
+  const exportEmployeesToExcel = () => {
+    try {
+      const exportData = filteredUsers.map(u => ({
+        '부서': u.departmentName || '미지정',
+        '직급': u.position || '사원',
+        '직무': u.jobRole || '',
+        '사번': u.employeeId,
+        '이름': u.displayName,
+        '연락처': u.phoneNumber || '',
+        '권한': ROLE_LABELS[u.role],
+        '입사일': u.joinedAt || '',
+        '상태': u.isActive ? '재직' : '퇴사',
+        '사업장': u.workplace || '',
+        '잔여연차': u.annualLeaveBalance || 0
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "직원목록");
+      
+      const fileName = `직원명부_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+      toast.success('사원정보 엑셀 파일이 다운로드되었습니다.');
+    } catch (error) {
+      console.error("Excel export error:", error);
+      toast.error('엑셀 변환 중 오류가 발생했습니다.');
+    }
+  };
+
   const filteredUsers = users.filter(u => {
     const matchesSearch = u.displayName.toLowerCase().includes(searchTerm) || 
                          u.employeeId.toLowerCase().includes(searchTerm);
@@ -402,8 +477,8 @@ export const EmployeeManagement: React.FC = () => {
     if (isHRAdmin) return matchesSearch && matchesStatus && matchesDept;
     if (isTeamLeader) return matchesSearch && matchesStatus && matchesDept && u.departmentId === profile?.departmentId;
     
-    // For regular employees: only see themselves
-    return u.uid === profile?.uid && matchesSearch && matchesStatus && matchesDept;
+    // For regular employees: can see everyone as a directory, but can only edit themselves (handled by canEdit)
+    return matchesSearch && matchesStatus && matchesDept;
   });
 
   return (
@@ -437,13 +512,13 @@ export const EmployeeManagement: React.FC = () => {
           <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
             <div className="p-4 sm:p-6 bg-slate-50 border-b border-slate-100 space-y-4">
               <div className="flex flex-col lg:flex-row gap-4">
-                <div className="relative flex-grow">
+                <div className="relative flex-grow group">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-primary transition-colors z-10" />
                   <Input 
-                    placeholder="직원 이름 또는 사번 검색" 
-                    className="h-12 pl-12 bg-white border-slate-200 rounded-2xl text-sm font-bold shadow-sm focus:ring-primary/10 transition-all text-slate-900 placeholder:text-slate-400"
+                    placeholder="직원 이름 또는 사번 검색..." 
+                    className="h-14 pl-12 bg-white border-2 border-slate-100 focus:border-primary rounded-2xl text-base font-black shadow-sm transition-all text-slate-900 placeholder:text-slate-300"
                     onChange={(e) => setSearchTerm(e.target.value.toLowerCase())}
                   />
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -476,15 +551,21 @@ export const EmployeeManagement: React.FC = () => {
                     </SelectContent>
                   </Select>
 
+                  <Button 
+                    variant="outline" 
+                    onClick={exportEmployeesToExcel}
+                    className="h-12 px-4 gap-2 font-black rounded-2xl border-slate-200 text-slate-600 hover:bg-slate-50 active:scale-95 transition-all text-xs"
+                  >
+                    <Download className="w-4 h-4 text-emerald-500" /> 엑셀 다운로드
+                  </Button>
+
                   {isHRAdmin && (
                     <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
-                      <DialogTrigger 
-                        render={
-                          <Button className="h-12 px-6 gap-2 font-black rounded-2xl shadow-lg shadow-primary/20 hover:shadow-primary/30 active:scale-95 transition-all text-sm ml-auto lg:ml-0">
-                            <Plus className="w-4 h-4" /> 사원 추가
-                          </Button>
-                        } 
-                      />
+                      <DialogTrigger render={
+                        <Button className="h-12 px-6 gap-2 font-black rounded-2xl shadow-lg shadow-primary/20 hover:shadow-primary/30 active:scale-95 transition-all text-sm ml-auto lg:ml-0">
+                          <Plus className="w-4 h-4" /> 사원 추가
+                        </Button>
+                      } />
                       <DialogContent className="bg-white border-none rounded-[2.5rem] shadow-2xl max-w-lg w-[95%] p-0 overflow-hidden flex flex-col max-h-[90dvh]">
                         <DialogHeader className="p-8 pb-4 bg-slate-50 border-b border-slate-100 text-left shrink-0">
                           <DialogTitle className="text-2xl font-black tracking-tighter text-slate-900">새 사원 등록</DialogTitle>
@@ -514,26 +595,22 @@ export const EmployeeManagement: React.FC = () => {
 
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">입사일</label>
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">생년월일 *</label>
+                              <Input 
+                                type="date"
+                                value={newUser.birthDate}
+                                onChange={(e) => setNewUser({...newUser, birthDate: e.target.value})}
+                                className="h-12 bg-slate-50 border-slate-200 rounded-xl font-bold"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">입사일 *</label>
                               <Input 
                                 type="date"
                                 value={newUser.joinedAt}
                                 onChange={(e) => setNewUser({...newUser, joinedAt: e.target.value})}
                                 className="h-12 bg-slate-50 border-slate-200 rounded-xl font-bold"
                               />
-                            </div>
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">직위</label>
-                              <Select value={newUser.position} onValueChange={(v) => setNewUser({...newUser, position: v})}>
-                                <SelectTrigger className="h-12 bg-slate-50 border-slate-200 rounded-xl font-bold text-left">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="bg-white border-slate-100 rounded-xl text-left">
-                                  {POSITIONS.map(pos => (
-                                    <SelectItem key={pos} value={pos} className="font-bold">{pos}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
                             </div>
                           </div>
 
@@ -549,23 +626,39 @@ export const EmployeeManagement: React.FC = () => {
 
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">권한</label>
-                              <Select value={newUser.role} onValueChange={(v) => setNewUser({...newUser, role: v as Role})}>
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">직위</label>
+                              <Select value={newUser.position} onValueChange={(v) => setNewUser({...newUser, position: v})}>
                                 <SelectTrigger className="h-12 bg-slate-50 border-slate-200 rounded-xl font-bold text-left">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent className="bg-white border-slate-100 rounded-xl text-left">
-                                  {ROLES.map(role => (
-                                    <SelectItem key={role} value={role} className="font-bold">{ROLE_LABELS[role]}</SelectItem>
+                                  {POSITIONS.map(pos => (
+                                    <SelectItem key={pos} value={pos} className="font-bold">{pos}</SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
                             </div>
                             <div className="space-y-2">
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">직무</label>
+                              <Select value={newUser.jobRole} onValueChange={(v) => setNewUser({...newUser, jobRole: v})}>
+                                <SelectTrigger className="h-12 bg-slate-50 border-slate-200 rounded-xl font-bold text-left">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="bg-white border-slate-100 rounded-xl text-left">
+                                  {jobRoles.map(jr => (
+                                    <SelectItem key={jr.id} value={jr.name} className="font-bold">{jr.name}</SelectItem>
+                                  ))}
+                                  {jobRoles.length === 0 && <SelectItem value="기타" className="font-bold">기타</SelectItem>}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
                               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">부서</label>
                               <Select value={newUser.departmentId} onValueChange={(v) => {
-                                const dept = departments.find(d => d.id === v);
-                                setNewUser({...newUser, departmentId: v, departmentName: dept?.name || ''});
+                                setNewUser({...newUser, departmentId: v});
                               }}>
                                 <SelectTrigger className="h-12 bg-slate-50 border-slate-200 rounded-xl font-bold text-left">
                                   <SelectValue placeholder="부서 선택" />
@@ -583,21 +676,37 @@ export const EmployeeManagement: React.FC = () => {
                           
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">사업장</label>
-                              <Input 
-                                value={newUser.workplace}
-                                onChange={(e) => setNewUser({...newUser, workplace: e.target.value})}
-                                className="h-12 bg-slate-50 border-slate-200 rounded-xl font-bold"
-                              />
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">권한</label>
+                              <Select value={newUser.role} onValueChange={(v) => setNewUser({...newUser, role: v as Role})}>
+                                <SelectTrigger className="h-12 bg-slate-50 border-slate-200 rounded-xl font-bold text-left">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="bg-white border-slate-100 rounded-xl text-left">
+                                  {ROLES.map(role => (
+                                    <SelectItem key={role} value={role} className="font-bold">{ROLE_LABELS[role]}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </div>
                             <div className="space-y-2">
                               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">연락처</label>
                               <Input 
                                 value={newUser.phoneNumber}
                                 onChange={(e) => setNewUser({...newUser, phoneNumber: e.target.value})}
+                                placeholder="010-0000-0000"
                                 className="h-12 bg-slate-50 border-slate-200 rounded-xl font-bold"
                               />
                             </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">사업장</label>
+                            <Input 
+                              value={newUser.workplace}
+                              onChange={(e) => setNewUser({...newUser, workplace: e.target.value})}
+                              placeholder="울산조선소"
+                              className="h-12 bg-slate-50 border-slate-200 rounded-xl font-bold"
+                            />
                           </div>
                         </div>
                         <DialogFooter className="p-8 pt-4 bg-slate-50 border-t border-slate-100 flex flex-row gap-3">
@@ -647,6 +756,7 @@ export const EmployeeManagement: React.FC = () => {
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="font-mono text-[10px] font-black text-slate-400 uppercase tracking-widest">{user.employeeId}</span>
                             <Badge variant="secondary" className="bg-slate-100 text-slate-600 text-[9px] font-bold px-1.5 h-5">{user.position}</Badge>
+                            {user.jobRole && <Badge variant="outline" className="text-[9px] font-bold px-1.5 h-5 border-slate-200 text-slate-400">{user.jobRole}</Badge>}
                             {(profile?.role === 'CEO' || profile?.role === 'SAFETY_MANAGER') && (
                               <Button 
                                 variant="ghost" 
@@ -750,66 +860,132 @@ export const EmployeeManagement: React.FC = () => {
 
         {isHRAdmin && (
         <TabsContent value="departments" className="space-y-8 outline-none">
-          <Card className="border-none shadow-sm bg-white rounded-2xl overflow-hidden">
-            <CardHeader className="pb-4 pt-6 px-6 bg-slate-50/50 border-b border-slate-100">
-              <CardTitle className="text-base font-black tracking-tight flex items-center gap-2">
-                <Plus className="w-4 h-4 text-primary" /> 새 부서 추가
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6 space-y-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">부서/팀 명칭</label>
-                <Input 
-                  placeholder="예: 생산1팀, 품질관리부" 
-                  value={newDeptName}
-                  onChange={(e) => setNewDeptName(e.target.value)}
-                  className="h-12 text-sm border-slate-200 bg-slate-50/50 rounded-xl focus:ring-primary/20 font-bold"
-                />
-              </div>
-              <Button className="w-full h-12 gap-2 font-black text-sm rounded-xl shadow-lg active:scale-[0.98] transition-all" onClick={handleAddDept}>
-                부서 생성하기
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="grid lg:grid-cols-2 gap-8">
+            <Card className="border-none shadow-sm bg-white rounded-2xl overflow-hidden">
+              <CardHeader className="pb-4 pt-6 px-6 bg-slate-50/50 border-b border-slate-100">
+                <CardTitle className="text-base font-black tracking-tight flex items-center gap-2">
+                  <Plus className="w-4 h-4 text-primary" /> 새 부서 추가
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">부서/팀 명칭</label>
+                  <Input 
+                    placeholder="예: 생산1팀, 품질관리부" 
+                    value={newDeptName}
+                    onChange={(e) => setNewDeptName(e.target.value)}
+                    className="h-12 text-sm border-slate-200 bg-slate-50/50 rounded-xl focus:ring-primary/20 font-bold"
+                  />
+                </div>
+                <Button className="w-full h-12 gap-2 font-black text-sm rounded-xl shadow-lg active:scale-[0.98] transition-all" onClick={handleAddDept}>
+                  부서 생성하기
+                </Button>
+              </CardContent>
+            </Card>
 
-          <div className="space-y-4">
-            <div className="flex items-center justify-between px-1">
-              <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">부서 목록 ({departments.length})</h3>
-              <div className="h-px flex-1 bg-slate-100 ml-4" />
-            </div>
-            
-            <div className="grid gap-3">
-              {departments.map((dept) => (
-                <Card key={dept.id} className="border-none shadow-sm bg-white rounded-2xl card-hover">
-                  <CardContent className="p-5 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400">
-                        <Building2 className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="font-black text-foreground tracking-tight">{dept.name}</div>
-                        <div className="text-[10px] text-slate-400 font-bold">
-                          현재 인원: <span className="text-primary">{users.filter(u => u.departmentId === dept.id).length}명</span>
+            <Card className="border-none shadow-sm bg-white rounded-2xl overflow-hidden">
+              <CardHeader className="pb-4 pt-6 px-6 bg-slate-50/50 border-b border-slate-100">
+                <CardTitle className="text-base font-black tracking-tight flex items-center gap-2 text-emerald-600">
+                  <Plus className="w-4 h-4 text-emerald-600" /> 새 직무 추가
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">직무 명칭</label>
+                  <Input 
+                    placeholder="예: 용접, 사상, 취부" 
+                    value={newJobRoleName}
+                    onChange={(e) => setNewJobRoleName(e.target.value)}
+                    className="h-12 text-sm border-slate-200 bg-slate-50/50 rounded-xl focus:ring-primary/20 font-bold"
+                  />
+                </div>
+                <Button className="w-full h-12 gap-2 font-black text-sm rounded-xl shadow-lg active:scale-[0.98] transition-all bg-emerald-600 hover:bg-emerald-700" onClick={handleAddJobRole}>
+                  직무 생성하기
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid lg:grid-cols-2 gap-8">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between px-1">
+                <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">부서 목록 ({departments.length})</h3>
+                <div className="h-px flex-1 bg-slate-100 ml-4" />
+              </div>
+              
+              <div className="grid gap-3">
+                {departments.map((dept) => (
+                  <Card key={dept.id} className="border-none shadow-sm bg-white rounded-2xl">
+                    <CardContent className="p-5 flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400">
+                          <Building2 className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="font-black text-foreground tracking-tight">{dept.name}</div>
+                          <div className="text-[10px] text-slate-400 font-bold">
+                            현재 인원: <span className="text-primary">{users.filter(u => u.departmentId === dept.id).length}명</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="w-10 h-10 rounded-xl text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
-                      onClick={() => handleDeleteDept(dept.id)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-            {departments.length === 0 && (
-              <div className="py-10 text-center text-muted-foreground text-xs font-medium bg-white rounded-xl border border-dashed border-border">
-                등록된 부서가 없습니다.
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="w-10 h-10 rounded-xl text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                        onClick={() => handleDeleteDept(dept.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+                {departments.length === 0 && (
+                  <div className="py-10 text-center text-slate-400 text-xs font-bold border border-dashed border-slate-200 rounded-2xl bg-white">
+                    등록된 부서가 없습니다.
+                  </div>
+                )}
               </div>
-            )}
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between px-1">
+                <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">직무 목록 ({jobRoles.length})</h3>
+                <div className="h-px flex-1 bg-slate-100 ml-4" />
+              </div>
+              
+              <div className="grid gap-3">
+                {jobRoles.map((jr) => (
+                  <Card key={jr.id} className="border-none shadow-sm bg-white rounded-2xl">
+                    <CardContent className="p-5 flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-400">
+                          <UserCog className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="font-black text-foreground tracking-tight">{jr.name}</div>
+                          <div className="text-[10px] text-slate-400 font-bold">
+                            해당 사원: <span className="text-emerald-600">{users.filter(u => u.jobRole === jr.name).length}명</span>
+                          </div>
+                        </div>
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="w-10 h-10 rounded-xl text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                        onClick={() => handleDeleteJobRole(jr.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+                {jobRoles.length === 0 && (
+                  <div className="py-10 text-center text-slate-400 text-xs font-bold border border-dashed border-slate-200 rounded-2xl bg-white">
+                    등록된 직무가 없습니다.
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </TabsContent>
         )}
@@ -878,40 +1054,67 @@ export const EmployeeManagement: React.FC = () => {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">연락처</label>
-              <Input 
-                value={editingUser?.phoneNumber || ''}
-                onChange={(e) => setEditingUser(prev => prev ? {...prev, phoneNumber: e.target.value} : null)}
-                placeholder="010-0000-0000"
-                className="h-12 bg-slate-50 border-slate-200 rounded-xl font-bold"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">직무</label>
+                <Select 
+                  value={editingUser?.jobRole || '기타'} 
+                  onValueChange={(v) => setEditingUser(prev => prev ? {...prev, jobRole: v} : null)}
+                  disabled={!isHRAdmin}
+                >
+                  <SelectTrigger className="h-12 bg-slate-50 border-slate-200 rounded-xl font-bold">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white rounded-xl">
+                    {jobRoles.map(jr => <SelectItem key={jr.id} value={jr.name}>{jr.name}</SelectItem>)}
+                    {jobRoles.length === 0 && DEFAULT_JOB_ROLES.map(jr => <SelectItem key={jr} value={jr}>{jr}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">연락처</label>
+                <Input 
+                  value={editingUser?.phoneNumber || ''}
+                  onChange={(e) => setEditingUser(prev => prev ? {...prev, phoneNumber: e.target.value} : null)}
+                  placeholder="010-0000-0000"
+                  className="h-12 bg-slate-50 border-slate-200 rounded-xl font-bold"
+                />
+              </div>
             </div>
 
             {isHRAdmin && (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">시스템 권한</label>
-                  <Select 
-                    value={editingUser?.role || 'EMPLOYEE'} 
-                    onValueChange={(v) => setEditingUser(prev => prev ? {...prev, role: v as Role} : null)}
-                  >
-                    <SelectTrigger className="h-12 bg-slate-50 border-slate-200 rounded-xl font-bold">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white rounded-xl">
-                      {ROLES.map(r => <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">입사일</label>
-                  <Input 
-                    type="date"
-                    value={editingUser?.joinedAt?.split('T')[0] || ''}
-                    onChange={(e) => setEditingUser(prev => prev ? {...prev, joinedAt: e.target.value} : null)}
-                    className="h-12 bg-slate-50 border-slate-200 rounded-xl font-bold"
-                  />
+              <div className="space-y-4 pt-4 border-t border-slate-100">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">상세 권한 설정</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {PERMISSIONS.map((perm) => (
+                    <div 
+                      key={perm.id} 
+                      onClick={() => {
+                        if (!editingUser) return;
+                        const currentPerms = editingUser.permissions || [];
+                        const newPerms = currentPerms.includes(perm.id)
+                          ? currentPerms.filter(p => p !== perm.id)
+                          : [...currentPerms, perm.id];
+                        setEditingUser({...editingUser, permissions: newPerms});
+                      }}
+                      className={cn(
+                        "flex items-center gap-3 p-3 rounded-xl border-2 transition-all cursor-pointer",
+                        (editingUser?.permissions || []).includes(perm.id)
+                          ? "bg-primary/5 border-primary text-primary"
+                          : "bg-white border-slate-50 text-slate-400 hover:border-slate-100"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all",
+                        (editingUser?.permissions || []).includes(perm.id)
+                          ? "bg-primary border-primary text-white"
+                          : "border-slate-200 text-transparent"
+                      )}>
+                        <CheckCircle2 className="w-3 h-3" />
+                      </div>
+                      <span className="text-xs font-black">{perm.label}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
