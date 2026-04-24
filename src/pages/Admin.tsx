@@ -125,7 +125,7 @@ export const Admin: React.FC = () => {
     { to: '/coupons', label: '칭찬쿠폰/룰렛 관리', icon: Trophy, permission: 'praise_coupon' },
     { to: '/redemption-mgmt', label: '현물 신청 관리', icon: CircleDollarSign, permission: 'redemption_mgmt' },
     { to: '/attendance-mgmt', label: '근태 관리', icon: Clock, permission: 'attendance_mgmt' },
-    { to: '/leave', label: '연차/휴가 관리', icon: CalendarDays, permission: 'leave_mgmt' },
+    { to: '/leave-mgmt', label: '연차/휴가 관리', icon: CalendarDays, permission: 'leave_mgmt' },
     { to: '/notifications', label: '공지사항 관리', icon: Megaphone, permission: 'notice_mgmt' },
     { to: '/accidents', label: '사고즉보 관리', icon: ShieldAlert, permission: 'accident_mgmt' },
     { onClick: () => setIsSnailSettingsOpen(true), label: '달팽이 경주 설정', icon: Zap, permission: 'admin' },

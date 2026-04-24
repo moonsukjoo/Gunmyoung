@@ -76,8 +76,31 @@ export const TrainingList: React.FC = () => {
     if (!target || !target.questions || target.questions.length === 0) {
       toast.error('문제가 없습니다.'); return;
     }
-    const selected = [...target.questions].sort(() => 0.5 - Math.random()).slice(0, target.questionsPerExam || target.questions.length);
-    setActiveQuestions(selected);
+    
+    // Select questions randomly
+    const selected = [...target.questions]
+      .sort(() => 0.5 - Math.random())
+      .slice(0, target.questionsPerExam || target.questions.length);
+
+    // IMPORTANT: Shuffle options for each selected question to prevent cheating
+    const sessionQuestions = selected.map(q => {
+      // Create a map of text to its original index
+      const optionsWithIndices = q.options.map((opt, idx) => ({ text: opt, originalIdx: idx }));
+      
+      // Shuffle the options
+      const shuffled = [...optionsWithIndices].sort(() => 0.5 - Math.random());
+      
+      // Find the new index of the correct answer
+      const newCorrectIdx = shuffled.findIndex(o => o.originalIdx === q.correctAnswer);
+      
+      return {
+        ...q,
+        options: shuffled.map(o => o.text),
+        correctAnswer: newCorrectIdx
+      };
+    });
+
+    setActiveQuestions(sessionQuestions);
     setCurrentAnswers({});
     setTimeLeft((target.timeLimit || 15) * 60);
     setIsExamMode(true);

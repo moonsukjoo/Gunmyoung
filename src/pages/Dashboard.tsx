@@ -438,7 +438,7 @@ export const Dashboard: React.FC = () => {
               {adminStats.presentToday} <span className="text-xs font-bold text-muted-foreground">/ {adminStats.totalEmployees}</span>
             </p>
           </Card>
-          <Card className="bg-card border-white/5 rounded-2xl p-4 overflow-hidden relative" onClick={() => navigate('/leave')} style={{ cursor: 'pointer' }}>
+          <Card className="bg-card border-white/5 rounded-2xl p-4 overflow-hidden relative" onClick={() => navigate('/leave-mgmt')} style={{ cursor: 'pointer' }}>
             <div className="absolute top-0 right-0 p-3 opacity-10">
               <CalendarDays className="w-10 h-10 text-amber-500" />
             </div>

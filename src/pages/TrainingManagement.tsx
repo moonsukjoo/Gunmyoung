@@ -22,10 +22,11 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Trash2, BookOpen, Layers, HelpCircle, CheckCircle2, AlertCircle, FileUp, Clock, Eye, Send, Circle } from 'lucide-react';
+import { Plus, Trash2, BookOpen, Layers, HelpCircle, CheckCircle2, AlertCircle, FileUp, Clock, Eye, Send, Circle, Zap } from 'lucide-react';
 import { useAuth } from '@/src/components/AuthProvider';
 import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
+import { GoogleGenAI } from "@google/genai";
 
 export const TrainingManagement: React.FC = () => {
   const { profile } = useAuth();
@@ -35,6 +36,8 @@ export const TrainingManagement: React.FC = () => {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isExamOpen, setIsExamOpen] = useState(false);
+  const [isAiGenerating, setIsAiGenerating] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
   const [selectedTrainingId, setSelectedTrainingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'PUBLISHED' | 'DRAFT'>('PUBLISHED');
 
@@ -153,6 +156,51 @@ export const TrainingManagement: React.FC = () => {
       toast.success('시험 설정이 저장되었습니다.');
     } catch (error) {
       toast.error('저장 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleAiGenerateQuestions = async () => {
+    if (!aiPrompt.trim()) {
+      toast.error('교육 내용 또는 질문 생성 가이드를 입력해주세요.');
+      return;
+    }
+
+    setIsAiGenerating(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `당신은 전문 교육 설계자입니다. 다음 내용을 바탕으로 객관식 4지 선다형 문제를 5개 생성해주세요. 
+출력은 반드시 다음과 같은 JSON 배열 형식이어야 합니다: 
+[{"question": "문제 내용", "options": ["보기1", "보기2", "보기3", "보기4"], "correctAnswer": 0}] 
+여기서 correctAnswer는 0부터 시작하는 인덱스입니다.
+
+교육 내용:
+${aiPrompt}`,
+        config: {
+          responseMimeType: "application/json",
+        },
+      });
+
+      const generated = JSON.parse(response.text || '[]');
+      if (Array.isArray(generated) && generated.length > 0) {
+        const formatted = generated.map((q: any) => ({
+          ...q,
+          id: Math.random().toString(36).substring(2, 9),
+          options: q.options.slice(0, 4)
+        }));
+        setExamSettings(prev => ({
+          ...prev,
+          questions: [...prev.questions, ...formatted]
+        }));
+        setAiPrompt('');
+        toast.success(`${formatted.length}개의 AI 문제가 생성되었습니다.`);
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error('AI 문제 생성 중 오류가 발생했습니다.');
+    } finally {
+      setIsAiGenerating(false);
     }
   };
 
@@ -360,7 +408,7 @@ export const TrainingManagement: React.FC = () => {
                   <Button variant="outline" className="h-12 px-4 rounded-xl font-black border-white/10 bg-white/5 text-white gap-2 shrink-0 hover:bg-white/10" onClick={() => document.getElementById('edu-file-upload')?.click()}>
                     <FileUp className="w-4 h-4" /> 파일 찾기
                   </Button>
-                  <input id="edu-file-upload" type="file" className="hidden" accept=".pdf,.xlsx,.xls,.doc,.docx,.ppt,.pptx" onChange={handleFileUpload} />
+                  <input id="edu-file-upload" type="file" className="hidden" accept=".pdf,.xlsx,.xls,.doc,.docx,.ppt,.pptx,.hwp" onChange={handleFileUpload} />
                 </div>
                 <Input 
                   value={newTraining.fileUrl} 
@@ -444,7 +492,7 @@ export const TrainingManagement: React.FC = () => {
                     <Button variant="outline" className="h-12 px-4 rounded-xl font-black border-white/10 bg-white/5 text-white gap-2 shrink-0 hover:bg-white/10" onClick={() => document.getElementById('edit-edu-file-upload')?.click()}>
                       <FileUp className="w-4 h-4" /> 파일 찾기
                     </Button>
-                    <input id="edit-edu-file-upload" type="file" className="hidden" accept=".pdf,.xlsx,.xls,.doc,.docx,.ppt,.pptx" onChange={(e) => {
+                    <input id="edit-edu-file-upload" type="file" className="hidden" accept=".pdf,.xlsx,.xls,.doc,.docx,.ppt,.pptx,.hwp" onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) setEditTraining({...editTraining, fileName: file.name, fileUrl: `mock-server-path/${file.name}`});
                     }} />
@@ -504,6 +552,33 @@ export const TrainingManagement: React.FC = () => {
               </div>
             </div>
             <div className="space-y-6 pt-6 border-t border-white/5">
+              <div className="bg-primary/5 p-5 rounded-2xl border border-primary/20 space-y-4">
+                <div className="flex items-center gap-2 text-primary">
+                  <Zap className="w-5 h-5" />
+                  <h4 className="font-black text-sm uppercase tracking-wider">AI 문제 생성기 (HWP/PDF 내용 활용)</h4>
+                </div>
+                <p className="text-[10px] text-muted-foreground font-bold leading-relaxed">
+                  교육 자료의 텍스트를 아래에 붙여넣으면 AI가 자동으로 시험 문항을 생성합니다. (HWP, PDF 파일 등에서 복사한 내용을 붙여넣으세요)
+                </p>
+                <Textarea 
+                  value={aiPrompt}
+                  onChange={e => setAiPrompt(e.target.value)}
+                  placeholder="여기에 교육 자료 텍스트를 붙여넣으세요..."
+                  className="bg-black/20 border-white/5 min-h-[100px] text-xs font-medium focus-visible:ring-primary/50"
+                />
+                <Button 
+                  onClick={handleAiGenerateQuestions}
+                  disabled={isAiGenerating || !aiPrompt.trim()}
+                  className="w-full bg-primary text-white font-black h-11 rounded-xl shadow-lg shadow-primary/20"
+                >
+                  {isAiGenerating ? (
+                    <><Clock className="w-4 h-4 mr-2 animate-spin" /> 인공지능이 분석 중...</>
+                  ) : (
+                    <><Zap className="w-4 h-4 mr-2" /> AI로 문제 5개 자동 생성</>
+                  )}
+                </Button>
+              </div>
+
               <div className="flex items-center justify-between gap-4">
                 <h4 className="font-black text-lg text-white">문제은행 ({examSettings.questions.length})</h4>
                 <div className="flex items-center gap-2">

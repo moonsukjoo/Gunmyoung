@@ -44,9 +44,20 @@ service cloud.firestore {
              'attendance_mgmt' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions ||
              'notice_mgmt' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions ||
              'accident_mgmt' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions ||
-             'training_mgmt' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions
+             'training_mgmt' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions ||
+             'leave_mgmt' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions ||
+             'praise_coupon' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions
            ))
         ))
+      );
+    }
+
+    function canManageLeave() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['CEO', 'DIRECTOR', 'GENERAL_AFFAIRS', 'GENERAL_MANAGER'] ||
+        ('permissions' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions != null &&
+         'leave_mgmt' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions)
       );
     }
 
@@ -196,9 +207,9 @@ service cloud.firestore {
     }
 
     match /leaveRequests/{requestId} {
-      allow read: if isAuthenticated() && (isOwner(resource.data.uid) || isHRManager() || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && isTeamLeader(get(/databases/$(database)/documents/users/$(resource.data.uid)).data.departmentId)));
+      allow read: if isAuthenticated() && (isOwner(resource.data.uid) || canManageLeave() || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && isTeamLeader(get(/databases/$(database)/documents/users/$(resource.data.uid)).data.departmentId)));
       allow create: if isAuthenticated() && isOwner(request.resource.data.uid);
-      allow update: if isAuthenticated() && (isOwner(resource.data.uid) || isHRManager());
+      allow update: if isAuthenticated() && (isOwner(resource.data.uid) || canManageLeave());
     }
 
     match /accidentCases/{caseId} {

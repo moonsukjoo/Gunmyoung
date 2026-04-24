@@ -12,6 +12,7 @@ import { AccidentReport } from './pages/AccidentReport';
 import { Notifications } from './pages/Notifications';
 import { Notices } from './pages/Notices';
 import { Leave } from './pages/Leave';
+import { LeaveManagement } from './pages/LeaveManagement';
 import { Coupons } from './pages/Coupons';
 import { Entertainment } from './pages/Entertainment';
 import { Lotto } from './pages/Lotto';
@@ -88,6 +89,7 @@ export default function App() {
           <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
           <Route path="/notices" element={<ProtectedRoute><Notices /></ProtectedRoute>} />
           <Route path="/leave" element={<ProtectedRoute><Leave /></ProtectedRoute>} />
+          <Route path="/leave-mgmt" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="leave_mgmt"><LeaveManagement /></ProtectedRoute>} />
           <Route path="/coupons" element={<ProtectedRoute><Coupons /></ProtectedRoute>} />
           <Route path="/lotto" element={<ProtectedRoute><Lotto /></ProtectedRoute>} />
           <Route path="/entertainment" element={<ProtectedRoute><Entertainment /></ProtectedRoute>} />

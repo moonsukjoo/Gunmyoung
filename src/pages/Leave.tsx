@@ -62,11 +62,13 @@ export const Leave: React.FC = () => {
     try {
       await addDoc(collection(db, 'leaveRequests'), {
         uid: profile.uid,
+        displayName: profile.displayName,
+        employeeId: profile.employeeId,
         type: leaveType,
         startDate: format(startDate, 'yyyy-MM-dd'),
         endDate: format(endDate || startDate, 'yyyy-MM-dd'),
         reason: reason.trim(),
-        status: 'APPROVED',
+        status: 'PENDING',
         createdAt: new Date().toISOString()
       });
 
