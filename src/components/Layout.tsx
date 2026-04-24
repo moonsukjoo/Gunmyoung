@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { auth, db } from '@/src/firebase';
 import { cn } from '@/lib/utils';
 import { collection, query, where, onSnapshot, getDocs, addDoc } from 'firebase/firestore';
+import { CompanyLogo } from './CompanyLogo';
 import { 
   Dialog,
   DialogContent,
@@ -167,7 +168,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             )}
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-lg p-1.5 active:scale-95 transition-all">
-                <img src="company_logo.png" alt="Kunmyung Logo" className="w-full h-full object-contain" />
+                <CompanyLogo className="w-full h-full" />
               </div>
               <div className="flex flex-col">
                 <span className="font-black text-sm tracking-tight leading-none text-white">건명기업</span>
