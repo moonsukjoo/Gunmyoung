@@ -38,11 +38,9 @@ jobs:
           npx cap init "건명" "com.gun.app" --web-dir dist || true
           npx cap add android || true
 
+      # 핵심 수정 사항: 불필요한 복사 과정을 지우고 바로 아이콘 생성 명령어 실행
       - name: 앱 아이콘 생성
-        run: |
-          mkdir -p assets
-          cp public/company_logo.png assets/icon.png
-          npx @capacitor/assets generate --android
+        run: npx @capacitor/assets generate --android
 
       - name: Capacitor 싱크
         run: npx cap sync android
