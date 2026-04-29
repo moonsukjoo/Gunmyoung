@@ -12,7 +12,6 @@ import { grantRandomShipPart } from '@/src/services/shipService';
 import { 
   Dialog, 
   DialogContent, 
-  DialogHeader, 
   DialogTitle, 
 } from '@/components/ui/dialog';
 
@@ -30,7 +29,7 @@ export const Notifications: React.FC = () => {
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setNotifications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification)));
-    });
+    }, (error) => console.error("Notifications listener error:", error));
     return () => unsubscribe();
   }, [profile]);
 

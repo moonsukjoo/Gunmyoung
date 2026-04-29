@@ -42,12 +42,12 @@ export const LeaveManagement: React.FC = () => {
     const q = query(collection(db, 'leaveRequests'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaveRequest)));
-    });
+    }, (error) => console.error("Leave requests listener error:", error));
 
     const uQ = query(collection(db, 'users'));
     const unsubscribeUsers = onSnapshot(uQ, (snapshot) => {
       setUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
-    });
+    }, (error) => console.error("Users list listener error:", error));
 
     return () => {
       unsubscribe();

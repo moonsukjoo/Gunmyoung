@@ -74,16 +74,16 @@ export const TrainingManagement: React.FC = () => {
   useEffect(() => {
     const unsubscribeT = onSnapshot(query(collection(db, 'trainings'), orderBy('createdAt', 'desc')), (snap) => {
       setTrainings(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Training)));
-    });
+    }, (error) => console.error("Trainings list listener error:", error));
     const unsubscribeJR = onSnapshot(query(collection(db, 'jobRoles'), orderBy('name')), (snap) => {
       setJobRoles(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as JobRole)));
-    });
+    }, (error) => console.error("Job roles listener error:", error));
     const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snap) => {
       setUsers(snap.docs.map(doc => ({ ...doc.data() } as UserProfile)));
-    });
+    }, (error) => console.error("Users list listener error:", error));
     const unsubscribeResults = onSnapshot(collection(db, 'trainingResults'), (snap) => {
       setAllResults(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as TrainingResult)));
-    });
+    }, (error) => console.error("Training results listener error:", error));
     return () => {
       unsubscribeT();
       unsubscribeJR();

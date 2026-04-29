@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '@/src/firebase';
-import { collection, onSnapshot, addDoc, query, orderBy, getDocs } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '@/src/firebase';
+import { collection, onSnapshot, addDoc, query, orderBy, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { AccidentCase } from '@/src/types';
 import { useAuth } from '@/src/components/AuthProvider';
 import { Card, CardContent } from '@/components/ui/card';
@@ -24,7 +24,8 @@ import {
   Plus, 
   MapPin, 
   Search,
-  ChevronRight
+  ChevronRight,
+  Trash2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -34,6 +35,8 @@ export const AccidentReport: React.FC = () => {
   const { profile } = useAuth();
   const [cases, setCases] = useState<AccidentCase[]>([]);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [caseToDelete, setCaseToDelete] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [newCase, setNewCase] = useState({
@@ -52,7 +55,7 @@ export const AccidentReport: React.FC = () => {
     const q = query(collection(db, 'accidentCases'), orderBy('date', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setCases(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AccidentCase)));
-    });
+    }, (error) => console.error("Accident cases listener error:", error));
     return () => unsubscribe();
   }, []);
 
@@ -101,6 +104,24 @@ export const AccidentReport: React.FC = () => {
       if (profile?.uid) grantRandomShipPart(profile.uid, '사고 즉보');
     } catch (error) { toast.error('실패'); } finally { setLoading(false); }
   };
+
+  const handleDeleteCase = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'accidentCases', id));
+      toast.success('사고 사례가 삭제되었습니다.');
+      setIsDeleteOpen(false);
+      setCaseToDelete(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `accidentCases/${id}`);
+    }
+  };
+
+  const isSafetyManager = profile?.role === 'SAFETY_MANAGER' || 
+                          profile?.role === 'CEO' || 
+                          profile?.role === 'DIRECTOR' ||
+                          profile?.permissions?.includes('admin') ||
+                          profile?.permissions?.includes('accident_mgmt') ||
+                          profile?.email === 'tjrwnfjqm1@gmail.com';
 
   const filteredCases = cases.filter(c => 
     c.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -191,7 +212,23 @@ export const AccidentReport: React.FC = () => {
                     </Badge>
                     <h4 className="text-lg font-black text-white leading-tight">{c.title}</h4>
                  </div>
-                 <span className="text-[10px] font-bold text-muted-foreground">{format(new Date(c.date), 'yyyy.MM.dd')}</span>
+                 <div className="flex flex-col items-end gap-2">
+                   <span className="text-[10px] font-bold text-muted-foreground">{format(new Date(c.date), 'yyyy.MM.dd')}</span>
+                   {isSafetyManager && (
+                     <Button 
+                       variant="ghost" 
+                       size="icon" 
+                       className="w-8 h-8 rounded-lg text-white/20 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                       onClick={(e) => {
+                         e.stopPropagation();
+                         setCaseToDelete(c.id);
+                         setIsDeleteOpen(true);
+                       }}
+                     >
+                       <Trash2 className="w-4 h-4" />
+                     </Button>
+                   )}
+                 </div>
               </div>
               <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground bg-white/5 p-3 rounded-xl">
                  <MapPin className="w-3.5 h-3.5 opacity-50" />
@@ -207,6 +244,36 @@ export const AccidentReport: React.FC = () => {
            </div>
          ))}
       </div>
+      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <DialogContent className="bg-card border-none rounded-[2rem] shadow-2xl max-w-sm w-[90%] p-8 overflow-hidden text-white">
+          <div className="flex flex-col items-center text-center gap-4">
+            <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center">
+              <Trash2 className="w-8 h-8 text-red-500" />
+            </div>
+            <div className="space-y-1">
+              <DialogTitle className="text-xl font-black text-white">사고 사례 삭제</DialogTitle>
+              <DialogDescription className="text-muted-foreground font-bold text-xs text-center">
+                이 사고 사례 보고를 정말 삭제하시겠습니까?<br />이 작업은 되돌릴 수 없습니다.
+              </DialogDescription>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3 pt-6">
+            <Button 
+              className="w-full h-14 bg-red-500 hover:bg-red-600 text-white font-black rounded-xl"
+              onClick={() => caseToDelete && handleDeleteCase(caseToDelete)}
+            >
+              삭제하기
+            </Button>
+            <Button 
+              variant="ghost"
+              className="w-full h-10 text-white/40 font-black hover:text-white"
+              onClick={() => setIsDeleteOpen(false)}
+            >
+              취소
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

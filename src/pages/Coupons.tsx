@@ -69,7 +69,10 @@ export const Coupons: React.FC = () => {
   useEffect(() => {
     if (!profile) return;
     
-    const isAuth = profile.role === 'CEO' || profile.role === 'SAFETY_MANAGER' || profile.permissions?.includes('praise_coupon');
+    const isAuth = profile.role === 'CEO' || 
+                   profile.role === 'SAFETY_MANAGER' || 
+                   profile.permissions?.includes('praise_coupon') ||
+                   profile.email === 'tjrwnfjqm1@gmail.com';
     setIsAuthorizedToGive(isAuth);
     
     const unsubscribeUsers = onSnapshot(

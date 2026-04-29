@@ -51,11 +51,11 @@ export const TrainingList: React.FC = () => {
         (!t.targetJobRole || t.targetJobRole === profile.jobRole || t.targetJobRole === 'ALL')
       );
       setTrainings(filtered);
-    });
+    }, (error) => console.error("Trainings listener error:", error));
     const qResults = query(collection(db, 'trainingResults'), where('uid', '==', profile.uid));
     const unsubscribeR = onSnapshot(qResults, (snap) => {
       setResults(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as TrainingResult)));
-    });
+    }, (error) => console.error("Training results listener error:", error));
     return () => { unsubscribeT(); unsubscribeR(); };
   }, [profile]);
 

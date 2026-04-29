@@ -1,16 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { db } from '@/src/firebase';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '@/src/firebase';
+import { collection, onSnapshot, query, orderBy, deleteDoc, doc } from 'firebase/firestore';
 import { Notice } from '@/src/types';
 import { useAuth } from '@/src/components/AuthProvider';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 import { 
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { 
@@ -19,9 +19,11 @@ import {
   ChevronRight, 
   Clock, 
   User,
+  Trash2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 import { grantRandomShipPart } from '@/src/services/shipService';
 
 export const Notices: React.FC = () => {
@@ -29,12 +31,14 @@ export const Notices: React.FC = () => {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [noticeToDelete, setNoticeToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     const q = query(collection(db, 'notices'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setNotices(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notice)));
-    });
+    }, (error) => console.error("Notices listener error:", error));
     return () => unsubscribe();
   }, []);
 
@@ -42,6 +46,27 @@ export const Notices: React.FC = () => {
     n.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     n.content.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleDeleteNotice = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'notices', id));
+      toast.success('공지사항이 삭제되었습니다.');
+      setSelectedNotice(null);
+      setIsDeleteOpen(false);
+      setNoticeToDelete(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `notices/${id}`);
+    }
+  };
+
+  const isAdmin = profile?.role === 'CEO' || 
+                  profile?.role === 'DIRECTOR' || 
+                  profile?.role === 'GENERAL_AFFAIRS' || 
+                  profile?.role === 'SAFETY_MANAGER' ||
+                  profile?.permissions?.includes('admin') ||
+                  profile?.permissions?.includes('notice_mgmt') ||
+                  profile?.email === 'tjrwnfjqm1@gmail.com' ||
+                  profile?.email === 'tjrwnef@gmail.com'; // Added other variants if needed, but the primary one is tjrwnfjqm1@gmail.com
 
   return (
     <div className="space-y-6 pb-24 px-1">
@@ -80,7 +105,23 @@ export const Notices: React.FC = () => {
                   {notice.isImportant && (
                     <Badge className="bg-red-500/20 text-red-500 border-none text-[8px] px-1.5 h-4 mb-1">URGENT</Badge>
                   )}
-                  <span className="text-[10px] font-bold text-muted-foreground">{format(new Date(notice.createdAt), 'MM.dd')}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-muted-foreground">{format(new Date(notice.createdAt), 'MM.dd')}</span>
+                    {isAdmin && (
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="w-6 h-6 rounded-md text-white/20 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNoticeToDelete(notice.id);
+                          setIsDeleteOpen(true);
+                        }}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    )}
+                  </div>
                </div>
                <h4 className="text-base font-black text-white tracking-tight truncate">{notice.title}</h4>
                <p className="text-xs text-muted-foreground font-bold line-clamp-1">{notice.content}</p>
@@ -117,20 +158,61 @@ export const Notices: React.FC = () => {
                   {selectedNotice.content}
                 </p>
               </div>
-              <div className="p-6 pt-0 border-t border-white/5">
+              <div className="p-6 pt-0 border-t border-white/5 space-y-3">
                 <Button 
                   onClick={() => setSelectedNotice(null)}
                   className="w-full h-14 bg-white/5 hover:bg-white/10 text-white rounded-2xl font-black mt-6"
                 >
                   확인
                 </Button>
+                {isAdmin && (
+                  <Button 
+                    variant="ghost"
+                    onClick={() => {
+                      setNoticeToDelete(selectedNotice.id);
+                      setIsDeleteOpen(true);
+                    }}
+                    className="w-full h-10 text-red-500/50 hover:text-red-500 hover:bg-red-500/5 rounded-xl font-bold flex items-center justify-center gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" /> 공지 삭제
+                  </Button>
+                )}
               </div>
             </div>
           )}
         </DialogContent>
       </Dialog>
+
+      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <DialogContent className="bg-card border-none rounded-[2rem] shadow-2xl max-w-sm w-[90%] p-8 overflow-hidden text-white">
+          <div className="flex flex-col items-center text-center gap-4">
+            <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center">
+              <Trash2 className="w-8 h-8 text-red-500" />
+            </div>
+            <div className="space-y-1">
+              <DialogTitle className="text-xl font-black text-white">공지 삭제</DialogTitle>
+              <p className="text-muted-foreground font-bold text-xs">
+                이 공지사항을 정말 삭제하시겠습니까?<br />이 작업은 되돌릴 수 없습니다.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3 pt-6">
+            <Button 
+              className="w-full h-14 bg-red-500 hover:bg-red-600 text-white font-black rounded-xl"
+              onClick={() => noticeToDelete && handleDeleteNotice(noticeToDelete)}
+            >
+              삭제하기
+            </Button>
+            <Button 
+              variant="ghost"
+              className="w-full h-10 text-white/40 font-black hover:text-white"
+              onClick={() => setIsDeleteOpen(false)}
+            >
+              취소
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
-
-const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');

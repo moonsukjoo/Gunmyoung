@@ -32,7 +32,7 @@ export const Leave: React.FC = () => {
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaveRequest)));
-    });
+    }, (error) => console.error("Leave requests listener error (Leave):", error));
     return () => unsubscribe();
   }, [profile]);
 

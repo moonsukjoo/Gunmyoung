@@ -14,28 +14,28 @@ const Toaster = ({ ...props }: ToasterProps) => {
       className="toaster group"
       icons={{
         success: (
-          <div className="bg-emerald-500 rounded-xl p-2 shadow-lg shadow-emerald-200">
-            <CircleCheckIcon className="size-5 text-white" />
+          <div className="flex items-center justify-center mr-2">
+            <CircleCheckIcon className="size-5 text-emerald-500" />
           </div>
         ),
         info: (
-          <div className="bg-blue-500 rounded-xl p-2 shadow-lg shadow-blue-200">
-            <InfoIcon className="size-5 text-white" />
+          <div className="flex items-center justify-center mr-2">
+            <InfoIcon className="size-5 text-blue-500" />
           </div>
         ),
         warning: (
-          <div className="bg-orange-500 rounded-xl p-2 shadow-lg shadow-orange-200">
-            <TriangleAlertIcon className="size-5 text-white" />
+          <div className="flex items-center justify-center mr-2">
+            <TriangleAlertIcon className="size-5 text-orange-500" />
           </div>
         ),
         error: (
-          <div className="bg-red-500 rounded-xl p-2 shadow-lg shadow-red-200">
-            <OctagonXIcon className="size-5 text-white" />
+          <div className="flex items-center justify-center mr-2">
+            <OctagonXIcon className="size-5 text-red-500" />
           </div>
         ),
         loading: (
-          <div className="bg-slate-500 rounded-xl p-2 shadow-lg shadow-slate-200">
-            <Loader2Icon className="size-5 text-white animate-spin" />
+          <div className="flex items-center justify-center mr-2">
+            <Loader2Icon className="size-5 text-slate-500 animate-spin" />
           </div>
         ),
       }}

@@ -48,7 +48,7 @@ export const Entertainment: React.FC = () => {
     const qGame = query(collection(db, 'lottoHistory'), where('uid', '==', profile.uid), orderBy('createdAt', 'desc'), limit(5));
     const unsubscribeGame = onSnapshot(qGame, (snapshot) => {
       setGameHistory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
-    });
+    }, (error) => console.error("Game history listener error:", error));
     return () => unsubscribeGame();
   }, [profile]);
 

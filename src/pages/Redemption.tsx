@@ -28,7 +28,7 @@ export const Redemption: React.FC = () => {
     );
     const unsubscribe = onSnapshot(q, (snap) => {
       setRequests(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as RedemptionRequest)));
-    });
+    }, (error) => console.error("Redemption requests listener error:", error));
     return () => unsubscribe();
   }, [profile]);
 

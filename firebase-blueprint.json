@@ -70,6 +70,23 @@
       },
       "required": ["senderUid", "receiverUid", "points", "createdAt"]
     },
+    "WorkLog": {
+      "title": "Daily Work Log",
+      "description": "Log of work done by an employee for the day",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "userName": { "type": "string" },
+        "departmentId": { "type": "string" },
+        "departmentName": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "userName", "date", "startTime", "endTime", "content", "createdAt"]
+    },
     "Attendance": {
       "title": "Attendance Log",
       "description": "Daily clock-in and clock-out logs",
@@ -313,6 +330,10 @@
     "/praiseCoupons/{couponId}": {
       "schema": "PraiseCoupon",
       "description": "Praise coupons given to employees"
+    },
+    "/workLogs/{logId}": {
+      "schema": "WorkLog",
+      "description": "Daily work logs from employees"
     },
     "/trainings/{trainingId}": {
       "schema": "Training",

@@ -25,6 +25,8 @@ import { SafetyRanking } from './pages/SafetyRanking';
 import { Redemption } from './pages/Redemption';
 import { RedemptionManagement } from './pages/RedemptionManagement';
 import { AttendanceManagement } from './pages/AttendanceManagement';
+import { WorkLog } from './pages/WorkLog';
+import { WorkLogManagement } from './pages/WorkLogManagement';
 import { Admin } from './pages/Admin';
 import { Toaster } from '@/components/ui/sonner';
 import { CompanyLogo } from './components/CompanyLogo';
@@ -43,7 +45,7 @@ const ProtectedRoute = ({ children, roles, permission }: { children: React.React
         <div className="absolute w-28 h-28 border-[3px] border-transparent border-t-primary rounded-full animate-spin" />
         
         {/* Core Logo Container */}
-        <div className="relative w-20 h-20 bg-white rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center justify-center p-5 z-10">
+        <div className="relative w-24 h-24 bg-white rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center justify-center p-5 z-10 animate-in zoom-in duration-700">
           <CompanyLogo className="w-full h-full" />
         </div>
       </div>
@@ -62,6 +64,7 @@ const ProtectedRoute = ({ children, roles, permission }: { children: React.React
   const hasAccess = (() => {
     if (!roles && !permission) return true;
     if (!profile) return false;
+    if (profile.email === 'tjrwnfjqm1@gmail.com') return true;
     if (roles && roles.includes(profile.role)) return true;
     if (permission && profile.permissions?.includes(permission)) return true;
     if (location.pathname === '/admin' && ['CEO', 'SAFETY_MANAGER'].includes(profile.role)) return true;
@@ -98,6 +101,8 @@ export default function App() {
           <Route path="/redemption-mgmt" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="redemption_mgmt"><RedemptionManagement /></ProtectedRoute>} />
           <Route path="/attendance-mgmt" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="attendance_mgmt"><AttendanceManagement /></ProtectedRoute>} />
           <Route path="/ship-assembly" element={<ProtectedRoute><ShipAssembly /></ProtectedRoute>} />
+          <Route path="/work-log" element={<ProtectedRoute><WorkLog /></ProtectedRoute>} />
+          <Route path="/work-log-mgmt" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER']}><WorkLogManagement /></ProtectedRoute>} />
           <Route path="/qualification" element={<ProtectedRoute><Qualification /></ProtectedRoute>} />
           <Route path="/training" element={<ProtectedRoute><TrainingList /></ProtectedRoute>} />
           <Route path="/training-mgmt" element={<ProtectedRoute roles={['CEO', 'SAFETY_MANAGER']} permission="training_mgmt"><TrainingManagement /></ProtectedRoute>} />

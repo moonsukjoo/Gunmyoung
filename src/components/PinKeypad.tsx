@@ -1,56 +1,96 @@
 import React from 'react';
-import { Button } from '@/components/ui/button';
-import { ShieldCheck, Delete, X } from 'lucide-react';
+import { Delete, ChevronLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { motion } from 'motion/react';
 
 interface PinKeypadProps {
   onInput: (value: string) => void;
   onDelete: () => void;
   onClear: () => void;
+  onBack?: () => void;
+  onOtherMethod?: () => void;
+  passwordLength: number;
   className?: string;
 }
 
-export const PinKeypad: React.FC<PinKeypadProps> = ({ onInput, onDelete, onClear, className }) => {
-  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', ''];
+export const PinKeypad: React.FC<PinKeypadProps> = ({ 
+  onInput, 
+  onDelete, 
+  onClear, 
+  onBack,
+  onOtherMethod,
+  passwordLength,
+  className 
+}) => {
+  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
   return (
-    <div className={cn("bg-[#0066CC] w-full p-4 pt-4 pb-12 sm:pt-8 sm:pb-10 flex flex-col items-center gap-3 sm:gap-6", className)}>
-      <div className="flex items-center gap-2 bg-black/10 px-3 py-1 rounded-full border border-white/5">
-        <ShieldCheck className="w-3.5 h-3.5 text-white/70" />
-        <span className="text-[9px] font-black text-white/70 uppercase tracking-widest">보안 키패드 작동중</span>
+    <div className={cn("fixed inset-0 z-[100] flex flex-col bg-black overflow-hidden", className)}>
+      {/* Top Section - Black Background */}
+      <div className="flex-[1.2] flex flex-col items-center justify-center p-6 space-y-12">
+        <div className="w-full flex justify-start absolute top-8 left-6">
+          <button onClick={onBack} className="p-2 -ml-2 text-white/40 hover:text-white transition-colors">
+            <ChevronLeft className="w-8 h-8" />
+          </button>
+        </div>
+
+        <div className="flex flex-col items-center gap-10 w-full pt-12">
+          <h2 className="text-xl font-bold text-white tracking-tight">간편 비밀번호를 입력해주세요</h2>
+
+          <div className="flex gap-4 items-center justify-center">
+            {[...Array(6)].map((_, i) => (
+              <motion.div 
+                key={i} 
+                animate={{ 
+                  scale: passwordLength > i ? 1.2 : 1,
+                  backgroundColor: passwordLength > i ? '#ffffff' : 'rgba(255, 255, 255, 0.15)'
+                }}
+                className="w-4 h-4 rounded-full transition-all duration-200" 
+              />
+            ))}
+          </div>
+
+          <button 
+            onClick={onOtherMethod}
+            className="text-sm font-bold text-white/60 underline underline-offset-4 hover:text-white transition-colors"
+          >
+            다른 로그인 방식
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-3 w-full max-w-[240px] gap-x-4 gap-y-2 sm:gap-y-4">
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-          <button
-            key={num}
-            onClick={() => onInput(num.toString())}
-            className="text-2xl font-black text-white hover:bg-white/10 active:scale-90 transition-all w-full aspect-square flex items-center justify-center rounded-full"
+      {/* Bottom Section - White Background */}
+      <div className="bg-white flex-1 p-8 shadow-2xl">
+        <div className="grid grid-cols-3 h-full w-full max-w-sm mx-auto items-center">
+          {keys.map((num) => (
+            <motion.button
+              key={num}
+              whileTap={{ scale: 0.85, opacity: 0.6 }}
+              onClick={() => onInput(num)}
+              className="h-full flex items-center justify-center text-4xl font-black text-black"
+            >
+              {num}
+            </motion.button>
+          ))}
+          
+          <div /> {/* Spacer */}
+          
+          <motion.button
+            whileTap={{ scale: 0.85, opacity: 0.6 }}
+            onClick={() => onInput('0')}
+            className="h-full flex items-center justify-center text-4xl font-black text-black"
           >
-            {num}
-          </button>
-        ))}
-        
-        <button
-          onClick={onClear}
-          className="text-[10px] font-black text-white/50 hover:text-white transition-colors flex items-center justify-center px-1"
-        >
-          초기화
-        </button>
-        
-        <button
-          onClick={() => onInput('0')}
-          className="text-2xl font-black text-white hover:bg-white/10 active:scale-90 transition-all aspect-square flex items-center justify-center rounded-full"
-        >
-          0
-        </button>
+            0
+          </motion.button>
 
-        <button
-          onClick={onDelete}
-          className="text-white hover:bg-white/10 active:scale-95 transition-all aspect-square flex items-center justify-center rounded-full group"
-        >
-          <Delete className="w-7 h-7 group-active:scale-90 transition-transform" />
-        </button>
+          <motion.button
+            whileTap={{ scale: 0.85, opacity: 0.6 }}
+            onClick={onDelete}
+            className="h-full flex items-center justify-center"
+          >
+            <Delete className="w-10 h-10" fill="black" />
+          </motion.button>
+        </div>
       </div>
     </div>
   );

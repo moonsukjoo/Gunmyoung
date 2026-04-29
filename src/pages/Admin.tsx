@@ -33,7 +33,8 @@ import {
   EyeOff,
   HardHat,
   CircleDollarSign,
-  Clock
+  Clock,
+  ClipboardList
 } from 'lucide-react';
 import { db } from '@/src/firebase';
 import { collection, query, onSnapshot, updateDoc, doc, setDoc } from 'firebase/firestore';
@@ -74,24 +75,32 @@ export const Admin: React.FC = () => {
   const [bannerText, setBannerText] = useState('안전한 하루가 되세요');
 
   useEffect(() => {
+    if (!profile) return;
+    
     const q = query(collection(db, 'users'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
       setUsers(data);
       setFilteredUsers(data);
       setLoading(false);
+    }, (error) => {
+      console.error("Users listener error (Admin):", error);
+      setLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [profile]);
 
   useEffect(() => {
-    onSnapshot(doc(db, 'settings', 'entertainment'), (snapshot) => {
+    if (!profile) return;
+
+    const unsubEntertainment = onSnapshot(doc(db, 'settings', 'entertainment'), (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
         if (data.snailProbabilities) setSnailProbs(data.snailProbabilities);
       }
-    });
-    onSnapshot(doc(db, 'settings', 'shipParts'), (snapshot) => {
+    }, (error) => console.error("Entertainment settings listener error (Admin):", error));
+
+    const unsubShip = onSnapshot(doc(db, 'settings', 'shipParts'), (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
         setShipSettings({
@@ -99,14 +108,20 @@ export const Admin: React.FC = () => {
           disabledParts: data.disabledParts ?? []
         });
       }
-    });
+    }, (error) => console.error("Ship settings listener error (Admin):", error));
 
-    onSnapshot(doc(db, 'settings', 'banner'), (snapshot) => {
+    const unsubBanner = onSnapshot(doc(db, 'settings', 'banner'), (snapshot) => {
       if (snapshot.exists()) {
         setBannerText(snapshot.data().text || '안전한 하루가 되세요');
       }
-    });
-  }, []);
+    }, (error) => console.error("Banner settings listener error (Admin):", error));
+
+    return () => {
+      unsubEntertainment();
+      unsubShip();
+      unsubBanner();
+    };
+  }, [profile]);
 
   useEffect(() => {
     const filtered = users.filter(user => 
@@ -134,6 +149,7 @@ export const Admin: React.FC = () => {
     { to: '/coupons', label: '칭찬쿠폰/룰렛 관리', icon: Trophy, permission: 'praise_coupon' },
     { to: '/redemption-mgmt', label: '현물 신청 관리', icon: CircleDollarSign, permission: 'redemption_mgmt' },
     { to: '/attendance-mgmt', label: '근태 관리', icon: Clock, permission: 'attendance_mgmt' },
+    { to: '/work-log-mgmt', label: '작업일지 관리', icon: ClipboardList, roles: ['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER'] },
     { to: '/leave-mgmt', label: '연차/휴가 관리', icon: CalendarDays, permission: 'leave_mgmt' },
     { to: '/notifications', label: '공지사항 관리', icon: Megaphone, permission: 'notice_mgmt' },
     { to: '/accidents', label: '사고즉보 관리', icon: ShieldAlert, permission: 'accident_mgmt' },
@@ -145,7 +161,11 @@ export const Admin: React.FC = () => {
 
   if (loading) return <div className="flex items-center justify-center h-[60vh]"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 
-  const isAdminMode = profile && (profile.role === 'CEO' || profile.permissions?.includes('admin'));
+  const isAdminMode = profile && (
+    profile.role === 'CEO' || 
+    profile.permissions?.includes('admin') ||
+    profile.email === 'tjrwnfjqm1@gmail.com'
+  );
 
   return (
     <div className="space-y-6 pb-24 px-1">

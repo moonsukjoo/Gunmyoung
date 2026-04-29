@@ -35,29 +35,43 @@ export const requestNotificationPermission = async () => {
 export const sendPushNotification = async (title: string, options: NotificationOptions & { useToast?: boolean } = {}) => {
   const { useToast = true, ...navOptions } = options;
 
-  // 1. Browser Level Notification (OS Level)
+  // 1. Browser Level Notification (OS Level / Status Bar)
+  let osNotificationShown = false;
   if ('Notification' in window && Notification.permission === 'granted') {
-    // If a service worker is active, use it to show the notification (better for mobile OS)
-    const registration = await navigator.serviceWorker.ready;
-    if (registration) {
-      registration.showNotification(title, {
-        icon: 'company_logo.png',
-        badge: 'company_logo.png',
-        ...navOptions,
-      });
-    } else {
-      new Notification(title, {
-        icon: 'company_logo.png',
-        badge: 'company_logo.png',
-        ...navOptions,
-      });
+    const registration = await navigator.serviceWorker.ready.catch(() => null);
+    const notificationPayload: any = {
+      body: options.body || '새로운 알림이 도착했습니다.',
+      icon: '/company_logo.png',
+      badge: '/company_logo.png',
+      vibrate: [500, 110, 500, 110, 450, 110, 200, 110, 170, 40],
+      tag: options.tag || 'generic-notification',
+      renotify: true,
+      data: options.data,
+      requireInteraction: options.requireInteraction || false,
+      ...navOptions,
+    };
+
+    try {
+      if (registration) {
+        await registration.showNotification(title, notificationPayload);
+        osNotificationShown = true;
+      } else {
+        new Notification(title, notificationPayload);
+        osNotificationShown = true;
+      }
+    } catch (e) {
+      console.warn('Failed to show OS notification:', e);
     }
   }
 
-  // 2. In-app System Style Toast (inspired by the user's image)
+  // 2. In-app System Style Toast (Fallback or if explicitly requested)
+  // We only show this if the app is visible AND the OS notification wasn't shown or we want both
   if (useToast) {
-    // Custom toast using sonner
-    toast.custom((t) => (
+    const isForeground = document.visibilityState === 'visible';
+    
+    // Only show in-app toast if OS notification failed to show OR if the app is in foreground and we want a visual redundant cue
+    if (isForeground && !osNotificationShown) {
+      toast.custom((t) => (
       <div className="w-full max-w-sm bg-black/85 backdrop-blur-xl rounded-[2rem] p-5 shadow-2xl border border-white/10 flex items-start gap-4 animate-in slide-in-from-top-10 duration-500 animate-out fade-out slide-out-to-top-10">
         <div className="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center shrink-0 shadow-lg shadow-orange-900/20">
           <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -86,5 +100,6 @@ export const sendPushNotification = async (title: string, options: NotificationO
       duration: 8000,
       position: 'top-center'
     });
+    }
   }
 };

@@ -75,7 +75,7 @@ export const Attendance: React.FC = () => {
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setHistoryData(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceType)));
-    });
+    }, (error) => console.error("Attendance history listener error:", error));
     return () => unsubscribe();
   }, [profile, historyMonth, isHistoryOpen]);
 
@@ -123,7 +123,7 @@ export const Attendance: React.FC = () => {
           }
         }
       });
-    });
+    }, (error) => console.error("Monthly attendance listener error:", error));
     return () => unsubscribe();
   }, [profile, month, todayStr]);
 

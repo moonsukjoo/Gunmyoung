@@ -62,7 +62,7 @@ export const AttendanceManagement: React.FC = () => {
     const q = query(collection(db, 'users'), orderBy('displayName', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setUsers(snapshot.docs.map(doc => ({ ...doc.data() } as UserProfile)));
-    });
+    }, (error) => console.error("Users list listener error (AttendanceMgmt):", error));
     return () => unsubscribe();
   }, []);
 
@@ -87,6 +87,9 @@ export const AttendanceManagement: React.FC = () => {
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setAttendanceData(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Attendance)));
+      setLoading(false);
+    }, (error) => {
+      console.error("Attendance data listener error (AttendanceMgmt):", error);
       setLoading(false);
     });
 

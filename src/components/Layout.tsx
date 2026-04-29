@@ -10,13 +10,14 @@ import {
   User,
   ShieldAlert,
   ChevronLeft,
-  Settings
+  Settings,
+  ClipboardList
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { auth, db } from '@/src/firebase';
 import { cn } from '@/lib/utils';
-import { collection, query, where, onSnapshot, getDocs, addDoc } from 'firebase/firestore';
 import { CompanyLogo } from './CompanyLogo';
+import { collection, query, where, onSnapshot, getDocs, addDoc } from 'firebase/firestore';
 import { 
   Dialog,
   DialogContent,
@@ -72,7 +73,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setUnreadCount(snapshot.size);
-    });
+    }, (error) => console.error("Unread count listener error:", error));
     return () => unsubscribe();
   }, [profile]);
 
@@ -126,7 +127,10 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           message: `${profile.displayName}님이 위급 상황(${type})을 보고했습니다.`,
           type: 'EMERGENCY',
           isRead: false,
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          fromUid: profile.uid,
+          fromName: profile.displayName,
+          priority: 'high'
         })
       );
 

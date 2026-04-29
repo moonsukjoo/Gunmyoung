@@ -23,7 +23,8 @@ import {
   ListTodo,
   CheckCircle,
   Users,
-  AlertTriangle
+  AlertTriangle,
+  ClipboardList
 } from 'lucide-react';
 import { db } from '@/src/firebase';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, limit, orderBy, getDocs, Timestamp } from 'firebase/firestore';
@@ -159,8 +160,8 @@ export const Dashboard: React.FC = () => {
         const completedIds = new Set(rSnap.docs.map(doc => doc.data().trainingId));
         const pending = tSnap.docs.filter(doc => !completedIds.has(doc.id)).length;
         setPendingTrainings(pending);
-      });
-    });
+      }).catch(err => console.error("Training results fetch error:", err));
+    }).catch(err => console.error("Trainings fetch error:", err));
 
     // Fetch Admin Stats if manager
     let unsubscribeAdminStats = () => {};
@@ -200,7 +201,7 @@ export const Dashboard: React.FC = () => {
       if (snapshot.exists()) {
         setBannerText(snapshot.data().text || '안전한 하루가 되세요');
       }
-    });
+    }, (error) => console.error("Banner listener error:", error));
 
     return () => {
       unsubscribeAttendance();
@@ -243,7 +244,10 @@ export const Dashboard: React.FC = () => {
       const [managersSnap, teamLeaderSnap] = await Promise.all([
         getDocs(managersQuery),
         getDocs(teamLeaderQuery)
-      ]);
+      ]).catch(err => {
+        console.error("SOS management lookup error:", err);
+        return [ { docs: [] }, { docs: [] } ] as any[];
+      });
 
       const targetUids = new Set<string>();
       managersSnap.docs.forEach(doc => targetUids.add(doc.id));
@@ -363,7 +367,8 @@ export const Dashboard: React.FC = () => {
           isRead: false,
           createdAt: new Date().toISOString(),
           fromUid: profile.uid,
-          fromName: profile.displayName
+          fromName: profile.displayName,
+          priority: 'high'
         })
       );
 
@@ -402,13 +407,14 @@ export const Dashboard: React.FC = () => {
         const notificationPromises = usersSnap.docs.map(uDoc => 
           addDoc(collection(db, 'notifications'), {
             uid: uDoc.id,
-            title: `📢 새 공지: ${newNotice.title}`,
-            message: newNotice.content.substring(0, 50) + '...',
-            type: 'NOTICE',
+            title: newNotice.isImportant ? `🚨 [중요공지] ${newNotice.title}` : `📢 새 공지: ${newNotice.title}`,
+            message: newNotice.content.substring(0, 80),
+            type: newNotice.isImportant ? 'URGENT_NOTICE' : 'NOTICE',
             isRead: false,
             createdAt: new Date().toISOString(),
             fromUid: profile.uid,
-            fromName: profile.displayName
+            fromName: profile.displayName,
+            priority: newNotice.isImportant ? 'high' : 'normal'
           })
         );
         await Promise.all(notificationPromises);
@@ -433,6 +439,25 @@ export const Dashboard: React.FC = () => {
           {bannerText}
         </h1>
       </div>
+
+      {/* Daily Work Log Quick Action */}
+      <Card 
+        className="bg-card border-white/5 rounded-3xl p-5 overflow-hidden relative cursor-pointer active:scale-[0.98] transition-all group border-primary/10 hover:border-primary/40"
+        onClick={() => navigate('/work-log')}
+      >
+        <div className="absolute top-0 right-0 p-5 opacity-5 group-hover:opacity-10 transition-opacity">
+          <ClipboardList className="w-16 h-16 text-white" />
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center text-white shadow-lg shadow-primary/20">
+            <ClipboardList className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-0.5">Daily Progress</p>
+            <h3 className="text-lg font-black text-white">일일 작업일지 작성하기</h3>
+          </div>
+        </div>
+      </Card>
 
       {/* Admin Dashboard Statistics */}
       {isManager && (
@@ -493,52 +518,6 @@ export const Dashboard: React.FC = () => {
           </CardContent>
         </Card>
       )}
-
-      {/* Attendance & Leave Quick Actions */}
-      <div className="space-y-3">
-        <Card 
-          className="border-none shadow-none bg-card rounded-2xl overflow-hidden cursor-pointer active:scale-[0.98] transition-all border border-white/5"
-          onClick={() => navigate('/attendance')}
-        >
-          <CardContent className="p-6 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-primary">
-                <Clock className="w-6 h-6" />
-              </div>
-              <div className="flex flex-col overflow-hidden">
-                <h4 className="text-base font-black text-white leading-tight tracking-tight">오늘의 출근</h4>
-                <p className="text-sm text-muted-foreground font-bold truncate">
-                  {todayAttendance ? `${format(new Date(todayAttendance.clockIn), 'HH:mm')} 출근` : '아직 출근 전이에요'}
-                </p>
-              </div>
-            </div>
-            <Button size="sm" className="bg-primary text-white font-black rounded-xl px-4 py-0 h-9 shrink-0">
-              {todayAttendance ? '내역보기' : '체크인'}
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card 
-          className="border-none shadow-none bg-card rounded-2xl overflow-hidden cursor-pointer active:scale-[0.98] transition-all border border-white/5"
-          onClick={() => navigate('/leave')}
-        >
-          <CardContent className="p-6 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-blue-500/10 rounded-full flex items-center justify-center text-blue-500">
-                <CalendarDays className="w-6 h-6" />
-              </div>
-              <div className="flex flex-col overflow-hidden">
-                <h4 className="text-base font-black text-white leading-tight tracking-tight">남은 연차</h4>
-                <p className="text-sm text-muted-foreground font-bold truncate">{profile?.annualLeaveBalance || 0}일 사용할 수 있어요</p>
-              </div>
-            </div>
-            <div className="flex items-center shrink-0">
-               <span className="text-lg font-black text-white mr-2">{profile?.annualLeaveBalance || 0}일</span>
-               <ChevronRight className="w-5 h-5 text-muted-foreground opacity-30" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Main Features Grid Panel */}
       <div className="bg-card rounded-2xl overflow-hidden border border-white/5">

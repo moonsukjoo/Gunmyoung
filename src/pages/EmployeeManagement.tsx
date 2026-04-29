@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { db } from '@/src/firebase';
+import { db, handleFirestoreError, OperationType } from '@/src/firebase';
 import { collection, onSnapshot, updateDoc, doc, addDoc, deleteDoc, query, orderBy, increment } from 'firebase/firestore';
 import { UserProfile, Role, Department, PraiseCoupon, JobRole } from '@/src/types';
 import { useAuth } from '@/src/components/AuthProvider';
@@ -44,7 +44,8 @@ import {
   Clock,
   MapPin,
   ArrowRight,
-  Download
+  Download,
+  RefreshCw
 } from 'lucide-react';
 import { 
   Dialog,
@@ -86,9 +87,12 @@ export const EmployeeManagement: React.FC = () => {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [jobRoles, setJobRoles] = useState<JobRole[]>([]);
+  const [positions, setPositions] = useState<{id: string, name: string, createdAt: string}[]>([]);
   const DEFAULT_JOB_ROLES = ['취부', '용접', '사상', '도장', '반장', '조장', '기타'];
+  const DEFAULT_POSITIONS = ['사장', '소장', '실장', '팀장', '조장', '반장', '사원'];
   const [newDeptName, setNewDeptName] = useState('');
   const [newJobRoleName, setNewJobRoleName] = useState('');
+  const [newPositionName, setNewPositionName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'RESIGNED'>('ALL');
   const [deptFilter, setDeptFilter] = useState<string>('ALL');
@@ -116,7 +120,7 @@ export const EmployeeManagement: React.FC = () => {
     role: 'EMPLOYEE' as Role,
     departmentId: '',
     position: '사원',
-    jobRole: '',
+    jobRole: '기타',
     workplace: '',
     phoneNumber: '',
     birthDate: '',
@@ -125,26 +129,34 @@ export const EmployeeManagement: React.FC = () => {
   });
 
   useEffect(() => {
+    if (!profile) return;
+
     const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-      setUsers(snapshot.docs.map(doc => doc.data() as UserProfile));
-    });
+      setUsers(snapshot.docs.map(doc => ({ ...doc.data(), uid: doc.id } as UserProfile)));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'users'));
 
     const deptQuery = query(collection(db, 'departments'), orderBy('createdAt', 'desc'));
     const unsubscribeDepts = onSnapshot(deptQuery, (snapshot) => {
       setDepartments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Department)));
-    });
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'departments'));
 
     const jobRoleQuery = query(collection(db, 'jobRoles'), orderBy('createdAt', 'desc'));
     const unsubscribeJobRoles = onSnapshot(jobRoleQuery, (snapshot) => {
       setJobRoles(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as JobRole)));
-    });
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'jobRoles'));
+
+    const positionQuery = query(collection(db, 'positions'), orderBy('createdAt', 'asc'));
+    const unsubscribePositions = onSnapshot(positionQuery, (snapshot) => {
+      setPositions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'positions'));
 
     return () => {
       unsubscribeUsers();
       unsubscribeDepts();
       unsubscribeJobRoles();
+      unsubscribePositions();
     };
-  }, []);
+  }, [profile]);
 
   const handleRoleChange = async (uid: string, newRole: Role) => {
     try {
@@ -245,6 +257,31 @@ export const EmployeeManagement: React.FC = () => {
     }
   };
 
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+  const [resetTarget, setResetTarget] = useState<{uid: string, employeeId: string} | null>(null);
+
+  const handleResetPin = async () => {
+    if (!resetTarget) return;
+    
+    try {
+      await updateDoc(doc(db, 'users', resetTarget.uid), { 
+        hasCustomPin: false,
+        failedLoginAttempts: 0,
+        isLocked: false,
+        updatedAt: new Date().toISOString()
+      });
+      
+      toast.success('비밀번호가 초기화되었습니다.', {
+        description: `사번(${resetTarget.employeeId})으로 초기화되었습니다.`
+      });
+      setIsResetConfirmOpen(false);
+      setResetTarget(null);
+    } catch (error) {
+      console.error("Reset PIN error:", error);
+      toast.error('초기화 중 오류가 발생했습니다.');
+    }
+  };
+
   const handleStatusChange = async (uid: string, isActive: boolean) => {
     try {
       await updateDoc(doc(db, 'users', uid), { isActive });
@@ -265,12 +302,11 @@ export const EmployeeManagement: React.FC = () => {
   };
 
   const handleDeleteUser = async (uid: string) => {
-    if (!window.confirm('정말 이 사원 정보를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
     try {
       await deleteDoc(doc(db, 'users', uid));
       toast.success('사원 정보가 삭제되었습니다.');
     } catch (error) {
-      toast.error('사원 삭제 중 오류가 발생했습니다.');
+      handleFirestoreError(error, OperationType.DELETE, `users/${uid}`);
     }
   };
 
@@ -317,6 +353,29 @@ export const EmployeeManagement: React.FC = () => {
       toast.success('직무가 삭제되었습니다.');
     } catch (error) {
       toast.error('직무 삭제 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleAddPosition = async () => {
+    if (!newPositionName.trim()) return;
+    try {
+      await addDoc(collection(db, 'positions'), {
+        name: newPositionName.trim(),
+        createdAt: new Date().toISOString()
+      });
+      setNewPositionName('');
+      toast.success('새 직위가 추가되었습니다.');
+    } catch (error) {
+      toast.error('직위 추가 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleDeletePosition = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'positions', id));
+      toast.success('직위가 삭제되었습니다.');
+    } catch (error) {
+      toast.error('직위 삭제 중 오류가 발생했습니다.');
     }
   };
 
@@ -430,9 +489,21 @@ export const EmployeeManagement: React.FC = () => {
     }
   };
 
-  const isHRAdmin = profile && (['CEO', 'DIRECTOR', 'GENERAL_AFFAIRS', 'GENERAL_MANAGER', 'CLERK'].includes(profile.role) || profile.permissions?.includes('employee_mgmt'));
-  const canManageDept = profile && (['CEO', 'DIRECTOR', 'GENERAL_AFFAIRS', 'GENERAL_MANAGER', 'CLERK'].includes(profile.role) || profile.permissions?.includes('dept_mgmt'));
-  const canManageLeave = profile && (['CEO', 'DIRECTOR', 'GENERAL_AFFAIRS', 'GENERAL_MANAGER', 'CLERK'].includes(profile.role) || profile.permissions?.includes('leave_mgmt'));
+  const isHRAdmin = profile && (
+    ['CEO', 'DIRECTOR', 'GENERAL_AFFAIRS', 'GENERAL_MANAGER', 'CLERK'].includes(profile.role) || 
+    profile.permissions?.includes('employee_mgmt') ||
+    profile.email === 'tjrwnfjqm1@gmail.com'
+  );
+  const canManageDept = profile && (
+    ['CEO', 'DIRECTOR', 'GENERAL_AFFAIRS', 'GENERAL_MANAGER', 'CLERK'].includes(profile.role) || 
+    profile.permissions?.includes('dept_mgmt') ||
+    profile.email === 'tjrwnfjqm1@gmail.com'
+  );
+  const canManageLeave = profile && (
+    ['CEO', 'DIRECTOR', 'GENERAL_AFFAIRS', 'GENERAL_MANAGER', 'CLERK'].includes(profile.role) || 
+    profile.permissions?.includes('leave_mgmt') ||
+    profile.email === 'tjrwnfjqm1@gmail.com'
+  );
   const isTeamLeader = profile?.role === 'TEAM_LEADER';
 
   const exportEmployeesToExcel = () => {
@@ -563,155 +634,198 @@ export const EmployeeManagement: React.FC = () => {
                     <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
                       <DialogTrigger asChild>
                         <Button className="h-12 px-6 gap-2 font-black rounded-2xl shadow-lg shadow-primary/20 hover:shadow-primary/30 active:scale-95 transition-all text-sm ml-auto lg:ml-0 bg-primary text-white">
-                          <Plus className="w-4 h-4" /> 사원 추가
+                          <UserPlus className="w-4 h-4" /> 사원 추가
                         </Button>
                       </DialogTrigger>
                       <DialogContent className="bg-card border-white/10 rounded-[2.5rem] shadow-2xl max-w-lg w-[95%] p-0 overflow-hidden flex flex-col max-h-[90dvh] text-white">
-                        <DialogHeader className="p-8 pb-4 bg-white/5 border-b border-white/10 text-left shrink-0">
-                          <DialogTitle className="text-2xl font-black tracking-tighter text-white">새 사원 등록</DialogTitle>
-                          <DialogDescription className="text-white/50 font-bold">임직원의 상세 정보를 입력해주세요.</DialogDescription>
+                        <DialogHeader className="p-8 pb-6 bg-white/5 border-b border-white/10 text-left shrink-0">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center">
+                              <UserPlus className="w-6 h-6 text-primary" />
+                            </div>
+                            <div>
+                              <DialogTitle className="text-2xl font-black tracking-tighter text-white">새 사원 등록</DialogTitle>
+                              <DialogDescription className="text-white/50 font-bold">임직원의 상세 정보를 입력해주세요.</DialogDescription>
+                            </div>
+                          </div>
                         </DialogHeader>
-                        <div className="p-8 space-y-5 overflow-y-auto flex-grow no-scrollbar">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">이름 *</label>
-                              <Input 
-                                value={newUser.displayName}
-                                onChange={(e) => setNewUser({...newUser, displayName: e.target.value})}
-                                placeholder="홍길동"
-                                className="h-12 bg-white/5 border-white/10 rounded-xl font-bold text-white placeholder:text-white/20"
-                              />
+                        
+                        <div className="p-8 space-y-6 overflow-y-auto flex-grow no-scrollbar">
+                          {/* Basic Info Group */}
+                          <div className="space-y-4">
+                            <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-2 px-1">기본 인적사항</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">이름 *</label>
+                                <div className="relative">
+                                  <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                                  <Input 
+                                    value={newUser.displayName}
+                                    onChange={(e) => setNewUser({...newUser, displayName: e.target.value})}
+                                    placeholder="성함 입력"
+                                    className="h-12 pl-12 bg-white/5 border-white/10 rounded-xl font-bold text-white placeholder:text-white/20"
+                                  />
+                                </div>
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">사원번호 *</label>
+                                <div className="relative">
+                                  <Badge className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20 p-0 flex items-center justify-center bg-transparent border-none">ID</Badge>
+                                  <Input 
+                                    value={newUser.employeeId}
+                                    onChange={(e) => setNewUser({...newUser, employeeId: e.target.value.toUpperCase()})}
+                                    placeholder="X12345"
+                                    className="h-12 pl-12 bg-white/5 border-white/10 rounded-xl font-bold text-white placeholder:text-white/20"
+                                  />
+                                </div>
+                              </div>
                             </div>
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">사번 *</label>
-                              <Input 
-                                value={newUser.employeeId}
-                                onChange={(e) => setNewUser({...newUser, employeeId: e.target.value})}
-                                placeholder="X12345"
-                                className="h-12 bg-white/5 border-white/10 rounded-xl font-bold text-white placeholder:text-white/20"
-                              />
-                            </div>
-                          </div>
 
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">생년월일 *</label>
-                              <Input 
-                                type="date"
-                                value={newUser.birthDate}
-                                onChange={(e) => setNewUser({...newUser, birthDate: e.target.value})}
-                                className="h-12 bg-white/5 border-white/10 rounded-xl font-bold text-white"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">입사일 *</label>
-                              <Input 
-                                type="date"
-                                value={newUser.joinedAt}
-                                onChange={(e) => setNewUser({...newUser, joinedAt: e.target.value})}
-                                className="h-12 bg-white/5 border-white/10 rounded-xl font-bold text-white"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">이메일</label>
-                            <Input 
-                              value={newUser.email}
-                              onChange={(e) => setNewUser({...newUser, email: e.target.value})}
-                              placeholder="example@email.com"
-                              className="h-12 bg-white/5 border-white/10 rounded-xl font-bold text-white placeholder:text-white/20"
-                            />
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">직위</label>
-                              <Select value={newUser.position} onValueChange={(v) => setNewUser({...newUser, position: v})}>
-                                <SelectTrigger className="h-12 bg-white/5 border-white/10 rounded-xl font-bold text-left text-white">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="bg-[#1c1c1e] border-white/10 rounded-xl text-white text-left">
-                                  {POSITIONS.map(pos => (
-                                    <SelectItem key={pos} value={pos} className="font-bold">{pos}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">직무</label>
-                              <Select value={newUser.jobRole} onValueChange={(v) => setNewUser({...newUser, jobRole: v})}>
-                                <SelectTrigger className="h-12 bg-white/5 border-white/10 rounded-xl font-bold text-left text-white">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="bg-[#1c1c1e] border-white/10 rounded-xl text-white text-left">
-                                  {jobRoles.map(jr => (
-                                    <SelectItem key={jr.id} value={jr.name} className="font-bold">{jr.name}</SelectItem>
-                                  ))}
-                                  {jobRoles.length === 0 && <SelectItem value="기타" className="font-bold">기타</SelectItem>}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">부서</label>
-                              <Select value={newUser.departmentId} onValueChange={(v) => {
-                                setNewUser({...newUser, departmentId: v});
-                              }}>
-                                <SelectTrigger className="h-12 bg-white/5 border-white/10 rounded-xl font-bold text-left text-white">
-                                  <SelectValue placeholder="부서 선택" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-[#1c1c1e] border-white/10 rounded-xl text-white text-left">
-                                  {departments.length > 0 ? departments.map(dept => (
-                                    <SelectItem key={dept.id} value={dept.id} className="font-bold">{dept.name}</SelectItem>
-                                  )) : (
-                                    <div className="p-2 text-xs text-white/30 text-center">등록된 부서가 없습니다.</div>
-                                  )}
-                                </SelectContent>
-                              </Select>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">생년월일 *</label>
+                                <div className="relative">
+                                  <CalendarRange className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                                  <Input 
+                                    placeholder="860330 (6자리)"
+                                    value={newUser.birthDate}
+                                    onChange={(e) => setNewUser({...newUser, birthDate: e.target.value})}
+                                    className="h-12 pl-12 bg-white/5 border-white/10 rounded-xl font-bold text-white placeholder:text-white/20"
+                                  />
+                                </div>
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">연락처</label>
+                                <Input 
+                                  value={newUser.phoneNumber}
+                                  onChange={(e) => setNewUser({...newUser, phoneNumber: e.target.value})}
+                                  placeholder="010-0000-0000"
+                                  className="h-12 bg-white/5 border-white/10 rounded-xl font-bold text-white placeholder:text-white/20"
+                                />
+                              </div>
                             </div>
                           </div>
                           
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">권한</label>
-                              <Select value={newUser.role} onValueChange={(v) => setNewUser({...newUser, role: v as Role})}>
-                                <SelectTrigger className="h-12 bg-white/5 border-white/10 rounded-xl font-bold text-left text-white">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="bg-[#1c1c1e] border-white/10 rounded-xl text-white text-left">
-                                  {ROLES.map(role => (
-                                    <SelectItem key={role} value={role} className="font-bold">{ROLE_LABELS[role]}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                          <div className="w-full h-px bg-white/5" />
+
+                          {/* Work Info Group */}
+                          <div className="space-y-4">
+                            <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-2 px-1">업무 정보</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">부서</label>
+                                <Select value={newUser.departmentId} onValueChange={(v) => setNewUser({...newUser, departmentId: v})}>
+                                  <SelectTrigger className="h-12 bg-white/5 border-white/10 rounded-xl font-bold text-left text-white">
+                                    <div className="flex items-center gap-2">
+                                      <Building2 className="w-4 h-4 text-white/20" />
+                                      <SelectValue placeholder="부서 선택" />
+                                    </div>
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-[#1c1c1e] border-white/10 rounded-xl text-white text-left">
+                                    {departments.map(dept => (
+                                      <SelectItem key={dept.id} value={dept.id} className="font-bold">{dept.name}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">직위</label>
+                                <Select value={newUser.position} onValueChange={(v) => setNewUser({...newUser, position: v})}>
+                                  <SelectTrigger className="h-12 bg-white/5 border-white/10 rounded-xl font-bold text-left text-white">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-[#1c1c1e] border-white/10 rounded-xl text-white text-left">
+                                    {positions.length > 0 ? (
+                                      positions.map(pos => (
+                                        <SelectItem key={pos.id} value={pos.name} className="font-bold">{pos.name}</SelectItem>
+                                      ))
+                                    ) : (
+                                      DEFAULT_POSITIONS.map(pos => (
+                                        <SelectItem key={pos} value={pos} className="font-bold">{pos}</SelectItem>
+                                      ))
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                              </div>
                             </div>
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">연락처</label>
-                              <Input 
-                                value={newUser.phoneNumber}
-                                onChange={(e) => setNewUser({...newUser, phoneNumber: e.target.value})}
-                                placeholder="010-0000-0000"
-                                className="h-12 bg-white/5 border-white/10 rounded-xl font-bold text-white placeholder:text-white/20"
-                              />
+
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">직무(팀)</label>
+                                <Select value={newUser.jobRole} onValueChange={(v) => setNewUser({...newUser, jobRole: v})}>
+                                  <SelectTrigger className="h-12 bg-white/5 border-white/10 rounded-xl font-bold text-left text-white">
+                                    <SelectValue placeholder="직무 선택" />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-[#1c1c1e] border-white/10 rounded-xl text-white text-left">
+                                    {jobRoles.length > 0 ? (
+                                      jobRoles.map(jr => (
+                                        <SelectItem key={jr.id} value={jr.name} className="font-bold">{jr.name}</SelectItem>
+                                      ))
+                                    ) : (
+                                      DEFAULT_JOB_ROLES.map(role => (
+                                        <SelectItem key={role} value={role} className="font-bold">{role}</SelectItem>
+                                      ))
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">입사일 *</label>
+                                <div className="relative">
+                                  <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                                  <Input 
+                                    type="date"
+                                    value={newUser.joinedAt}
+                                    onChange={(e) => setNewUser({...newUser, joinedAt: e.target.value})}
+                                    className="h-12 pl-12 bg-white/5 border-white/10 rounded-xl font-bold text-white"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">시스템 권한</label>
+                                <Select value={newUser.role} onValueChange={(v) => setNewUser({...newUser, role: v as Role})}>
+                                  <SelectTrigger className="h-12 bg-white/5 border-white/10 rounded-xl font-bold text-left text-white">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-[#1c1c1e] border-white/10 rounded-xl text-white text-left">
+                                    {ROLES.map(role => (
+                                      <SelectItem key={role} value={role} className="font-bold">{ROLE_LABELS[role]}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">사업장</label>
+                                <div className="relative">
+                                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                                  <Input 
+                                    value={newUser.workplace}
+                                    onChange={(e) => setNewUser({...newUser, workplace: e.target.value})}
+                                    placeholder="울산조선소"
+                                    className="h-12 pl-12 bg-white/5 border-white/10 rounded-xl font-bold text-white placeholder:text-white/20"
+                                  />
+                                </div>
+                              </div>
                             </div>
                           </div>
-
+                          
                           <div className="space-y-2">
-                            <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">사업장</label>
+                            <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">이메일 계정</label>
                             <Input 
-                              value={newUser.workplace}
-                              onChange={(e) => setNewUser({...newUser, workplace: e.target.value})}
-                              placeholder="울산조선소"
+                              value={newUser.email}
+                              onChange={(e) => setNewUser({...newUser, email: e.target.value})}
+                              placeholder="example@gmail.com (선택)"
                               className="h-12 bg-white/5 border-white/10 rounded-xl font-bold text-white placeholder:text-white/20"
                             />
                           </div>
                         </div>
-                        <DialogFooter className="p-8 pt-4 bg-white/5 border-t border-white/10 flex flex-row gap-3 min-h-[100px]">
-                          <Button variant="outline" className="flex-1 h-12 rounded-xl font-black border-white/10 bg-white/5 text-white" onClick={() => setIsAddUserOpen(false)}>취소</Button>
-                          <Button className="flex-1 h-12 rounded-xl font-black shadow-lg shadow-primary/20 bg-primary text-white" onClick={handleAddUser}>등록 완료</Button>
+
+                        <DialogFooter className="p-8 pt-6 bg-white/5 border-t border-white/10 flex flex-row gap-3 min-h-[100px] shrink-0">
+                          <Button variant="outline" className="flex-1 h-14 rounded-2xl font-black border-white/10 bg-white/5 text-white hover:bg-white/10 transition-all" onClick={() => setIsAddUserOpen(false)}>취소</Button>
+                          <Button className="flex-1 h-14 rounded-2xl font-black shadow-lg shadow-primary/20 bg-primary text-white hover:shadow-primary/40 active:scale-95 transition-all" onClick={handleAddUser}>인사정보 저장</Button>
                         </DialogFooter>
                       </DialogContent>
                     </Dialog>
@@ -904,16 +1018,38 @@ export const EmployeeManagement: React.FC = () => {
                 </Button>
               </CardContent>
             </Card>
+
+            <Card className="border-none shadow-sm bg-card rounded-2xl overflow-hidden border border-white/5">
+              <CardHeader className="pb-4 pt-6 px-6 bg-white/5 border-b border-white/5">
+                <CardTitle className="text-base font-black tracking-tight flex items-center gap-2 text-blue-400">
+                  <Plus className="w-4 h-4 text-blue-400" /> 새 직위 추가
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">직위 명칭</label>
+                  <Input 
+                    placeholder="예: 사원, 대리, 과장" 
+                    value={newPositionName}
+                    onChange={(e) => setNewPositionName(e.target.value)}
+                    className="h-12 text-sm border-white/5 bg-black/20 rounded-xl focus:ring-primary/20 font-bold text-white placeholder:text-white/20"
+                  />
+                </div>
+                <Button className="w-full h-12 gap-2 font-black text-sm rounded-xl shadow-lg active:scale-[0.98] transition-all bg-blue-600 hover:bg-blue-700 text-white" onClick={handleAddPosition}>
+                  직위 생성하기
+                </Button>
+              </CardContent>
+            </Card>
           </div>
 
-          <div className="grid lg:grid-cols-2 gap-8">
+          <div className="grid lg:grid-cols-3 gap-8">
             <div className="space-y-4">
               <div className="flex items-center justify-between px-1">
                 <h3 className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">부서 목록 ({departments.length})</h3>
                 <div className="h-px flex-1 bg-white/5 ml-4" />
               </div>
               
-              <div className="grid gap-3">
+              <div className="grid gap-3 max-h-[400px] overflow-y-auto no-scrollbar">
                 {departments.map((dept) => (
                   <Card key={dept.id} className="border-none shadow-sm bg-white/5 rounded-2xl border border-white/5">
                     <CardContent className="p-5 flex items-center justify-between">
@@ -953,7 +1089,7 @@ export const EmployeeManagement: React.FC = () => {
                 <div className="h-px flex-1 bg-white/5 ml-4" />
               </div>
               
-              <div className="grid gap-3">
+              <div className="grid gap-3 max-h-[400px] overflow-y-auto no-scrollbar">
                 {jobRoles.map((jr) => (
                   <Card key={jr.id} className="border-none shadow-sm bg-white/5 rounded-2xl border border-white/5">
                     <CardContent className="p-5 flex items-center justify-between">
@@ -982,6 +1118,46 @@ export const EmployeeManagement: React.FC = () => {
                 {jobRoles.length === 0 && (
                   <div className="py-10 text-center text-white/30 text-xs font-bold border border-dashed border-white/10 rounded-2xl bg-white/5">
                     등록된 직무가 없습니다.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between px-1">
+                <h3 className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">직위 목록 ({positions.length})</h3>
+                <div className="h-px flex-1 bg-white/5 ml-4" />
+              </div>
+              
+              <div className="grid gap-3 max-h-[400px] overflow-y-auto no-scrollbar">
+                {positions.map((pos) => (
+                  <Card key={pos.id} className="border-none shadow-sm bg-white/5 rounded-2xl border border-white/5">
+                    <CardContent className="p-5 flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-500">
+                          <Plus className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="font-black text-white tracking-tight">{pos.name}</div>
+                          <div className="text-[10px] text-muted-foreground font-bold">
+                            해당 사원: <span className="text-blue-500">{users.filter(u => u.position === pos.name).length}명</span>
+                          </div>
+                        </div>
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="w-10 h-10 rounded-xl text-white/20 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                        onClick={() => handleDeletePosition(pos.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+                {positions.length === 0 && (
+                  <div className="py-10 text-center text-white/30 text-xs font-bold border border-dashed border-white/10 rounded-2xl bg-white/5">
+                    등록된 직위가 없습니다.
                   </div>
                 )}
               </div>
@@ -1019,6 +1195,31 @@ export const EmployeeManagement: React.FC = () => {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
+                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">생년월일</label>
+                <div className="relative">
+                  <CalendarRange className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                  <Input 
+                    type="text"
+                    placeholder="860330"
+                    value={editingUser?.birthDate || ''}
+                    onChange={(e) => setEditingUser(prev => prev ? {...prev, birthDate: e.target.value} : null)}
+                    className="h-12 pl-12 bg-white/5 border-white/5 rounded-xl font-bold text-white placeholder:text-white/20"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">연락처</label>
+                <Input 
+                  value={editingUser?.phoneNumber || ''}
+                  onChange={(e) => setEditingUser(prev => prev ? {...prev, phoneNumber: e.target.value} : null)}
+                  placeholder="010-0000-0000"
+                  className="h-12 bg-white/5 border-white/5 rounded-xl font-bold text-white placeholder:text-white/20"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
                 <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">소속 부서</label>
                 <Select 
                   value={editingUser?.departmentId || 'none'} 
@@ -1029,7 +1230,10 @@ export const EmployeeManagement: React.FC = () => {
                   disabled={!isHRAdmin}
                 >
                   <SelectTrigger className="h-12 bg-white/5 border-white/5 rounded-xl font-bold text-white">
-                    <SelectValue />
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-white/20" />
+                      <SelectValue />
+                    </div>
                   </SelectTrigger>
                   <SelectContent className="bg-[#1c1c1e] rounded-xl border-white/5 text-white">
                     <SelectItem value="none">미지정</SelectItem>
@@ -1048,7 +1252,11 @@ export const EmployeeManagement: React.FC = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-[#1c1c1e] rounded-xl border-white/5 text-white">
-                    {POSITIONS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                    {positions.length > 0 ? (
+                      positions.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)
+                    ) : (
+                      DEFAULT_POSITIONS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -1056,7 +1264,7 @@ export const EmployeeManagement: React.FC = () => {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">직무</label>
+                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">직무(팀)</label>
                 <Select 
                   value={editingUser?.jobRole || '기타'} 
                   onValueChange={(v) => setEditingUser(prev => prev ? {...prev, jobRole: v} : null)}
@@ -1066,19 +1274,13 @@ export const EmployeeManagement: React.FC = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-[#1c1c1e] rounded-xl border-white/5 text-white">
-                    {jobRoles.map(jr => <SelectItem key={jr.id} value={jr.name}>{jr.name}</SelectItem>)}
-                    {jobRoles.length === 0 && DEFAULT_JOB_ROLES.map(jr => <SelectItem key={jr} value={jr}>{jr}</SelectItem>)}
+                    {jobRoles.length > 0 ? (
+                      jobRoles.map(jr => <SelectItem key={jr.id} value={jr.name}>{jr.name}</SelectItem>)
+                    ) : (
+                      DEFAULT_JOB_ROLES.map(jr => <SelectItem key={jr} value={jr}>{jr}</SelectItem>)
+                    )}
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">연락처</label>
-                <Input 
-                  value={editingUser?.phoneNumber || ''}
-                  onChange={(e) => setEditingUser(prev => prev ? {...prev, phoneNumber: e.target.value} : null)}
-                  placeholder="010-0000-0000"
-                  className="h-12 bg-white/5 border-white/5 rounded-xl font-bold text-white placeholder:text-white/20"
-                />
               </div>
             </div>
 
@@ -1121,8 +1323,51 @@ export const EmployeeManagement: React.FC = () => {
           </div>
           <DialogFooter className="p-8 pt-4 bg-white/5 border-t border-white/5 flex flex-row gap-3 shadow-2xl">
             <Button variant="outline" className="flex-1 h-12 rounded-xl font-black border-white/10 bg-white/5 text-white" onClick={() => setIsEditUserOpen(false)}>취소</Button>
+            {isHRAdmin && editingUser && (
+              <Button 
+                variant="outline" 
+                className="flex-1 h-12 rounded-xl font-black border-red-500/30 bg-red-500/5 text-red-500 hover:bg-red-500/10" 
+                onClick={() => {
+                  setResetTarget({ uid: editingUser.uid, employeeId: editingUser.employeeId });
+                  setIsResetConfirmOpen(true);
+                }}
+              >
+                초기화
+              </Button>
+            )}
             <Button className="flex-1 h-12 rounded-xl font-black shadow-lg bg-primary text-white" onClick={handleEditUserSave}>저장하기</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isResetConfirmOpen} onOpenChange={setIsResetConfirmOpen}>
+        <DialogContent className="bg-card border-none rounded-[2rem] shadow-2xl max-w-sm w-[90%] p-8 overflow-hidden text-white">
+          <DialogHeader className="items-center text-center space-y-4">
+            <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center">
+              <RefreshCw className="w-8 h-8 text-primary" />
+            </div>
+            <div className="space-y-1">
+              <DialogTitle className="text-xl font-black text-white tracking-tighter">비밀번호 초기화</DialogTitle>
+              <DialogDescription className="text-muted-foreground font-bold text-xs text-center">
+                선택하신 사원의 비밀번호를 초기화하시겠습니까?<br />초기 비밀번호는 사번으로 설정됩니다.
+              </DialogDescription>
+            </div>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 pt-6">
+            <Button 
+              className="w-full h-14 bg-primary text-white font-black rounded-xl"
+              onClick={handleResetPin}
+            >
+              초기화 실행
+            </Button>
+            <Button 
+              variant="ghost"
+              className="w-full h-10 text-white/40 font-black hover:text-white"
+              onClick={() => setIsResetConfirmOpen(false)}
+            >
+              취소
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

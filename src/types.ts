@@ -154,7 +154,7 @@ export interface Notification {
   uid: string; // Target user
   title: string;
   message: string;
-  type: 'HEALTH_CHECK' | 'NOTICE' | 'SYSTEM' | 'LEAVE_REMINDER' | 'COUPON' | 'EMERGENCY';
+  type: 'HEALTH_CHECK' | 'NOTICE' | 'SYSTEM' | 'LEAVE_REMINDER' | 'COUPON' | 'EMERGENCY' | 'URGENT_NOTICE' | 'LEAVE_RESPONSE';
   isRead: boolean;
   createdAt: string;
   fromUid?: string;
@@ -194,6 +194,19 @@ export interface RedemptionRequest {
   processedAt?: string;
   processedBy?: string;
   processedByName?: string;
+}
+
+export interface WorkLog {
+  id?: string;
+  uid: string;
+  userName: string;
+  departmentId?: string;
+  departmentName?: string;
+  date: string; // yyyy-MM-dd
+  startTime: string; // HH:mm
+  endTime: string; // HH:mm
+  content: string;
+  createdAt: string;
 }
 
 export interface Task {

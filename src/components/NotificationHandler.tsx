@@ -37,16 +37,20 @@ export const NotificationHandler: React.FC = () => {
           const data = change.doc.data() as Notification;
           
           // Trigger the visual alert (Foreground OS Notification)
+          const isUrgent = data.type === 'EMERGENCY' || data.type === 'URGENT_NOTICE';
+          
           await sendPushNotification(data.title, {
             body: data.message,
             tag: data.id || change.doc.id,
-            requireInteraction: data.type === 'EMERGENCY',
+            requireInteraction: isUrgent,
+            silent: false,
             // Use specific icons based on type
-            badge: data.type === 'EMERGENCY' ? '/emergency-icon.png' : undefined
+            icon: '/company_logo.png',
+            badge: '/company_logo.png'
           });
         }
       });
-    });
+    }, (error) => console.error("Notification handler listener error:", error));
 
     return () => unsubscribe();
   }, [user]);

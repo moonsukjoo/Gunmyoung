@@ -27,7 +27,8 @@ import {
   AlertCircle,
   LogOut,
   Wallet,
-  Ticket
+  Ticket,
+  Bell
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -38,6 +39,7 @@ import { toast } from 'sonner';
 import { TrainingResult } from '@/src/types';
 import { format } from 'date-fns';
 import { PinKeypad } from '@/src/components/PinKeypad';
+import { requestNotificationPermission } from '@/src/services/notificationService';
 
 export const MyPage: React.FC = () => {
   const { profile } = useAuth();
@@ -52,6 +54,19 @@ export const MyPage: React.FC = () => {
   const [examHistory, setExamHistory] = useState<TrainingResult[]>([]);
   const [allResults, setAllResults] = useState<TrainingResult[]>([]);
   const [isExamHistoryOpen, setIsExamHistoryOpen] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
+    'Notification' in window ? Notification.permission : 'denied'
+  );
+
+  const handleRequestPermission = async () => {
+    const granted = await requestNotificationPermission();
+    setNotificationPermission('Notification' in window ? Notification.permission : 'denied');
+    if (granted) {
+      toast.success('알림이 허용되었습니다.');
+    } else {
+      toast.error('알림 권한이 거부되었습니다. 브라우저 설정에서 확인해주세요.');
+    }
+  };
 
   React.useEffect(() => {
     if (!profile) return;
@@ -62,7 +77,7 @@ export const MyPage: React.FC = () => {
     );
     const unsubscribe = onSnapshot(q, (snap) => {
       setExamHistory(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as TrainingResult)));
-    });
+    }, (error) => console.error("Exam history listener error:", error));
     return () => unsubscribe();
   }, [profile]);
 
@@ -74,7 +89,7 @@ export const MyPage: React.FC = () => {
     );
     const unsubscribe = onSnapshot(q, (snap) => {
       setAllResults(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as TrainingResult)));
-    });
+    }, (error) => console.error("All results search listener error:", error));
     return () => unsubscribe();
   }, []);
 
@@ -254,7 +269,32 @@ export const MyPage: React.FC = () => {
       </div>
 
       {/* Settings section */}
-      <div className="pt-4">
+      <div className="pt-4 space-y-3">
+        <div 
+          className="bg-card p-5 rounded-2xl border border-white/5 flex items-center justify-between cursor-pointer"
+          onClick={handleRequestPermission}
+        >
+          <div className="flex items-center gap-4">
+            <div className={cn(
+              "w-10 h-10 rounded-xl flex items-center justify-center transition-colors",
+              notificationPermission === 'granted' ? "bg-primary/20 text-primary" : "bg-white/5 text-muted-foreground"
+            )}>
+              <Bell className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm font-black text-white">기기 알림 설정</p>
+              <p className="text-[10px] text-muted-foreground font-bold">
+                {notificationPermission === 'granted' ? '알림이 활성화되었습니다' : '상태바 알림을 허용하세요'}
+              </p>
+            </div>
+          </div>
+          <div className={cn("px-3 py-1 rounded-lg text-[10px] font-black", 
+            notificationPermission === 'granted' ? "bg-emerald-500/20 text-emerald-500" : "bg-amber-500/20 text-amber-500"
+          )}>
+            {notificationPermission === 'granted' ? '활성' : '비활성'}
+          </div>
+        </div>
+
         <div 
           className="bg-card p-5 rounded-2xl border border-white/5 flex items-center justify-between cursor-pointer"
           onClick={toggleElderlyMode}
@@ -308,7 +348,10 @@ export const MyPage: React.FC = () => {
                 else if (pinStep === 1) setNewPin("");
                 else setConfirmPin("");
              }}
-             className="bg-white/[0.02]" 
+             passwordLength={isReAuthPending ? reAuthPin.length : (pinStep === 1 ? newPin.length : confirmPin.length)}
+             onBack={() => setIsPinModalOpen(false)}
+             onOtherMethod={() => setIsPinModalOpen(false)}
+             className={cn(!isPinModalOpen && "hidden")}
            />
         </DialogContent>
       </Dialog>

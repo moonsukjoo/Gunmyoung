@@ -57,15 +57,15 @@ export const SafetyRanking: React.FC = () => {
     const unsubscribeUsers = onSnapshot(query(collection(db, 'users')), (snapshot) => {
       setUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
       setLoading(false);
-    });
+    }, (error) => console.error("SafetyRanking users listener error:", error));
 
     const unsubscribeDepts = onSnapshot(query(collection(db, 'departments'), orderBy('name')), (snapshot) => {
       setDepartments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Department)));
-    });
+    }, (error) => console.error("SafetyRanking departments listener error:", error));
 
     const unsubscribeLogs = onSnapshot(query(collection(db, 'safetyScoreLogs'), orderBy('createdAt', 'desc')), (snapshot) => {
       setLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SafetyScoreLog)));
-    });
+    }, (error) => console.error("SafetyRanking logs listener error:", error));
 
     return () => {
       unsubscribeUsers();
