@@ -17,7 +17,7 @@ jobs:
       - name: Node.js 설정
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '20' # 안정적인 LTS 버전 권장
 
       - name: 의존성 패키지 설치
         run: |
@@ -33,16 +33,21 @@ jobs:
           cp -r out/* dist/ 2>/dev/null || true
           cp -r build/* dist/ 2>/dev/null || true
 
-      - name: Capacitor 초기화 및 앱 이름 지정
+      - name: Capacitor 초기화 및 안드로이드 플랫폼 추가
         run: |
           npx cap init "건명" "com.gun.app" --web-dir dist || true
           npx cap add android || true
 
-      # 핵심 수정 사항: 불필요한 복사 과정을 지우고 바로 아이콘 생성 명령어 실행
-      - name: 앱 아이콘 생성
-        run: npx @capacitor/assets generate --android
+      # 핵심 해결책: 아이콘 생성 전 assets 폴더를 최신화하고 강제로 생성
+      - name: 앱 아이콘 강제 생성
+        run: |
+          mkdir -p assets
+          # public에 있는 최신 로고를 assets/icon.png로 복사하여 소스 일치시킴
+          cp public/company_logo.png assets/icon.png 2>/dev/null || true
+          # 안드로이드 아이콘 리소스 강제 생성
+          npx @capacitor/assets generate --android
 
-      - name: Capacitor 싱크
+      - name: Capacitor 싱크 (생성된 아이콘 반영)
         run: npx cap sync android
 
       - name: Java 설정
@@ -55,6 +60,8 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
+          # 이전 빌드 기록 삭제 후 깨끗하게 빌드
+          ./gradlew clean
           ./gradlew assembleDebug --stacktrace
 
       - name: 완성된 APK 업로드
@@ -63,4 +70,3 @@ jobs:
         with:
           name: gun-app-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
-
