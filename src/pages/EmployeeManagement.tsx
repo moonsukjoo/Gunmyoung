@@ -393,7 +393,8 @@ export const EmployeeManagement: React.FC = () => {
         ...newUser,
         uid: `manual_${Date.now()}`,
         isActive: true,
-        departmentName: departments.find(d => d.id === newUser.departmentId)?.name || ''
+        departmentName: departments.find(d => d.id === newUser.departmentId)?.name || '',
+        kudosCount: 0
       });
       
       await updateDoc(doc(db, 'users', userRef.id), { uid: userRef.id });

@@ -27,6 +27,7 @@ import { RedemptionManagement } from './pages/RedemptionManagement';
 import { AttendanceManagement } from './pages/AttendanceManagement';
 import { WorkLog } from './pages/WorkLog';
 import { WorkLogManagement } from './pages/WorkLogManagement';
+import { PraiseFeed } from './pages/PraiseFeed';
 import { Admin } from './pages/Admin';
 import { Toaster } from '@/components/ui/sonner';
 import { CompanyLogo } from './components/CompanyLogo';
@@ -101,6 +102,7 @@ export default function App() {
           <Route path="/redemption-mgmt" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="redemption_mgmt"><RedemptionManagement /></ProtectedRoute>} />
           <Route path="/attendance-mgmt" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="attendance_mgmt"><AttendanceManagement /></ProtectedRoute>} />
           <Route path="/ship-assembly" element={<ProtectedRoute><ShipAssembly /></ProtectedRoute>} />
+          <Route path="/praise-feed" element={<ProtectedRoute><PraiseFeed /></ProtectedRoute>} />
           <Route path="/work-log" element={<ProtectedRoute><WorkLog /></ProtectedRoute>} />
           <Route path="/work-log-mgmt" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER']}><WorkLogManagement /></ProtectedRoute>} />
           <Route path="/qualification" element={<ProtectedRoute><Qualification /></ProtectedRoute>} />

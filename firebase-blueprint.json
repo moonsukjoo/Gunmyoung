@@ -28,7 +28,10 @@
         "lastPinChange": { "type": "string", "format": "date-time" },
         "permissions": { "type": "array", "items": { "type": "string" }, "description": "Dynamic permissions: notice_mgmt, accident_mgmt, leave_mgmt, dept_mgmt, employee_mgmt, praise_coupon" },
         "safetyScore": { "type": "number", "description": "Safety performance score starting at 100" },
-        "safetyScoreLastUpdate": { "type": "string", "format": "date-time" }
+        "safetyScoreLastUpdate": { "type": "string", "format": "date-time" },
+        "kudosCount": { "type": "number", "description": "Count of praises received from colleagues" },
+        "monthlyKudosCount": { "type": "number", "description": "Kudos count for the current month" },
+        "kudosMonth": { "type": "string", "description": "Current month string (YYYY-MM)" }
       },
       "required": ["uid", "email", "role", "displayName"]
     },
@@ -50,6 +53,33 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["targetUid", "adminUid", "scoreDelta", "previousScore", "newScore", "type", "createdAt"]
+    },
+    "Praise": {
+      "title": "Praise Feed",
+      "description": "Short praise messages sent between workers for safety and help",
+      "type": "object",
+      "properties": {
+        "senderUid": { "type": "string" },
+        "senderName": { "type": "string" },
+        "receiverUid": { "type": "string" },
+        "receiverName": { "type": "string" },
+        "message": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderUid", "receiverUid", "message", "createdAt"]
+    },
+    "PraiseComment": {
+      "title": "Praise Comment",
+      "description": "Comments on praise posts",
+      "type": "object",
+      "properties": {
+        "praiseId": { "type": "string" },
+        "uid": { "type": "string" },
+        "userName": { "type": "string" },
+        "message": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["praiseId", "uid", "userName", "message", "createdAt"]
     },
     "PraiseCoupon": {
       "title": "Praise Coupon",
@@ -346,6 +376,14 @@
     "/safetyScoreLogs/{logId}": {
       "schema": "SafetyScoreLog",
       "description": "Logs of safety score adjustments"
+    },
+    "/praises/{praiseId}": {
+      "schema": "Praise",
+      "description": "Praise relay feed records"
+    },
+    "/praises/{praiseId}/comments/{commentId}": {
+      "schema": "PraiseComment",
+      "description": "Comments on a praise post"
     },
     "/jobRoles/{roleId}": {
       "schema": "JobRole",

@@ -24,11 +24,14 @@ import {
   CheckCircle,
   Users,
   AlertTriangle,
-  ClipboardList
+  ClipboardList,
+  Heart,
+  Sparkles,
+  User as UserIcon
 } from 'lucide-react';
 import { db } from '@/src/firebase';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, limit, orderBy, getDocs, Timestamp } from 'firebase/firestore';
-import { Attendance, Notice, Role, AccidentCase, LeaveRequest, Task } from '@/src/types';
+import { Attendance, Notice, Role, AccidentCase, LeaveRequest, Task, UserProfile } from '@/src/types';
 import { format, startOfMonth, subMonths } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -453,7 +456,7 @@ export const Dashboard: React.FC = () => {
             <ClipboardList className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-0.5">Daily Progress</p>
+            <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-0.5">업무 일지</p>
             <h3 className="text-lg font-black text-white">일일 작업일지 작성하기</h3>
           </div>
         </div>
@@ -526,6 +529,25 @@ export const Dashboard: React.FC = () => {
         </div>
         
         <div className="divide-y divide-white/5">
+          <div 
+            className="p-6 py-5 flex items-center justify-between group active:bg-white/5 transition-colors cursor-pointer"
+            onClick={() => navigate('/praise-feed')}
+          >
+            <div className="flex items-center gap-4 overflow-hidden">
+              <div className="w-10 h-10 bg-pink-500/20 rounded-xl flex items-center justify-center text-pink-500 shrink-0">
+                <Heart className="w-5 h-5 fill-pink-500" />
+              </div>
+              <div className="flex flex-col overflow-hidden">
+                <span className="text-base font-black text-white tracking-tight truncate">칭찬 릴레이</span>
+                <span className="text-xs text-pink-500 font-bold">동료에게 마음을 전하세요</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+               <span className="text-sm font-black text-pink-500">{profile?.kudosCount || 0}개</span>
+               <ChevronRight className="w-5 h-5 text-muted-foreground opacity-30" />
+            </div>
+          </div>
+
           <div 
             className="p-6 py-5 flex items-center justify-between group active:bg-white/5 transition-colors cursor-pointer"
             onClick={() => navigate('/ship-assembly')}
@@ -615,7 +637,7 @@ export const Dashboard: React.FC = () => {
               <h4 className="text-sm font-black text-white opacity-60">오늘의 컨디션</h4>
             </div>
             <Badge className="bg-primary/20 text-primary border-none px-3 py-1 font-black text-[10px] tracking-widest shrink-0">
-              {todayAttendance ? (todayAttendance.clockOut ? 'WORK END' : 'WORKING') : 'BEFORE WORK'}
+              {todayAttendance ? (todayAttendance.clockOut ? '업무 종료' : '근무 중') : '출근 전'}
             </Badge>
           </div>
 

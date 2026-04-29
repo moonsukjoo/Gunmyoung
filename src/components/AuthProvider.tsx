@@ -99,6 +99,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               role: isBootstrapCEO ? 'CEO' : 'EMPLOYEE',
               isActive: true,
               joinedAt: new Date().toISOString(),
+              kudosCount: 0,
             };
             await setDoc(doc(db, 'users', firebaseUser.uid), newProfile);
             setProfile(newProfile);

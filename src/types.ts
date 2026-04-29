@@ -29,6 +29,9 @@ export interface UserProfile {
   lastShipPartGrantAt?: string;
   safetyScore?: number;
   safetyScoreLastUpdate?: string;
+  kudosCount?: number;
+  monthlyKudosCount?: number;
+  kudosMonth?: string;
 }
 
 export interface SafetyScoreLog {
@@ -165,6 +168,25 @@ export interface LottoHistory {
   id: string;
   uid: string;
   lines: string[]; // Store as ["1,2,3,4,5,6,7", ...] to avoid Firestore nested array error
+  createdAt: string;
+}
+
+export interface Praise {
+  id: string;
+  senderUid: string;
+  senderName: string;
+  receiverUid: string;
+  receiverName: string;
+  message: string;
+  createdAt: string;
+}
+
+export interface PraiseComment {
+  id: string;
+  praiseId: string;
+  uid: string;
+  userName: string;
+  message: string;
   createdAt: string;
 }
 
