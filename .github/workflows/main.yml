@@ -38,14 +38,15 @@ jobs:
           npx cap init "건명" "com.gun.app" --web-dir dist || true
           npx cap add android || true
 
-      # 에셋 파일이 실제로 존재하는지 확인 (디버깅용)
-      - name: 에셋 확인
-        run: ls -R assets/
-
-      - name: 앱 아이콘 및 스플래시 생성
+      # 안전장치: public의 로고를 assets/icon.png로 강제 덮어쓰기하여 항상 최신 유지
+      - name: 아이콘 소스 동기화
         run: |
-          npx @capacitor/assets generate --android --assetPath assets/icon.png
-          npx @capacitor/assets generate --android --assetPath assets/splash.png || true
+          mkdir -p assets
+          cp public/company_logo.png assets/icon.png 2>/dev/null || true
+
+      # 핵심 수정: 잘못된 --assetPath 옵션을 제거하고 기본 명령어로 실행
+      - name: 앱 아이콘 및 스플래시 생성
+        run: npx @capacitor/assets generate --android
 
       - name: Capacitor 싱크
         run: npx cap sync android
@@ -60,6 +61,7 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
+          ./gradlew clean  # 이전 에러로 꼬인 찌꺼기(캐시) 완벽 제거
           ./gradlew assembleDebug --stacktrace
 
       - name: 완성된 APK 업로드
@@ -68,4 +70,3 @@ jobs:
         with:
           name: gun-app-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
-
