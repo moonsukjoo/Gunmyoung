@@ -54,17 +54,50 @@ export const MyPage: React.FC = () => {
   const [examHistory, setExamHistory] = useState<TrainingResult[]>([]);
   const [allResults, setAllResults] = useState<TrainingResult[]>([]);
   const [isExamHistoryOpen, setIsExamHistoryOpen] = useState(false);
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
+  const [notificationPermission, setNotificationPermission] = useState<string>(
     'Notification' in window ? Notification.permission : 'denied'
   );
 
+  const checkPermission = async () => {
+    const isCapacitor = (window as any).Capacitor !== undefined;
+    if (isCapacitor) {
+      try {
+        const { LocalNotifications } = await import('@capacitor/local-notifications');
+        const status = await LocalNotifications.checkPermissions();
+        setNotificationPermission(status.display);
+      } catch (e) {
+        console.error('Check native permission failed:', e);
+      }
+    } else {
+      setNotificationPermission('Notification' in window ? Notification.permission : 'denied');
+    }
+  };
+
+  React.useEffect(() => {
+    checkPermission();
+  }, []);
+
   const handleRequestPermission = async () => {
     const granted = await requestNotificationPermission();
-    setNotificationPermission('Notification' in window ? Notification.permission : 'denied');
+    await checkPermission();
+    
     if (granted) {
       toast.success('알림이 허용되었습니다.');
     } else {
-      toast.error('알림 권한이 거부되었습니다. 브라우저 설정에서 확인해주세요.');
+      // 안드로이드 앱 또는 Capacitor 환경 감지
+      const isCapacitor = (window as any).Capacitor !== undefined;
+      const isAdminApp = isCapacitor || window.location.protocol === 'capacitor:' || /Android/i.test(navigator.userAgent);
+      
+      if (isAdminApp) {
+        toast.error('기기 알람 권한이 필요합니다.', {
+          description: '핸드폰의 [설정 > 애플리케이션 > 건명 > 알림]에서 "알림 허용"을 활성화해 주세요.',
+          duration: 6000
+        });
+      } else {
+        toast.error('알림 권한이 거부되었습니다.', {
+          description: '브라우저 주소창 옆의 자물쇠 아이콘을 눌러 알림 권한을 허용해 주세요.',
+        });
+      }
     }
   };
 
