@@ -27,6 +27,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from 'sonner';
+import { sendPushNotification } from '../services/notificationService';
 
 interface NavItemProps {
   to: string;
@@ -73,6 +74,21 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setUnreadCount(snapshot.size);
+      
+      // Trigger local notification for new arrivals if not initially loading
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          const data = change.doc.data();
+          // Avoid notifying for old messages on first load or messages from self
+          const isNew = data.createdAt && new Date(data.createdAt).getTime() > Date.now() - 10000;
+          if (isNew) {
+            sendPushNotification(data.title, {
+              body: data.message,
+              data: { type: data.type, id: change.doc.id }
+            });
+          }
+        }
+      });
     }, (error) => console.error("Unread count listener error:", error));
     return () => unsubscribe();
   }, [profile]);
@@ -135,6 +151,14 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       );
 
       await Promise.all(notificationPromises);
+      
+      // 실제 푸시 알림 전송 (Capacitor/브라우저 OS 레벨)
+      await sendPushNotification(`🚨 [긴급 SOS] ${type} 발생!`, {
+        body: `${profile.displayName}님이 위급 상황(${type})을 보고했습니다.`,
+        tag: `emergency-${Date.now()}`,
+        data: { type: 'EMERGENCY' }
+      });
+
       setIsSOSDialogOpen(false);
       toast.error('긴급 SOS 전송 완료');
     } catch (error) {

@@ -1,4 +1,5 @@
 import React from 'react';
+import logo from '@/src/assets/logo.png';
 
 interface LogoProps {
   className?: string;
@@ -8,7 +9,7 @@ interface LogoProps {
 export const CompanyLogo: React.FC<LogoProps> = ({ className, size = '100%' }) => {
   return (
     <img 
-      src="/company_logo.png" 
+      src={logo} 
       alt="Company Logo" 
       className={className}
       style={{ width: size, height: size, objectFit: 'contain' }}

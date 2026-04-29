@@ -27,26 +27,24 @@ jobs:
       - name: 웹 프로젝트 빌드
         run: npm run build
 
-      - name: 빌드 폴더 정리
-        run: |
-          mkdir -p dist
-          cp -r out/* dist/ 2>/dev/null || true
-          cp -r build/* dist/ 2>/dev/null || true
-
-      - name: Capacitor 초기화 및 앱 이름 지정
+      - name: Capacitor 프로젝트 설정
         run: |
           npx cap init "건명" "com.gun.app" --web-dir dist || true
           npx cap add android || true
 
-      # 안전장치: public의 로고를 assets/icon.png로 강제 덮어쓰기하여 항상 최신 유지
-      - name: 아이콘 소스 동기화
+      - name: 앱 에셋 준비 (아이콘/스플래시)
         run: |
           mkdir -p assets
-          cp public/company_logo.png assets/icon.png 2>/dev/null || true
-
-      # 핵심 수정: 잘못된 --assetPath 옵션을 제거하고 기본 명령어로 실행
+          # 로고 파일을 아이콘과 스플래시 소스로 사용
+          cp public/company_logo.png assets/icon.png || true
+          cp public/company_logo.png assets/icon-only.png || true
+          cp public/company_logo.png assets/icon-foreground.png || true
+          cp public/company_logo.png assets/icon-background.png || true
+          cp public/company_logo.png assets/splash.png || true
+          cp public/company_logo.png assets/splash-dark.png || true
+          
       - name: 앱 아이콘 및 스플래시 생성
-        run: npx @capacitor/assets generate --android
+        run: npx @capacitor/assets generate --android --assetPath assets || true
 
       - name: Capacitor 싱크
         run: npx cap sync android
@@ -61,7 +59,6 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew clean  # 이전 에러로 꼬인 찌꺼기(캐시) 완벽 제거
           ./gradlew assembleDebug --stacktrace
 
       - name: 완성된 APK 업로드
@@ -70,3 +67,4 @@ jobs:
         with:
           name: gun-app-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
