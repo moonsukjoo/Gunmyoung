@@ -1,4 +1,4 @@
-name: Build Android APK (건명)
+name: Build Android APK
 
 on:
   push:
@@ -11,33 +11,54 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 코드 체크아웃
+      - name: checkout
         uses: actions/checkout@v4
 
-      - name: Node.js 설정
+      - name: setup-node
         uses: actions/setup-node@v4
         with:
-          node-version: '20' # 가장 안정적인 LTS 버전 사용
+          node-version: '20'
 
-      - name: 의존성 패키지 설치
+      - name: install-dependencies
         run: |
           npm install
-          # 에셋 생성 도구와 캐파시터 관련 패키지 설치
           npm install @capacitor/assets @capacitor/cli @capacitor/android
 
-      - name: 웹 프로젝트 빌드
+      - name: build-web
         run: npm run build
 
-      - name: Capacitor 초기화 및 플랫폼 추가
+      - name: capacitor-init
         run: |
-          npx cap init "건명" "com.gun.app" --web-dir dist || echo "이미 초기화됨"
-          npx cap add android || echo "안드로이드 플랫폼이 이미 존재함"
+          npx cap init "건명" "com.gun.app" --web-dir dist || echo "skip"
+          npx cap add android || echo "skip"
 
-      - name: 앱 에셋 강제 준비 (에러 방지용 단순화)
-        # 배경 투명도 문제로 인한 빌드 에러를 막기 위해 icon.png 하나만 사용합니다.
+      - name: prepare-assets
         run: |
           mkdir -p assets
           cp public/company_logo.png assets/icon.png
           cp public/company_logo.png assets/splash.png
 
-      - name: 안드로
+      - name: generate-resources
+        run: npx @capacitor/assets generate --android --assetPath assets
+
+      - name: capacitor-sync
+        run: npx cap sync android
+
+      - name: setup-java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: build-apk
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew clean assembleDebug --stacktrace
+
+      - name: upload-apk
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: gun-app-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
