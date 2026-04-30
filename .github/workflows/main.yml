@@ -14,10 +14,10 @@ jobs:
       - name: 코드 체크아웃
         uses: actions/checkout@v4
 
-      - name: Node.js 설정
+      - name: Node.js 설정 (버전 22로 업그레이드)
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22' # 에러 해결의 핵심 부분입니다.
 
       - name: 의존성 설치
         run: |
