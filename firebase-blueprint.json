@@ -31,7 +31,10 @@
         "safetyScoreLastUpdate": { "type": "string", "format": "date-time" },
         "kudosCount": { "type": "number", "description": "Count of praises received from colleagues" },
         "monthlyKudosCount": { "type": "number", "description": "Kudos count for the current month" },
-        "kudosMonth": { "type": "string", "description": "Current month string (YYYY-MM)" }
+        "kudosMonth": { "type": "string", "description": "Current month string (YYYY-MM)" },
+        "currentAltitude": { "type": "number", "description": "Current relative altitude in meters" },
+        "altitudeUpdatedAt": { "type": "string", "format": "date-time" },
+        "basePressure": { "type": "number", "description": "Baseline air pressure at ground level" }
       },
       "required": ["uid", "email", "role", "displayName"]
     },
@@ -318,6 +321,33 @@
         "updatedBy": { "type": "string" }
       },
       "required": ["text", "updatedAt"]
+    },
+    "EvacuationStatus": {
+      "title": "Emergency Evacuation Status",
+      "description": "Global status for active emergency evacuations",
+      "type": "object",
+      "properties": {
+        "isActive": { "type": "boolean" },
+        "activatedAt": { "type": "string", "format": "date-time" },
+        "activatedByUid": { "type": "string" },
+        "activatedByName": { "type": "string" },
+        "reason": { "type": "string" },
+        "totalWorkers": { "type": "number" },
+        "confirmedCount": { "type": "number" }
+      },
+      "required": ["isActive", "activatedAt", "activatedByUid", "reason"]
+    },
+    "EvacuationCheckin": {
+      "title": "Evacuation Check-in",
+      "description": "User safety confirmation record during an evacuation",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "departmentName": { "type": "string" },
+        "confirmedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "confirmedAt"]
     }
   },
   "firestore": {
@@ -396,6 +426,18 @@
     "/settings/banner": {
       "schema": "Banner",
       "description": "Global banner text configuration"
+    },
+    "/evacuation/status": {
+      "schema": "EvacuationStatus",
+      "description": "Current emergency evacuation status singleton"
+    },
+    "/evacuations/{evacuationId}/checkins/{uid}": {
+      "schema": "EvacuationCheckin",
+      "description": "Check-in records for a specific evacuation event"
+    },
+    "/altitudeLogs/{logId}": {
+      "schema": "object",
+      "description": "Historical altitude data points for safety auditing"
     }
   }
 }

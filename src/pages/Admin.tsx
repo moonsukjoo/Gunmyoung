@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { useAuth } from '@/src/components/AuthProvider';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,8 @@ import {
   Settings, 
   Megaphone, 
   ShieldAlert, 
+  AlertTriangle,
+  BarChart3,
   CalendarDays, 
   Trophy,
   Search,
@@ -41,7 +44,7 @@ import { collection, query, onSnapshot, updateDoc, doc, setDoc } from 'firebase/
 import { UserProfile } from '@/src/types';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 const PERMISSIONS = [
   { id: 'admin', label: '시스템 관리 접근', icon: Settings },
@@ -57,6 +60,7 @@ const PERMISSIONS = [
 
 export const Admin: React.FC = () => {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -65,6 +69,7 @@ export const Admin: React.FC = () => {
   const [isShipSettingsOpen, setIsShipSettingsOpen] = useState(false);
   const [isBannerSettingsOpen, setIsBannerSettingsOpen] = useState(false);
   const [isPermissionSettingsOpen, setIsPermissionSettingsOpen] = useState(false);
+  const [isEmergencyOpen, setIsEmergencyOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const [snailProbs, setSnailProbs] = useState<number[]>([1, 1, 1, 1, 1]);
@@ -73,6 +78,34 @@ export const Admin: React.FC = () => {
     disabledParts: [] as string[]
   });
   const [bannerText, setBannerText] = useState('안전한 하루가 되세요');
+  const [evacuationStatus, setEvacuationStatus] = useState<any>(null);
+  const [evacuationCheckins, setEvacuationCheckins] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!profile) return;
+    
+    const unsubEvacuation = onSnapshot(doc(db, 'evacuation', 'status'), (snap) => {
+      if (snap.exists()) {
+        setEvacuationStatus(snap.data());
+      } else {
+        setEvacuationStatus(null);
+      }
+    });
+
+    return () => unsubEvacuation();
+  }, [profile]);
+
+  useEffect(() => {
+    if (evacuationStatus?.isActive) {
+      const q = query(collection(db, 'evacuations', evacuationStatus.id, 'checkins'));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        setEvacuationCheckins(snapshot.docs.map(doc => doc.data()));
+      });
+      return () => unsubscribe();
+    } else {
+      setEvacuationCheckins([]);
+    }
+  }, [evacuationStatus?.isActive, evacuationStatus?.id]);
 
   useEffect(() => {
     if (!profile) return;
@@ -157,6 +190,8 @@ export const Admin: React.FC = () => {
     { onClick: () => setIsSnailSettingsOpen(true), label: '달팽이 경주 설정', icon: Zap, permission: 'admin' },
     { onClick: () => setIsShipSettingsOpen(true), label: '함선 부품 설정', icon: Ship, permission: 'admin' },
     { onClick: () => setIsPermissionSettingsOpen(true), label: '사용자 권한 명단', icon: ShieldCheck, permission: 'admin' },
+    { onClick: () => navigate('/high-work-monitor'), label: '고소작업 실시간 현황', icon: BarChart3, roles: ['CEO', 'SAFETY_MANAGER'] },
+    { onClick: () => setIsEmergencyOpen(true), label: '비상 대피 롤콜', icon: AlertTriangle, roles: ['CEO', 'SAFETY_MANAGER'] },
   ];
 
   if (loading) return <div className="flex items-center justify-center h-[60vh]"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
@@ -325,6 +360,132 @@ export const Admin: React.FC = () => {
                 ));
               })()}
            </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isEmergencyOpen} onOpenChange={setIsEmergencyOpen}>
+        <DialogContent className="bg-card border-none rounded-3xl text-white max-w-lg p-0 overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="p-8 pb-4">
+            <DialogHeader>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 bg-red-600/20 text-red-600 rounded-xl flex items-center justify-center">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+                <div>
+                  <DialogTitle className="font-black text-xl">비상 대피 실시간 롤콜</DialogTitle>
+                  <DialogDescription className="font-bold">현장 인원들의 안전을 실시간으로 확인합니다.</DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-8 pt-0 space-y-6">
+            {evacuationStatus?.isActive ? (
+              <div className="space-y-6">
+                {/* Real-time Stats */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-white/5 p-6 rounded-2xl border border-white/5 text-center">
+                    <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">확인 인원</p>
+                    <p className="text-4xl font-black text-primary">{evacuationCheckins.length}</p>
+                  </div>
+                  <div className="bg-red-600/10 p-6 rounded-2xl border border-red-600/20 text-center">
+                    <p className="text-[10px] font-black text-red-600/60 uppercase tracking-widest mb-1">미확인 인원</p>
+                    <p className="text-4xl font-black text-red-600">
+                      {Math.max(0, (evacuationStatus.totalWorkers || users.length) - evacuationCheckins.length)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="bg-white/5 h-4 rounded-full overflow-hidden">
+                  <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: `${(evacuationCheckins.length / (evacuationStatus.totalWorkers || users.length)) * 100}%` }}
+                    className="h-full bg-primary"
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="text-sm font-black text-white px-1">미확인 인원 명단</h4>
+                  <div className="grid grid-cols-1 gap-2">
+                    {users
+                      .filter(u => !evacuationCheckins.some(c => c.uid === u.uid))
+                      .map(user => (
+                        <div key={user.uid} className="flex items-center justify-between p-4 bg-red-600/5 border border-red-600/10 rounded-xl">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-red-600/20 text-red-600 rounded-lg flex items-center justify-center font-black text-xs">
+                              {user.displayName.charAt(0)}
+                            </div>
+                            <div>
+                              <p className="font-black text-sm text-red-600">{user.displayName}님</p>
+                              <p className="text-[10px] text-red-400 font-bold">{user.departmentName || '소속 없음'}</p>
+                            </div>
+                          </div>
+                          <Badge className="bg-red-600/20 text-red-600 border-none font-black text-[10px]">미확인</Badge>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <Button 
+                    variant="outline" 
+                    className="flex-1 h-14 rounded-2xl border-white/10 text-white font-black"
+                    onClick={() => setIsEmergencyOpen(false)}
+                  >
+                    닫기
+                  </Button>
+                  <Button 
+                    className="flex-1 h-14 rounded-2xl bg-slate-900 text-white font-black border border-white/5"
+                    onClick={async () => {
+                      if (window.confirm('대피 상황을 종료하시겠습니까?')) {
+                        await updateDoc(doc(db, 'evacuation', 'status'), { isActive: false });
+                        toast.success('대피 상황이 종료되었습니다.');
+                      }
+                    }}
+                  >
+                    상황 종료
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-6 pt-4">
+                <div className="p-6 bg-red-600/10 rounded-3xl border border-red-600/20 text-center space-y-2">
+                  <p className="text-sm font-black text-red-600">현재 활성화된 대피령이 없습니다.</p>
+                  <p className="text-xs font-bold text-red-400">비상 상황 발생 시 아래 버튼을 눌러 대피령을 발동하세요.</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest px-1">대피 공지 사유</Label>
+                  <Input 
+                    placeholder="예: 제3도크 화재 발생, 즉시 대피 바랍니다."
+                    className="bg-white/5 border-none h-14 rounded-2xl font-bold"
+                    id="emergency-reason"
+                  />
+                </div>
+
+                <Button 
+                  className="w-full h-16 bg-red-600 hover:bg-red-700 text-white font-black rounded-2xl text-lg shadow-xl shadow-red-600/20"
+                  onClick={async () => {
+                    const reason = (document.getElementById('emergency-reason') as HTMLInputElement)?.value || '긴급 상황이 발생했습니다.';
+                    const id = new Date().getTime().toString();
+                    await setDoc(doc(db, 'evacuation', 'status'), {
+                      id,
+                      isActive: true,
+                      activatedAt: new Date().toISOString(),
+                      activatedByUid: profile?.uid,
+                      activatedByName: profile?.displayName,
+                      reason,
+                      totalWorkers: users.length,
+                      confirmedCount: 0
+                    });
+                    toast.error('비상 대피령이 발동되었습니다!');
+                  }}
+                >
+                  비상 대피령 발동 (ROLL-CALL 시작)
+                </Button>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

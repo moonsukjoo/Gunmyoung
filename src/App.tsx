@@ -28,9 +28,12 @@ import { AttendanceManagement } from './pages/AttendanceManagement';
 import { WorkLog } from './pages/WorkLog';
 import { WorkLogManagement } from './pages/WorkLogManagement';
 import { PraiseFeed } from './pages/PraiseFeed';
+import { HighWorkMonitoring } from './pages/HighWorkMonitoring';
 import { Admin } from './pages/Admin';
 import { Toaster } from '@/components/ui/sonner';
 import { CompanyLogo } from './components/CompanyLogo';
+import { EmergencyOverlay } from './components/EmergencyOverlay';
+import { AltitudeTracker } from './components/AltitudeTracker';
 
 const ProtectedRoute = ({ children, roles, permission }: { children: React.ReactNode, roles?: string[], permission?: string }) => {
   const { user, profile, loading } = useAuth();
@@ -82,6 +85,8 @@ export default function App() {
     <AuthProvider>
       <NotificationHandler />
       <FontSizeManager />
+      <EmergencyOverlay />
+      <AltitudeTracker />
       <Router>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -101,6 +106,7 @@ export default function App() {
           <Route path="/redemption" element={<ProtectedRoute><Redemption /></ProtectedRoute>} />
           <Route path="/redemption-mgmt" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="redemption_mgmt"><RedemptionManagement /></ProtectedRoute>} />
           <Route path="/attendance-mgmt" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="attendance_mgmt"><AttendanceManagement /></ProtectedRoute>} />
+          <Route path="/high-work-monitor" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER']}><HighWorkMonitoring /></ProtectedRoute>} />
           <Route path="/ship-assembly" element={<ProtectedRoute><ShipAssembly /></ProtectedRoute>} />
           <Route path="/praise-feed" element={<ProtectedRoute><PraiseFeed /></ProtectedRoute>} />
           <Route path="/work-log" element={<ProtectedRoute><WorkLog /></ProtectedRoute>} />

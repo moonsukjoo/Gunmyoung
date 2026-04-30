@@ -32,6 +32,9 @@ export interface UserProfile {
   kudosCount?: number;
   monthlyKudosCount?: number;
   kudosMonth?: string;
+  currentAltitude?: number;
+  altitudeUpdatedAt?: string;
+  basePressure?: number;
 }
 
 export interface SafetyScoreLog {
@@ -241,4 +244,22 @@ export interface Task {
   priority: 'LOW' | 'MEDIUM' | 'HIGH';
   dueDate?: string;
   createdAt: string;
+}
+
+export interface EvacuationStatus {
+  id: string;
+  isActive: boolean;
+  activatedAt: string;
+  activatedByUid: string;
+  activatedByName: string;
+  reason: string;
+  totalWorkers?: number;
+  confirmedCount?: number;
+}
+
+export interface EvacuationCheckin {
+  uid: string;
+  displayName: string;
+  departmentName: string;
+  confirmedAt: string;
 }

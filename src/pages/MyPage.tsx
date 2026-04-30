@@ -38,6 +38,7 @@ import { doc, updateDoc, collection, query, where, onSnapshot, orderBy } from 'f
 import { toast } from 'sonner';
 import { TrainingResult } from '@/src/types';
 import { format } from 'date-fns';
+import { motion } from 'framer-motion';
 import { PinKeypad } from '@/src/components/PinKeypad';
 import { requestNotificationPermission } from '@/src/services/notificationService';
 
@@ -57,6 +58,28 @@ export const MyPage: React.FC = () => {
   const [notificationPermission, setNotificationPermission] = useState<string>(
     'Notification' in window ? Notification.permission : 'denied'
   );
+  const [evacuationStatus, setEvacuationStatus] = useState<any>(null);
+  const [hasConfirmed, setHasConfirmed] = useState(false);
+
+  React.useEffect(() => {
+    if (!profile) return;
+    const unsubStatus = onSnapshot(doc(db, 'evacuation', 'status'), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setEvacuationStatus(data);
+        if (data.isActive) {
+          const checkinRef = doc(db, 'evacuations', data.id, 'checkins', profile.uid);
+          const unsubscribeCheckin = onSnapshot(checkinRef, (checkSnap) => {
+            setHasConfirmed(checkSnap.exists());
+          });
+          return () => unsubscribeCheckin();
+        }
+      } else {
+        setEvacuationStatus(null);
+      }
+    });
+    return () => unsubStatus();
+  }, [profile]);
 
   const checkPermission = async () => {
     const isCapacitor = (window as any).Capacitor !== undefined;
@@ -238,6 +261,49 @@ export const MyPage: React.FC = () => {
           <LogOut className="w-5 h-5 mr-2" /> 로그아웃
         </Button>
       </header>
+
+      {/* Emergency Status Alert Card */}
+      {evacuationStatus?.isActive && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className={cn(
+            "p-6 rounded-[32px] border-2 flex flex-col gap-4 shadow-xl transition-all",
+            hasConfirmed 
+              ? "bg-green-600/10 border-green-600/20 text-green-500" 
+              : "bg-red-600/10 border-red-600/20 text-red-600"
+          )}
+        >
+          <div className="flex items-center gap-3">
+            <div className={cn(
+              "w-10 h-10 rounded-xl flex items-center justify-center",
+              hasConfirmed ? "bg-green-600/20" : "bg-red-600/20 animate-pulse"
+            )}>
+              {hasConfirmed ? <ShieldCheck className="w-6 h-6" /> : <AlertCircle className="w-6 h-6" />}
+            </div>
+            <div>
+              <p className="text-lg font-black leading-tight">
+                {hasConfirmed ? '안전이 확인되었습니다' : '대피 확인이 필요합니다!'}
+              </p>
+              <p className="text-[10px] font-bold opacity-70">
+                {evacuationStatus.reason || '비상 소집령 발동 중'}
+              </p>
+            </div>
+          </div>
+          {!hasConfirmed && (
+             <Button 
+               className="w-full h-12 bg-red-600 hover:bg-red-700 text-white font-black rounded-2xl"
+               onClick={() => {
+                 // The overlay already handles confirmed status via global state
+                 // This is just a visual link or direct button if needed
+                 toast.info('화면 중앙의 버튼을 눌러주세요.');
+               }}
+             >
+               지금 안전 확인하기
+             </Button>
+          )}
+        </motion.div>
+      )}
 
       {/* Profile Card */}
       <Card className="border-none shadow-none bg-card rounded-2xl overflow-hidden border border-white/5">

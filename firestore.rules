@@ -72,7 +72,8 @@ service cloud.firestore {
          (
            (request.resource.data.kudosMonth == resource.data.get('kudosMonth', '') && request.resource.data.monthlyKudosCount == (resource.data.get('monthlyKudosCount', 0) + 1)) ||
            (request.resource.data.kudosMonth != resource.data.get('kudosMonth', '') && request.resource.data.monthlyKudosCount == 1)
-         ))
+         )) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentAltitude', 'altitudeUpdatedAt', 'basePressure']))
       );
       allow delete: if isHRManager();
     }
@@ -190,6 +191,16 @@ service cloud.firestore {
         (request.method == 'update' && (isOwner(resource.data.uid) || isHRManager())) ||
         isHRManager()
       );
+    }
+
+    match /evacuation/status {
+      allow read: if isAuthenticated();
+      allow write: if isSafetyManager();
+    }
+
+    match /evacuations/{evacuationId}/checkins/{uid} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (isOwner(uid) || isSafetyManager());
     }
 
     // Default deny at the end
