@@ -28,7 +28,8 @@ import {
   LogOut,
   Wallet,
   Ticket,
-  Bell
+  Bell,
+  Navigation
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -241,6 +242,28 @@ export const MyPage: React.FC = () => {
     }
   };
 
+  const handleCalibrateAltitude = async () => {
+    if (!profile) return;
+    setIsUpdating(true);
+    try {
+      // We need to get the CURRENT pressure from sensor. However, since this component 
+      // is not tracking sensors directly, we'll suggest clicking when they are on ground.
+      // In a real device, the AltitudeTracker would handle updates. 
+      // Here we just mark as needing a baseline reset.
+      await updateDoc(doc(db, 'users', profile.uid), {
+        basePressure: null, // This will trigger AltitudeTracker to re-initialize from next reading
+        currentAltitude: 0
+      });
+      toast.success('고도가 초기화되었습니다.', {
+        description: '현재 위치가 지면(0m)으로 설정됩니다.'
+      });
+    } catch (e) {
+      toast.error('초기화 실패');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   const menuItems = [
     { label: '연차 내역', icon: CalendarDays, to: '/leave', color: 'text-blue-500', bgColor: 'bg-blue-500/10' },
     { label: '현물 신청', icon: Wallet, to: '/redemption', color: 'text-emerald-400', bgColor: 'bg-emerald-400/10' },
@@ -410,6 +433,25 @@ export const MyPage: React.FC = () => {
           <div className={cn("w-10 h-5 rounded-full transition-colors p-1", profile?.elderlyMode ? "bg-primary" : "bg-white/10")}>
             <div className={cn("w-3 h-3 bg-white rounded-full transition-transform", profile?.elderlyMode ? "translate-x-5" : "translate-x-0")} />
           </div>
+        </div>
+
+        {/* Altitude Calibration */}
+        <div 
+          className="bg-card p-5 rounded-2xl border border-white/5 flex items-center justify-between cursor-pointer"
+          onClick={handleCalibrateAltitude}
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-muted-foreground">
+              <Navigation className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm font-black text-white">고도 영점 조정</p>
+              <p className="text-[10px] text-muted-foreground font-bold">
+                지상에서 클릭 (현재: {(profile?.currentAltitude || 0).toFixed(1)}m)
+              </p>
+            </div>
+          </div>
+          <RefreshCw className={cn("w-4 h-4 text-muted-foreground", isUpdating && "animate-spin")} />
         </div>
       </div>
 
