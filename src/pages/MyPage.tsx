@@ -29,7 +29,8 @@ import {
   Wallet,
   Ticket,
   Bell,
-  Navigation
+  Navigation,
+  Activity
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -246,12 +247,8 @@ export const MyPage: React.FC = () => {
     if (!profile) return;
     setIsUpdating(true);
     try {
-      // We need to get the CURRENT pressure from sensor. However, since this component 
-      // is not tracking sensors directly, we'll suggest clicking when they are on ground.
-      // In a real device, the AltitudeTracker would handle updates. 
-      // Here we just mark as needing a baseline reset.
       await updateDoc(doc(db, 'users', profile.uid), {
-        basePressure: null, // This will trigger AltitudeTracker to re-initialize from next reading
+        basePressure: null,
         currentAltitude: 0
       });
       toast.success('고도가 초기화되었습니다.', {
@@ -259,6 +256,21 @@ export const MyPage: React.FC = () => {
       });
     } catch (e) {
       toast.error('초기화 실패');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleToggleGhostGuard = async () => {
+    if (!profile) return;
+    setIsUpdating(true);
+    try {
+      await updateDoc(doc(db, 'users', profile.uid), {
+        ghostGuardEnabled: !profile.ghostGuardEnabled
+      });
+      toast.success(profile.ghostGuardEnabled ? '유령 가드가 비활성화되었습니다.' : '유령 가드가 활성화되었습니다.');
+    } catch (e) {
+      toast.error('변경 실패');
     } finally {
       setIsUpdating(false);
     }
@@ -392,6 +404,26 @@ export const MyPage: React.FC = () => {
 
       {/* Settings section */}
       <div className="pt-4 space-y-3">
+        {/* 1. Elderly Mode */}
+        <div 
+          className="bg-card p-5 rounded-2xl border border-white/5 flex items-center justify-between cursor-pointer"
+          onClick={toggleElderlyMode}
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-muted-foreground">
+              <Eye className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm font-black text-white">어르신 모드</p>
+              <p className="text-[10px] text-muted-foreground font-bold">글씨를 크게 봅니다</p>
+            </div>
+          </div>
+          <div className={cn("w-10 h-5 rounded-full transition-colors p-1", profile?.elderlyMode ? "bg-primary" : "bg-white/10")}>
+            <div className={cn("w-3 h-3 bg-white rounded-full transition-transform", profile?.elderlyMode ? "translate-x-5" : "translate-x-0")} />
+          </div>
+        </div>
+
+        {/* 2. Device Notifications */}
         <div 
           className="bg-card p-5 rounded-2xl border border-white/5 flex items-center justify-between cursor-pointer"
           onClick={handleRequestPermission}
@@ -417,25 +449,34 @@ export const MyPage: React.FC = () => {
           </div>
         </div>
 
+        {/* 3. Ghost Guard Toggle */}
         <div 
           className="bg-card p-5 rounded-2xl border border-white/5 flex items-center justify-between cursor-pointer"
-          onClick={toggleElderlyMode}
+          onClick={handleToggleGhostGuard}
         >
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-muted-foreground">
-              <Eye className="w-5 h-5" />
+              <Activity className={cn("w-5 h-5", profile?.ghostGuardEnabled && "text-emerald-500")} />
             </div>
             <div>
-              <p className="text-sm font-black text-white">어르신 모드</p>
-              <p className="text-[10px] text-muted-foreground font-bold">글씨를 크게 봅니다</p>
+              <p className="text-sm font-black text-white">유령 가드 (Ghost Guard)</p>
+              <p className="text-[10px] text-muted-foreground font-bold">
+                무동작 시 자동 구조 신호 (현재: {profile?.ghostGuardEnabled ? '활성' : '비활성'})
+              </p>
             </div>
           </div>
-          <div className={cn("w-10 h-5 rounded-full transition-colors p-1", profile?.elderlyMode ? "bg-primary" : "bg-white/10")}>
-            <div className={cn("w-3 h-3 bg-white rounded-full transition-transform", profile?.elderlyMode ? "translate-x-5" : "translate-x-0")} />
+          <div className={cn(
+            "w-10 h-5 rounded-full p-1 transition-colors",
+            profile?.ghostGuardEnabled ? "bg-emerald-500" : "bg-white/10"
+          )}>
+            <div className={cn(
+              "w-3 h-3 bg-white rounded-full transition-transform",
+              profile?.ghostGuardEnabled ? "translate-x-5" : "translate-x-0"
+            )} />
           </div>
         </div>
 
-        {/* Altitude Calibration */}
+        {/* 4. Altitude Calibration */}
         <div 
           className="bg-card p-5 rounded-2xl border border-white/5 flex items-center justify-between cursor-pointer"
           onClick={handleCalibrateAltitude}

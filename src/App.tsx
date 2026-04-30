@@ -34,35 +34,17 @@ import { Toaster } from '@/components/ui/sonner';
 import { CompanyLogo } from './components/CompanyLogo';
 import { EmergencyOverlay } from './components/EmergencyOverlay';
 import { AltitudeTracker } from './components/AltitudeTracker';
+import { GhostGuardTracker } from './components/GhostGuardTracker';
+
+import { motion, AnimatePresence } from 'motion/react';
+
+import { GlowLoading } from './components/GlowLoading';
 
 const ProtectedRoute = ({ children, roles, permission }: { children: React.ReactNode, roles?: string[], permission?: string }) => {
   const { user, profile, loading } = useAuth();
   const location = window.location;
 
-  if (loading) return (
-    <div className="h-screen flex flex-col items-center justify-center bg-[#0a0a0a] space-y-12 p-6 overflow-hidden">
-      <div className="relative flex items-center justify-center">
-        {/* Outer Glow Ring */}
-        <div className="absolute w-32 h-32 rounded-full border-2 border-primary/20 animate-[pulse_2s_infinite]" />
-        
-        {/* Rotating Spinner */}
-        <div className="absolute w-28 h-28 border-[3px] border-transparent border-t-primary rounded-full animate-spin" />
-        
-        {/* Core Logo Container */}
-        <div className="relative w-24 h-24 bg-white rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center justify-center p-5 z-10 animate-in zoom-in duration-700">
-          <CompanyLogo className="w-full h-full" />
-        </div>
-      </div>
-      <div className="flex flex-col items-center text-center space-y-4">
-        <div className="space-y-1">
-          <span className="font-black text-3xl tracking-tighter text-white leading-none block">건명기업</span>
-        </div>
-        <div className="flex gap-1.5">
-           {[0,1,2].map(i => <div key={i} className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}
-        </div>
-      </div>
-    </div>
-  );
+  if (loading) return <GlowLoading />;
   if (!user) return <Navigate to="/login" />;
   
   const hasAccess = (() => {
@@ -87,6 +69,7 @@ export default function App() {
       <FontSizeManager />
       <EmergencyOverlay />
       <AltitudeTracker />
+      <GhostGuardTracker />
       <Router>
         <Routes>
           <Route path="/login" element={<Login />} />

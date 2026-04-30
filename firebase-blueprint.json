@@ -34,7 +34,10 @@
         "kudosMonth": { "type": "string", "description": "Current month string (YYYY-MM)" },
         "currentAltitude": { "type": "number", "description": "Current relative altitude in meters" },
         "altitudeUpdatedAt": { "type": "string", "format": "date-time" },
-        "basePressure": { "type": "number", "description": "Baseline air pressure at ground level" }
+        "basePressure": { "type": "number", "description": "Baseline air pressure at ground level" },
+        "ghostGuardEnabled": { "type": "boolean", "description": "Whether Ghost Guard (immobility detection) is active" },
+        "lastMovementAt": { "type": "string", "format": "date-time" },
+        "isImmobile": { "type": "boolean", "description": "Flag for workers detected as immobile" }
       },
       "required": ["uid", "email", "role", "displayName"]
     },

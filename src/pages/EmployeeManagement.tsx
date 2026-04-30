@@ -82,9 +82,12 @@ const PERMISSIONS = [
   { id: 'praise_coupon', label: '칭찬쿠폰 발행' },
 ];
 
+import { GlowLoading } from '@/src/components/GlowLoading';
+
 export const EmployeeManagement: React.FC = () => {
   const { profile } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [loading, setLoading] = useState(true);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [jobRoles, setJobRoles] = useState<JobRole[]>([]);
   const [positions, setPositions] = useState<{id: string, name: string, createdAt: string}[]>([]);
@@ -131,6 +134,8 @@ export const EmployeeManagement: React.FC = () => {
   useEffect(() => {
     if (!profile) return;
 
+    const minLoadTime = new Promise(resolve => setTimeout(resolve, 1500));
+
     const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       setUsers(snapshot.docs.map(doc => ({ ...doc.data(), uid: doc.id } as UserProfile)));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'users'));
@@ -146,8 +151,10 @@ export const EmployeeManagement: React.FC = () => {
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'jobRoles'));
 
     const positionQuery = query(collection(db, 'positions'), orderBy('createdAt', 'asc'));
-    const unsubscribePositions = onSnapshot(positionQuery, (snapshot) => {
+    const unsubscribePositions = onSnapshot(positionQuery, async (snapshot) => {
       setPositions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
+      await minLoadTime;
+      setLoading(false);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'positions'));
 
     return () => {

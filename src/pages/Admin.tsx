@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { useAuth } from '@/src/components/AuthProvider';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -58,6 +58,8 @@ const PERMISSIONS = [
   { id: 'attendance_mgmt', label: '근태 관리', icon: Clock },
 ];
 
+import { GlowLoading } from '@/src/components/GlowLoading';
+
 export const Admin: React.FC = () => {
   const { profile } = useAuth();
   const navigate = useNavigate();
@@ -110,9 +112,11 @@ export const Admin: React.FC = () => {
   useEffect(() => {
     if (!profile) return;
     
+    const minLoadTime = new Promise(resolve => setTimeout(resolve, 1500));
     const q = query(collection(db, 'users'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
       const data = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
+      await minLoadTime;
       setUsers(data);
       setFilteredUsers(data);
       setLoading(false);
@@ -175,26 +179,56 @@ export const Admin: React.FC = () => {
     } catch (e) { toast.error('권한 업데이트 실패'); }
   };
 
-  const managementLinks = [
-    { to: '/personnel', label: '인사등록', icon: UserPlus, permission: 'employee_mgmt' },
-    { to: '/training-mgmt', label: '교육/평가 관리', icon: HardHat, permission: 'training_mgmt' },
-    { to: '/safety-score', label: '안전지수 점수 관리', icon: ShieldCheck, roles: ['CEO', 'SAFETY_MANAGER'] },
-    { to: '/coupons', label: '칭찬쿠폰/룰렛 관리', icon: Trophy, permission: 'praise_coupon' },
-    { to: '/redemption-mgmt', label: '현물 신청 관리', icon: CircleDollarSign, permission: 'redemption_mgmt' },
-    { to: '/attendance-mgmt', label: '근태 관리', icon: Clock, permission: 'attendance_mgmt' },
-    { to: '/work-log-mgmt', label: '작업일지 관리', icon: ClipboardList, roles: ['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER'] },
-    { to: '/leave-mgmt', label: '연차/휴가 관리', icon: CalendarDays, permission: 'leave_mgmt' },
-    { to: '/notifications', label: '공지사항 관리', icon: Megaphone, permission: 'notice_mgmt' },
-    { to: '/accidents', label: '사고즉보 관리', icon: ShieldAlert, permission: 'accident_mgmt' },
-    { onClick: () => setIsBannerSettingsOpen(true), label: '메인 배너 관리', icon: Megaphone, permission: 'admin' },
-    { onClick: () => setIsSnailSettingsOpen(true), label: '달팽이 경주 설정', icon: Zap, permission: 'admin' },
-    { onClick: () => setIsShipSettingsOpen(true), label: '함선 부품 설정', icon: Ship, permission: 'admin' },
-    { onClick: () => setIsPermissionSettingsOpen(true), label: '사용자 권한 명단', icon: ShieldCheck, permission: 'admin' },
-    { onClick: () => navigate('/high-work-monitor'), label: '고소작업 실시간 현황', icon: BarChart3, roles: ['CEO', 'SAFETY_MANAGER'] },
-    { onClick: () => setIsEmergencyOpen(true), label: '비상 대피 롤콜', icon: AlertTriangle, roles: ['CEO', 'SAFETY_MANAGER'] },
-  ];
+  const categorizedLinks = {
+    hr: [
+      { to: '/personnel', label: '인사등록', icon: UserPlus, permission: 'employee_mgmt' },
+      { to: '/attendance-mgmt', label: '근태 관리', icon: Clock, permission: 'attendance_mgmt' },
+      { to: '/leave-mgmt', label: '연차/휴가 관리', icon: CalendarDays, permission: 'leave_mgmt' },
+      { to: '/work-log-mgmt', label: '작업일지 관리', icon: ClipboardList, roles: ['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER'] },
+      { to: '/redemption-mgmt', label: '현물 신청 관리', icon: CircleDollarSign, permission: 'redemption_mgmt' },
+    ],
+    safety: [
+      { onClick: () => navigate('/high-work-monitor'), label: '고소작업 총괄 현황', icon: BarChart3, roles: ['CEO', 'SAFETY_MANAGER'] },
+      { onClick: () => setIsEmergencyOpen(true), label: '비상 대피 롤콜', icon: AlertTriangle, roles: ['CEO', 'SAFETY_MANAGER'] },
+      { to: '/accidents', label: '사고즉보 관리', icon: ShieldAlert, permission: 'accident_mgmt' },
+      { to: '/training-mgmt', label: '교육/평가 관리', icon: HardHat, permission: 'training_mgmt' },
+      { to: '/safety-score', label: '안전지수 설정', icon: ShieldCheck, roles: ['CEO', 'SAFETY_MANAGER'] },
+    ],
+    system: [
+      { to: '/notifications', label: '공지사항 관리', icon: Megaphone, permission: 'notice_mgmt' },
+      { onClick: () => setIsBannerSettingsOpen(true), label: '메인 배너 문구', icon:Megaphone, permission: 'admin' },
+      { to: '/coupons', label: '포상/룰렛 관리', icon: Trophy, permission: 'praise_coupon' },
+      { onClick: () => setIsShipSettingsOpen(true), label: '함선 파츠 확률', icon: Ship, permission: 'admin' },
+      { onClick: () => setIsSnailSettingsOpen(true), label: '달팽이 경주 설정', icon: Zap, permission: 'admin' },
+      { onClick: () => setIsPermissionSettingsOpen(true), label: '사용자 권한 명단', icon: ShieldCheck, permission: 'admin' },
+    ]
+  };
 
-  if (loading) return <div className="flex items-center justify-center h-[60vh]"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+  const renderLink = (link: any, idx: number) => {
+    const isAllowed = isAdminMode || 
+      (link.roles && profile && link.roles.includes(profile.role)) ||
+      (link.permission && profile && profile.permissions?.includes(link.permission)) ||
+      (!link.roles && !link.permission);
+
+    if (!isAllowed) return null;
+
+    const Content = (
+      <div className="bg-card p-4 rounded-2xl border border-white/5 flex items-center gap-4 active:scale-95 transition-all w-full text-left">
+        <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary shrink-0">
+          <link.icon className="w-5 h-5" />
+        </div>
+        <span className="text-xs font-black text-white leading-tight">{link.label}</span>
+      </div>
+    );
+
+    return 'to' in link ? (
+      <Link key={idx} to={link.to} className="w-full">{Content}</Link>
+    ) : (
+      <button key={idx} onClick={link.onClick} className="w-full">{Content}</button>
+    );
+  };
+
+  if (loading) return <GlowLoading message="ADMIN" subMessage="Scanning Authority..." />;
 
   const isAdminMode = profile && (
     profile.role === 'CEO' || 
@@ -203,31 +237,44 @@ export const Admin: React.FC = () => {
   );
 
   return (
-    <div className="space-y-6 pb-24 px-1">
+    <div className="space-y-8 pb-24 px-1">
       <header className="py-6">
-        <h2 className="text-3xl font-black tracking-tight text-white leading-tight">시스템 어드민</h2>
-        <p className="text-muted-foreground font-bold">건명기업 시스템의 모든 설정을 관리하세요</p>
+        <h2 className="text-3xl font-black tracking-tight text-white leading-tight">Admin OS</h2>
+        <p className="text-muted-foreground font-bold">건명기업 시스템의 코어 설정을 제어합니다</p>
       </header>
 
-      <div className="grid grid-cols-2 gap-3">
-        {managementLinks.filter(link => {
-          if (isAdminMode) return true;
-          if (link.roles && profile && link.roles.includes(profile.role)) return true;
-          if (link.permission && profile && profile.permissions?.includes(link.permission)) return true;
-          if (!link.roles && !link.permission) return true;
-          return false;
-        }).map((link, idx) => {
-          const Content = (
-            <div className="bg-card p-6 rounded-2xl border border-white/5 flex flex-col items-center gap-4 text-center active:scale-95 transition-all h-full">
-              <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
-                <link.icon className="w-6 h-6" />
-              </div>
-              <span className="text-xs font-black text-white leading-tight">{link.label}</span>
-            </div>
-          );
-          return 'to' in link ? <Link key={idx} to={link.to}>{Content}</Link> : <button key={idx} onClick={link.onClick}>{Content}</button>;
-        })}
-      </div>
+      {/* HR & Personnel Section */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2 px-1">
+          <Users className="w-4 h-4 text-muted-foreground" />
+          <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">인사 및 현장 행정</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {categorizedLinks.hr.map((link, idx) => renderLink(link, idx))}
+        </div>
+      </section>
+
+      {/* Smart Safety Section */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2 px-1">
+          <HardHat className="w-4 h-4 text-emerald-500" />
+          <h3 className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">스마트 안전 관제</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {categorizedLinks.safety.map((link, idx) => renderLink(link, idx))}
+        </div>
+      </section>
+
+      {/* System & Rewards Section */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2 px-1">
+          <Settings className="w-4 h-4 text-primary" />
+          <h3 className="text-[10px] font-black text-primary uppercase tracking-widest">시스템 및 보상 설정</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {categorizedLinks.system.map((link, idx) => renderLink(link, idx))}
+        </div>
+      </section>
 
       <Dialog open={isSnailSettingsOpen} onOpenChange={setIsSnailSettingsOpen}>
         <DialogContent className="bg-card border-none rounded-3xl text-white max-w-sm">

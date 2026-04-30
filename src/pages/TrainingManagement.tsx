@@ -29,9 +29,12 @@ import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { GoogleGenAI } from "@google/genai";
 
+import { GlowLoading } from '@/src/components/GlowLoading';
+
 export const TrainingManagement: React.FC = () => {
   const { profile } = useAuth();
   const [trainings, setTrainings] = useState<Training[]>([]);
+  const [loading, setLoading] = useState(true);
   const [jobRoles, setJobRoles] = useState<JobRole[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [allResults, setAllResults] = useState<TrainingResult[]>([]);
@@ -72,9 +75,15 @@ export const TrainingManagement: React.FC = () => {
   );
 
   useEffect(() => {
-    const unsubscribeT = onSnapshot(query(collection(db, 'trainings'), orderBy('createdAt', 'desc')), (snap) => {
+    const minLoadTime = new Promise(resolve => setTimeout(resolve, 1500));
+    const unsubscribeT = onSnapshot(query(collection(db, 'trainings'), orderBy('createdAt', 'desc')), async (snap) => {
       setTrainings(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Training)));
-    }, (error) => console.error("Trainings list listener error:", error));
+      await minLoadTime;
+      setLoading(false);
+    }, (error) => {
+      console.error("Trainings list listener error:", error);
+      setLoading(false);
+    });
     const unsubscribeJR = onSnapshot(query(collection(db, 'jobRoles'), orderBy('name')), (snap) => {
       setJobRoles(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as JobRole)));
     }, (error) => console.error("Job roles listener error:", error));

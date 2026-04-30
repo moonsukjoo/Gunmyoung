@@ -31,18 +31,27 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 
+import { GlowLoading } from '@/src/components/GlowLoading';
+
 export const LeaveManagement: React.FC = () => {
   const { profile } = useAuth();
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'PENDING' | 'HISTORY' | 'EMPLOYEES'>('PENDING');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const minLoadTime = new Promise(resolve => setTimeout(resolve, 1500));
     const q = query(collection(db, 'leaveRequests'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
       setRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaveRequest)));
-    }, (error) => console.error("Leave requests listener error:", error));
+      await minLoadTime;
+      setLoading(false);
+    }, (error) => {
+      console.error("Leave requests listener error:", error);
+      setLoading(false);
+    });
 
     const uQ = query(collection(db, 'users'));
     const unsubscribeUsers = onSnapshot(uQ, (snapshot) => {

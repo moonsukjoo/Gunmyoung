@@ -195,7 +195,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               </Button>
             )}
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-lg p-1.5 active:scale-95 transition-all">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center p-1.5 active:scale-95 transition-all">
                 <CompanyLogo className="w-full h-full" />
               </div>
               <div className="flex flex-col">

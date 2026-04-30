@@ -15,9 +15,11 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+
+import { GlowLoading } from '@/src/components/GlowLoading';
 
 export const HighWorkMonitoring: React.FC = () => {
   const navigate = useNavigate();
@@ -25,6 +27,8 @@ export const HighWorkMonitoring: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const minLoadTime = new Promise(resolve => setTimeout(resolve, 1500));
+
     // Fetch users who have altitude data and are active
     const q = query(
       collection(db, 'users'),
@@ -32,16 +36,19 @@ export const HighWorkMonitoring: React.FC = () => {
       orderBy('currentAltitude', 'desc')
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
       const allWorkers = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
-      // Filter those who have been updated in the last 10 minutes to ensure real-time status
+      // Filter active workers for either high work or immobility
       const tenMinutesAgo = new Date(Date.now() - 10 * 60000).toISOString();
-      const activeHighWorkers = allWorkers.filter(w => 
-        w.isActive &&
-        (w.currentAltitude || 0) > 0.5 && 
-        (w.altitudeUpdatedAt || '') > tenMinutesAgo
+      const monitoredWorkers = allWorkers.filter(w => 
+        w.isActive && (
+          ((w.currentAltitude || 0) > 0.5 && (w.altitudeUpdatedAt || '') > tenMinutesAgo) ||
+          w.isImmobile
+        )
       );
-      setWorkers(activeHighWorkers);
+      
+      await minLoadTime;
+      setWorkers(monitoredWorkers);
       setLoading(false);
     }, (error) => {
       console.error("Altitude monitor error:", error);
@@ -51,7 +58,11 @@ export const HighWorkMonitoring: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  const getRiskLevel = (altitude: number) => {
+  if (loading) return <GlowLoading message="MONITOR" subMessage="Syncing Altitude Data..." />;
+
+  const getRiskLevel = (worker: UserProfile) => {
+    if (worker.isImmobile) return { color: 'text-red-500', bg: 'bg-red-500/10', label: '무동작 감지', icon: ShieldAlert };
+    const altitude = worker.currentAltitude || 0;
     if (altitude > 10) return { color: 'text-red-500', bg: 'bg-red-500/10', label: '고위험', icon: ShieldAlert };
     if (altitude > 3) return { color: 'text-orange-500', bg: 'bg-orange-500/10', label: '주의', icon: AlertTriangle };
     return { color: 'text-primary', bg: 'bg-primary/10', label: '정상', icon: ArrowUp };
@@ -92,9 +103,9 @@ export const HighWorkMonitoring: React.FC = () => {
         </Card>
         <Card className="bg-card border-white/5 rounded-3xl overflow-hidden shadow-xl">
           <CardContent className="p-6">
-            <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-2">10m 이상 위험</p>
+            <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-2">현재 무동작 인원</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-red-500">{workers.filter(w => (w.currentAltitude || 0) > 10).length}</span>
+              <span className="text-3xl font-black text-red-500">{workers.filter(w => w.isImmobile).length}</span>
               <span className="text-xs font-bold text-muted-foreground">명</span>
             </div>
           </CardContent>
@@ -113,16 +124,11 @@ export const HighWorkMonitoring: React.FC = () => {
           </span>
         </div>
 
-        {loading ? (
-          <div className="flex flex-col items-center justify-center p-20 gap-4">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
-            <p className="text-xs font-bold text-muted-foreground">데이터를 불러오는 중...</p>
-          </div>
-        ) : workers.length > 0 ? (
+        {workers.length > 0 ? (
           <div className="space-y-3">
             <AnimatePresence>
               {workers.map((worker) => {
-                const risk = getRiskLevel(worker.currentAltitude || 0);
+                const risk = getRiskLevel(worker);
                 const RiskIcon = risk.icon;
 
                 return (
@@ -150,15 +156,26 @@ export const HighWorkMonitoring: React.FC = () => {
                         </div>
 
                         <div className="text-right shrink-0">
-                          <div className="flex items-baseline gap-1 justify-end">
-                            <span className={cn("text-2xl font-black tabular-nums", risk.color)}>
-                              {(worker.currentAltitude || 0).toFixed(1)}
-                            </span>
-                            <span className="text-[10px] font-bold text-muted-foreground">m</span>
-                          </div>
-                          <p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest mt-1">
-                            {format(new Date(worker.altitudeUpdatedAt || ''), 'HH:mm:ss')}
-                          </p>
+                          {worker.isImmobile ? (
+                            <div className="flex flex-col items-end">
+                               <Badge className="bg-red-500 text-white border-none animate-pulse mb-1">무반응</Badge>
+                               <p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest">
+                                 {worker.lastMovementAt ? format(new Date(worker.lastMovementAt), 'HH:mm:ss') : 'N/A'} 기준
+                               </p>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex items-baseline gap-1 justify-end">
+                                <span className={cn("text-2xl font-black tabular-nums", risk.color)}>
+                                  {(worker.currentAltitude || 0).toFixed(1)}
+                                </span>
+                                <span className="text-[10px] font-bold text-muted-foreground">m</span>
+                              </div>
+                              <p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest mt-1">
+                                {format(new Date(worker.altitudeUpdatedAt || ''), 'HH:mm:ss')}
+                              </p>
+                            </>
+                          )}
                         </div>
                       </CardContent>
                     </Card>

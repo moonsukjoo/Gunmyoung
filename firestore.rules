@@ -73,7 +73,7 @@ service cloud.firestore {
            (request.resource.data.kudosMonth == resource.data.get('kudosMonth', '') && request.resource.data.monthlyKudosCount == (resource.data.get('monthlyKudosCount', 0) + 1)) ||
            (request.resource.data.kudosMonth != resource.data.get('kudosMonth', '') && request.resource.data.monthlyKudosCount == 1)
          )) ||
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentAltitude', 'altitudeUpdatedAt', 'basePressure']))
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentAltitude', 'altitudeUpdatedAt', 'basePressure', 'ghostGuardEnabled', 'lastMovementAt', 'isImmobile']))
       );
       allow delete: if isHRManager();
     }

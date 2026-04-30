@@ -36,6 +36,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { calculateAttendanceHours } from '@/src/lib/attendance';
 
+import { GlowLoading } from '@/src/components/GlowLoading';
+
 export const AttendanceManagement: React.FC = () => {
   const navigate = useNavigate();
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -43,7 +45,8 @@ export const AttendanceManagement: React.FC = () => {
   const [search, setSearch] = useState('');
   const [month, setMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [attendanceData, setAttendanceData] = useState<Attendance[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{
     clockIn: string;
@@ -59,10 +62,16 @@ export const AttendanceManagement: React.FC = () => {
 
   // Fetch all users
   useEffect(() => {
+    const minLoadTime = new Promise(resolve => setTimeout(resolve, 1500));
     const q = query(collection(db, 'users'), orderBy('displayName', 'asc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
       setUsers(snapshot.docs.map(doc => ({ ...doc.data() } as UserProfile)));
-    }, (error) => console.error("Users list listener error (AttendanceMgmt):", error));
+      await minLoadTime;
+      setInitialLoading(false);
+    }, (error) => {
+      console.error("Users list listener error (AttendanceMgmt):", error);
+      setInitialLoading(false);
+    });
     return () => unsubscribe();
   }, []);
 

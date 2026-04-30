@@ -35,6 +35,9 @@ export interface UserProfile {
   currentAltitude?: number;
   altitudeUpdatedAt?: string;
   basePressure?: number;
+  ghostGuardEnabled?: boolean;
+  lastMovementAt?: string;
+  isImmobile?: boolean;
 }
 
 export interface SafetyScoreLog {

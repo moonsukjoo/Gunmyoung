@@ -34,6 +34,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
+import { GlowLoading } from '@/src/components/GlowLoading';
+
 export const RedemptionManagement: React.FC = () => {
   const { profile } = useAuth();
   const [requests, setRequests] = useState<RedemptionRequest[]>([]);
@@ -44,12 +46,14 @@ export const RedemptionManagement: React.FC = () => {
   const [exportMonth, setExportMonth] = useState(format(new Date(), 'yyyy-MM'));
 
   useEffect(() => {
+    const minLoadTime = new Promise(resolve => setTimeout(resolve, 1500));
     const q = query(
       collection(db, 'redemptionRequests'),
       orderBy('createdAt', 'desc')
     );
-    const unsubscribe = onSnapshot(q, (snap) => {
+    const unsubscribe = onSnapshot(q, async (snap) => {
       setRequests(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as RedemptionRequest)));
+      await minLoadTime;
       setLoading(false);
     }, (error) => {
       console.error("Redemption requests listener error (RedemptionMgmt):", error);

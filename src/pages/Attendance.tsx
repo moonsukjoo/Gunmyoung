@@ -142,7 +142,13 @@ export const Attendance: React.FC = () => {
         overtimeHours: 0,
         createdAt: dt.toISOString()
       });
-      toast.success('출근 완료');
+      // 출근 시 유령 가드 자동 활성화
+      await updateDoc(doc(db, 'users', profile.uid), {
+        ghostGuardEnabled: true,
+        lastMovementAt: dt.toISOString(),
+        isImmobile: false
+      });
+      toast.success('출근 완료 (유령 가드 활성화)');
       if (profile?.uid) grantRandomShipPart(profile.uid, '출근');
     } catch (error) { toast.error('실패'); }
   };
@@ -157,7 +163,12 @@ export const Attendance: React.FC = () => {
         workHours,
         overtimeHours
       });
-      toast.success('퇴근 완료');
+      // 퇴근 시 유령 가드 자동 비활성화
+      await updateDoc(doc(db, 'users', profile.uid), {
+        ghostGuardEnabled: false,
+        isImmobile: false
+      });
+      toast.success('퇴근 완료 (유령 가드 종료)');
     } catch (error) { toast.error('실패'); }
   };
 

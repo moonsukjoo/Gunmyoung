@@ -31,6 +31,8 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
+import { GlowLoading } from '@/src/components/GlowLoading';
+
 export const AccidentReport: React.FC = () => {
   const { profile } = useAuth();
   const [cases, setCases] = useState<AccidentCase[]>([]);
@@ -38,7 +40,8 @@ export const AccidentReport: React.FC = () => {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [caseToDelete, setCaseToDelete] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [pageLoading, setPageLoading] = useState(true);
   const [newCase, setNewCase] = useState({
     title: '',
     date: new Date().toISOString().split('T')[0],
@@ -52,10 +55,16 @@ export const AccidentReport: React.FC = () => {
   });
 
   useEffect(() => {
+    const minLoadTime = new Promise(resolve => setTimeout(resolve, 1500));
     const q = query(collection(db, 'accidentCases'), orderBy('date', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
       setCases(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AccidentCase)));
-    }, (error) => console.error("Accident cases listener error:", error));
+      await minLoadTime;
+      setPageLoading(false);
+    }, (error) => {
+      console.error("Accident cases listener error:", error);
+      setPageLoading(false);
+    });
     return () => unsubscribe();
   }, []);
 

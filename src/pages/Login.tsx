@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { User, Chrome, RefreshCw, KeyRound, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { PinKeypad } from '@/src/components/PinKeypad';
+import { CompanyLogo } from '@/src/components/CompanyLogo';
 import { cn } from '@/lib/utils';
 import { UserProfile } from '../types';
 
@@ -172,7 +173,10 @@ export const Login: React.FC = () => {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-sm flex flex-col h-full space-y-8 animate-in fade-in duration-700">
-        <div className="flex flex-col items-center gap-4 py-6">
+        <div className="flex flex-col items-center gap-6 py-6">
+          <div className="w-20 h-20 bg-transparent flex items-center justify-center p-2">
+            <CompanyLogo className="w-full h-full" />
+          </div>
           <div className="text-center space-y-2">
             <h2 className="text-2xl font-black text-white">
               {isRememberedMode ? `${rememberedName}님,` : "반갑습니다,"}
