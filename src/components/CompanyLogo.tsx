@@ -26,9 +26,8 @@ export const CompanyLogo: React.FC<LogoProps> = ({ className, size = '100%' }) =
       alt="Company Logo" 
       className={className}
       style={{ width: size, height: size, objectFit: 'contain' }}
-      referrerPolicy="no-referrer"
       onError={() => {
-        console.error("Failed to load company logo from public folder, trying fallback...");
+        console.error("Failed to load company logo. Falling back to text logo.");
         setError(true);
       }}
     />

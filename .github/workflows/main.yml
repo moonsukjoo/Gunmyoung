@@ -37,18 +37,20 @@ jobs:
       - name: 앱 에셋 준비 (아이콘 및 스플래시)
         run: |
           mkdir -p assets
-          # @capacitor/assets 도구는 icon.png 또는 logo.png를 기본 소스로 인식합니다.
+          # @capacitor/assets는 특정 파일명을 소스로 사용합니다.
+          cp icon.png assets/logo.png
           cp icon.png assets/icon.png
           cp icon.png assets/icon-only.png
           cp icon.png assets/icon-foreground.png
           cp icon.png assets/icon-background.png
-          # 스플래시 화면 소스
+          # 스플래시 소스 파일
           cp public/company_logo.png assets/splash.png
           cp public/company_logo.png assets/splash-dark.png
 
       - name: 안드로이드 네이티브 에셋 생성
-        # npx -y @capacitor/assets generate 명령을 사용하여 res 폴더를 강제 생성/교체합니다.
-        run: npx -y @capacitor/assets generate --android --assetPath assets
+        # @capacitor/assets를 사용하여 아이콘과 스플래시 리소스를 명시적으로 생성합니다.
+        run: |
+          npx -y @capacitor/assets generate --android --assetPath assets
 
       - name: Capacitor 싱크 및 리소스 동기화
         # 리소스 생성 후 네이티브 프로젝트와 동기화합니다.
