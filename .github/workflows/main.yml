@@ -14,10 +14,10 @@ jobs:
       - name: 코드 체크아웃
         uses: actions/checkout@v4
 
-      - name: Node.js 설정 (버전 22로 업그레이드)
+      - name: Node.js 설정 (버전 22)
         uses: actions/setup-node@v4
         with:
-          node-version: '22' # 에러 해결의 핵심 부분입니다.
+          node-version: '22'
 
       - name: 의존성 설치
         run: |
@@ -25,6 +25,7 @@ jobs:
           npm install @capacitor/assets @capacitor/cli @capacitor/android
 
       - name: 웹 프로젝트 빌드
+        # 여기서 생성된 dist 폴더가 앱 내부 화면이 됩니다.
         run: npm run build
 
       - name: Capacitor 프로젝트 설정
@@ -34,30 +35,26 @@ jobs:
             npx cap add android
           fi
 
-      - name: 앱 에셋 준비 (아이콘 및 스플래시)
+      - name: 앱 에셋 준비 (핵심 원인 해결)
+        # 알 수 없는 icon.png 대신, 확실하게 존재하는 public/company_logo.png로 모든 에셋을 덮어씌웁니다.
         run: |
           mkdir -p assets
-          # @capacitor/assets는 특정 파일명을 소스로 사용합니다.
-          cp icon.png assets/logo.png
-          cp icon.png assets/icon.png
-          cp icon.png assets/icon-only.png
-          cp icon.png assets/icon-foreground.png
-          cp icon.png assets/icon-background.png
-          # 스플래시 소스 파일
+          cp public/company_logo.png assets/icon.png
+          cp public/company_logo.png assets/icon-only.png
+          cp public/company_logo.png assets/icon-foreground.png
+          cp public/company_logo.png assets/icon-background.png
           cp public/company_logo.png assets/splash.png
           cp public/company_logo.png assets/splash-dark.png
 
       - name: 안드로이드 네이티브 에셋 생성
-        # @capacitor/assets를 사용하여 아이콘과 스플래시 리소스를 명시적으로 생성합니다.
-        run: |
-          npx -y @capacitor/assets generate --android --assetPath assets
+        # 실제 안드로이드 리소스(res 폴더)에 건명 로고를 박아 넣습니다.
+        run: npx -y @capacitor/assets generate --android --assetPath assets
 
       - name: Capacitor 싱크 및 리소스 동기화
-        # 리소스 생성 후 네이티브 프로젝트와 동기화합니다.
+        # 웹 빌드 결과물(dist)과 생성된 에셋을 안드로이드 프로젝트에 완벽하게 복사합니다.
         run: npx cap sync android
 
-      - name: 중복 클래스 및 빌드 에러 해결 (핵심 수정)
-        # Gradle 빌드 시 중복된 라이브러리 충돌을 강제로 해결하는 코드를 주입합니다.
+      - name: 중복 클래스 및 빌드 에러 해결
         run: |
           echo "configurations.all { resolutionStrategy { force 'androidx.core:core:1.13.1'; force 'org.jetbrains.kotlin:kotlin-stdlib:1.9.22' } }" >> android/app/build.gradle
           echo "android.enableJetifier=true" >> android/gradle.properties
