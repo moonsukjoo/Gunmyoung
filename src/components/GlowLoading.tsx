@@ -21,48 +21,44 @@ export const GlowLoading: React.FC<GlowLoadingProps> = ({
         backgroundSize: '40px 40px'
       }} />
       
-      {/* Background Pulses */}
+      {/* Background Pulses - Highly Optimized for Mobile Performance */}
       <motion.div 
-        animate={{ scale: [1, 1.5, 1], opacity: [0.1, 0.3, 0.1] }}
-        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-        className="absolute w-[500px] h-[500px] bg-primary/20 rounded-full blur-[120px] pointer-events-none"
+        animate={{ opacity: [0.05, 0.1, 0.05] }}
+        transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+        className="absolute w-[250px] h-[250px] bg-primary/10 rounded-full pointer-events-none"
+        style={{ filter: 'blur(60px)' }}
       />
 
-      <div className="relative flex flex-col items-center gap-12 z-10">
+      <div className="relative flex flex-col items-center gap-10 z-10">
         {/* Complex Orbital System */}
-        <div className="relative w-48 h-48 flex items-center justify-center">
-          {/* Inner breathing glow */}
+        <div className="relative w-32 h-32 flex items-center justify-center">
+          {/* Inner breathing glow - Simplified */}
           <motion.div 
-            animate={{ scale: [0.8, 1.1, 0.8], opacity: [0.3, 0.6, 0.3] }}
-            transition={{ duration: 2, repeat: Infinity }}
-            className="absolute inset-0 bg-primary/30 rounded-full blur-3xl"
+            animate={{ opacity: [0.1, 0.3, 0.1] }}
+            transition={{ duration: 3, repeat: Infinity }}
+            className="absolute inset-8 bg-primary/10 rounded-full"
+            style={{ filter: 'blur(30px)' }}
           />
 
-          {/* Core Logo Container */}
+          {/* Core Logo Container - Removed Backdrop Blur for Maximum Mobile Speed */}
           <motion.div 
-            initial={{ scale: 0.5, opacity: 0 }}
+            initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 1, ease: "easeOut" }}
-            className="relative w-28 h-28 flex items-center justify-center z-10 overflow-hidden rounded-full bg-black/40 backdrop-blur-sm"
+            className="relative w-20 h-20 flex items-center justify-center z-10 overflow-hidden rounded-full bg-[#111]"
           >
-            <CompanyLogo className="w-full h-full drop-shadow-[0_0_15px_rgba(56,189,248,0.5)] mix-blend-lighten scale-75" />
+            <CompanyLogo className="w-full h-full scale-75 opacity-90" />
           </motion.div>
 
-          {/* Outer Orbital Rings - Cyber Style */}
+          {/* Outer Orbital Rings - Simplified for Mobile */}
           <motion.div 
             animate={{ rotate: 360 }}
-            transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-            className="absolute inset-0 rounded-full border-[1px] border-t-primary/80 border-r-transparent border-b-transparent border-l-transparent"
+            transition={{ duration: 5, repeat: Infinity, ease: "linear" }}
+            className="absolute inset-0 rounded-full border-[1px] border-t-primary/40 border-transparent"
           />
           <motion.div 
             animate={{ rotate: -360 }}
-            transition={{ duration: 5, repeat: Infinity, ease: "linear" }}
-            className="absolute inset-4 rounded-full border-[1.5px] border-b-primary/60 border-t-transparent border-r-transparent border-l-transparent"
-          />
-          <motion.div 
-            animate={{ rotate: 180 }}
-            transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-            className="absolute inset-10 rounded-full border-[0.5px] border-primary/20"
+            transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+            className="absolute inset-4 rounded-full border-[0.5px] border-b-primary/30 border-transparent"
           />
 
           {/* Orbiting Particle */}

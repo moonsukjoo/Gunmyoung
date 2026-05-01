@@ -34,7 +34,7 @@ jobs:
             npx cap add android
           fi
 
-      - name: 앱 에셋 준비 (아이콘)
+      - name: 앱 에셋 준비 (아이콘 및 스플래시)
         run: |
           mkdir -p assets
           cp icon.png assets/icon.png
@@ -44,10 +44,11 @@ jobs:
           cp public/company_logo.png assets/splash.png
           cp public/company_logo.png assets/splash-dark.png
 
-      - name: 안드로이드 아이콘 생성
-        run: npx @capacitor/assets generate --android --assetPath assets
+      - name: 안드로이드 네이티브 에셋 생성
+        # capacitor-assets를 사용하여 아이콘과 스플래시 화면을 생성합니다.
+        run: npx capacitor-assets generate --android --assetPath assets
 
-      - name: 중복 클래스 에러 해결 (핵심 수정)
+      - name: 중복 클래스 및 빌드 에러 해결
         # Gradle 빌드 시 중복된 라이브러리 충돌을 강제로 해결하는 코드를 주입합니다.
         run: |
           echo "configurations.all { resolutionStrategy { force 'androidx.core:core:1.13.1'; force 'org.jetbrains.kotlin:kotlin-stdlib:1.9.22' } }" >> android/app/build.gradle

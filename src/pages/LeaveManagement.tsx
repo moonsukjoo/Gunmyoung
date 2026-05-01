@@ -42,7 +42,7 @@ export const LeaveManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const minLoadTime = new Promise(resolve => setTimeout(resolve, 1500));
+    const minLoadTime = new Promise(resolve => setTimeout(resolve, 800));
     const q = query(collection(db, 'leaveRequests'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       setRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaveRequest)));

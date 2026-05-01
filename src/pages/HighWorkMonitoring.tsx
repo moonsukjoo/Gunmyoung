@@ -27,7 +27,7 @@ export const HighWorkMonitoring: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const minLoadTime = new Promise(resolve => setTimeout(resolve, 1500));
+    const minLoadTime = new Promise(resolve => setTimeout(resolve, 800));
 
     // Fetch users who have altitude data and are active
     const q = query(

@@ -112,7 +112,7 @@ export const Admin: React.FC = () => {
   useEffect(() => {
     if (!profile) return;
     
-    const minLoadTime = new Promise(resolve => setTimeout(resolve, 1500));
+    const minLoadTime = new Promise(resolve => setTimeout(resolve, 800));
     const q = query(collection(db, 'users'));
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       const data = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
@@ -276,7 +276,108 @@ export const Admin: React.FC = () => {
         </div>
       </section>
 
+      <Dialog open={isShipSettingsOpen} onOpenChange={setIsShipSettingsOpen}>
+        <DialogContent className="bg-card border-none rounded-3xl text-white max-w-md overflow-y-auto max-h-[85vh] p-6 focus:outline-none">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black">함선 파츠 확률 설정</DialogTitle>
+            <DialogDescription className="text-xs font-bold text-muted-foreground mt-1">
+              활동(근태, 작업 등) 완료 시 파츠가 지급될 기본 확률과 특정 파츠의 지급 여부를 설정합니다.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-6 border-y border-white/5 my-4">
+            <div className="space-y-4">
+              <div className="flex justify-between items-end">
+                <Label className="text-[10px] font-black text-primary uppercase tracking-widest">기본 지급 확률</Label>
+                <span className="text-xl font-black text-white">{(shipSettings.probability * 100).toFixed(0)}%</span>
+              </div>
+              <input 
+                type="range" 
+                min="0" 
+                max="1" 
+                step="0.05" 
+                value={shipSettings.probability} 
+                onChange={e => setShipSettings(prev => ({ ...prev, probability: parseFloat(e.target.value) }))}
+                className="w-full h-2 bg-white/10 rounded-full appearance-none accent-primary" 
+              />
+              <p className="text-[10px] font-bold text-muted-foreground text-center italic">
+                * 100% 설정 시 모든 활동 완료 시 확정적으로 지급됩니다.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <Label className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">파츠 활성화 관리</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {SHIP_PARTS.map(part => {
+                  const isDisabled = shipSettings.disabledParts.includes(part.id);
+                  return (
+                    <button
+                      key={part.id}
+                      onClick={() => {
+                        const newDisabled = isDisabled 
+                          ? shipSettings.disabledParts.filter(id => id !== part.id)
+                          : [...shipSettings.disabledParts, part.id];
+                        setShipSettings(prev => ({ ...prev, disabledParts: newDisabled }));
+                      }}
+                      className={cn(
+                        "flex items-center gap-3 p-3 rounded-xl border transition-all text-left",
+                        isDisabled 
+                          ? "bg-red-500/5 border-red-500/20 text-red-500 grayscale" 
+                          : "bg-white/5 border-white/5 text-white"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
+                        isDisabled ? "bg-red-500/10" : "bg-primary/10"
+                      )}>
+                        <Ship className={cn("w-4 h-4", isDisabled ? "text-red-500" : "text-primary")} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-black truncate">{part.name}</p>
+                        <p className={cn("text-[9px] font-bold", isDisabled ? "text-red-500/60" : "text-muted-foreground")}>
+                          {isDisabled ? '중지됨' : '정상지급'}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              className="flex-1 h-14 rounded-2xl border-white/10 text-white font-black"
+              onClick={() => setIsShipSettingsOpen(false)}
+            >
+              취소
+            </Button>
+            <Button 
+              className="flex-1 h-14 bg-primary text-white font-black rounded-2xl shadow-lg shadow-primary/20"
+              onClick={async () => {
+                try {
+                  await setDoc(doc(db, 'settings', 'shipParts'), {
+                    probability: shipSettings.probability,
+                    disabledParts: shipSettings.disabledParts,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: profile?.uid
+                  }, { merge: true });
+                  toast.success('함선 파츠 확률 설정이 저장되었습니다.');
+                  setIsShipSettingsOpen(false);
+                } catch (e) {
+                  toast.error('설정 저장 중 오류가 발생했습니다.');
+                }
+              }}
+            >
+              설정 저장
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isSnailSettingsOpen} onOpenChange={setIsSnailSettingsOpen}>
+
         <DialogContent className="bg-card border-none rounded-3xl text-white max-w-sm">
            <DialogHeader><DialogTitle className="font-black">달팽이 확률 설정</DialogTitle></DialogHeader>
            <div className="space-y-4 py-4">

@@ -62,7 +62,7 @@ export const AttendanceManagement: React.FC = () => {
 
   // Fetch all users
   useEffect(() => {
-    const minLoadTime = new Promise(resolve => setTimeout(resolve, 1500));
+    const minLoadTime = new Promise(resolve => setTimeout(resolve, 800));
     const q = query(collection(db, 'users'), orderBy('displayName', 'asc'));
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       setUsers(snapshot.docs.map(doc => ({ ...doc.data() } as UserProfile)));

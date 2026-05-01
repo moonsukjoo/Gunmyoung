@@ -75,7 +75,7 @@ export const TrainingManagement: React.FC = () => {
   );
 
   useEffect(() => {
-    const minLoadTime = new Promise(resolve => setTimeout(resolve, 1500));
+    const minLoadTime = new Promise(resolve => setTimeout(resolve, 800));
     const unsubscribeT = onSnapshot(query(collection(db, 'trainings'), orderBy('createdAt', 'desc')), async (snap) => {
       setTrainings(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Training)));
       await minLoadTime;

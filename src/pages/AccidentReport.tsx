@@ -25,7 +25,8 @@ import {
   MapPin, 
   Search,
   ChevronRight,
-  Trash2
+  Trash2,
+  X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -39,8 +40,9 @@ export const AccidentReport: React.FC = () => {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [caseToDelete, setCaseToDelete] = useState<string | null>(null);
+  const [selectedCase, setSelectedCase] = useState<AccidentCase | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [newCase, setNewCase] = useState({
     title: '',
@@ -55,7 +57,7 @@ export const AccidentReport: React.FC = () => {
   });
 
   useEffect(() => {
-    const minLoadTime = new Promise(resolve => setTimeout(resolve, 1500));
+    const minLoadTime = new Promise(resolve => setTimeout(resolve, 800));
     const q = query(collection(db, 'accidentCases'), orderBy('date', 'desc'));
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       setCases(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AccidentCase)));
@@ -111,7 +113,12 @@ export const AccidentReport: React.FC = () => {
       });
       toast.success('보고 완료');
       if (profile?.uid) grantRandomShipPart(profile.uid, '사고 즉보');
-    } catch (error) { toast.error('실패'); } finally { setLoading(false); }
+    } catch (error) { 
+      console.error(error);
+      toast.error('등록 실패'); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   const handleDeleteCase = async (id: string) => {
@@ -136,6 +143,8 @@ export const AccidentReport: React.FC = () => {
     c.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.location.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  if (pageLoading) return <GlowLoading message="SECURITY" subMessage="Accessing Accident Logs..." />;
 
   return (
     <div className="space-y-6 pb-24 px-1">
@@ -210,7 +219,11 @@ export const AccidentReport: React.FC = () => {
 
       <div className="space-y-3">
          {filteredCases.map(c => (
-           <div key={c.id} className="bg-card p-6 rounded-3xl border border-white/5 space-y-4">
+           <div 
+             key={c.id} 
+             className="bg-card p-6 rounded-3xl border border-white/5 space-y-4 active:scale-[0.98] transition-transform cursor-pointer"
+             onClick={() => setSelectedCase(c)}
+           >
               <div className="flex justify-between items-start">
                  <div className="space-y-1">
                     <Badge className={cn(
@@ -281,6 +294,81 @@ export const AccidentReport: React.FC = () => {
               취소
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+      {/* Detail View Dialog */}
+      <Dialog open={!!selectedCase} onOpenChange={(open) => !open && setSelectedCase(null)}>
+        <DialogContent className="bg-card border-none rounded-3xl text-white max-w-sm overflow-y-auto max-h-[90vh] p-0 focus:outline-none">
+          {selectedCase && (
+            <div className="flex flex-col">
+              {/* Header Image or Placeholder */}
+              <div className="h-32 bg-red-500/10 flex items-center justify-center relative">
+                <div className={cn(
+                  "absolute inset-0 opacity-20",
+                  selectedCase.severity === 'HIGH' ? "bg-red-500" : selectedCase.severity === 'MEDIUM' ? "bg-orange-500" : "bg-emerald-500"
+                )} />
+                <ShieldAlert className={cn(
+                  "w-12 h-12 relative z-10",
+                  selectedCase.severity === 'HIGH' ? "text-red-500" : selectedCase.severity === 'MEDIUM' ? "text-orange-500" : "text-emerald-500"
+                )} />
+                <button 
+                  onClick={() => setSelectedCase(null)}
+                  className="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/40 flex items-center justify-center text-white/60 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-6">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Badge className={cn(
+                      "bg-opacity-20 border-none rounded-lg px-2 text-[10px] font-black",
+                      selectedCase.severity === 'HIGH' ? "bg-red-500 text-red-500" : selectedCase.severity === 'MEDIUM' ? "bg-orange-500 text-orange-500" : "bg-emerald-500 text-emerald-500"
+                    )}>
+                      {selectedCase.severity === 'HIGH' ? '중대사고' : selectedCase.severity === 'MEDIUM' ? '경미사고' : '아차사고'}
+                    </Badge>
+                    <span className="text-[10px] font-bold text-muted-foreground">{format(new Date(selectedCase.date), 'yyyy.MM.dd')}</span>
+                  </div>
+                  <h3 className="text-xl font-black text-white leading-tight">{selectedCase.title}</h3>
+                  <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
+                    <MapPin className="w-3 h-3" />
+                    {selectedCase.location}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] font-black text-white/40 uppercase tracking-widest pl-1">상세 내용</p>
+                    <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                      <p className="text-sm font-bold text-gray-300 leading-relaxed whitespace-pre-wrap">{selectedCase.description}</p>
+                    </div>
+                  </div>
+
+                  {selectedCase.measures && (
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest pl-1">후속 조치 및 대책</p>
+                      <div className="bg-emerald-500/5 p-4 rounded-2xl border border-emerald-500/10">
+                        <p className="text-sm font-bold text-emerald-400/90 leading-relaxed whitespace-pre-wrap">{selectedCase.measures}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[10px] font-bold text-muted-foreground">
+                    <span>제보자: {selectedCase.reportedBy}</span>
+                    <span>등록일: {format(new Date(selectedCase.createdAt), 'yyyy.MM.dd HH:mm')}</span>
+                  </div>
+                </div>
+
+                <Button 
+                  className="w-full h-14 bg-white/5 hover:bg-white/10 text-white font-black rounded-2xl transition-all"
+                  onClick={() => setSelectedCase(null)}
+                >
+                  확인 완료
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

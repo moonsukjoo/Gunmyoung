@@ -46,7 +46,7 @@ export const RedemptionManagement: React.FC = () => {
   const [exportMonth, setExportMonth] = useState(format(new Date(), 'yyyy-MM'));
 
   useEffect(() => {
-    const minLoadTime = new Promise(resolve => setTimeout(resolve, 1500));
+    const minLoadTime = new Promise(resolve => setTimeout(resolve, 800));
     const q = query(
       collection(db, 'redemptionRequests'),
       orderBy('createdAt', 'desc')
