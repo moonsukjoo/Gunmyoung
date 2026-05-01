@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import companyLogo from '../../public/company_logo.png';
 
 interface LogoProps {
   className?: string;
@@ -22,7 +23,7 @@ export const CompanyLogo: React.FC<LogoProps> = ({ className, size = '100%' }) =
 
   return (
     <img 
-      src="/company_logo.png" 
+      src={companyLogo} 
       alt="Company Logo" 
       className={className}
       style={{ width: size, height: size, objectFit: 'contain' }}
