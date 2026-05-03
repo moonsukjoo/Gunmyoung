@@ -30,7 +30,8 @@ import {
   Ticket,
   Bell,
   Navigation,
-  Activity
+  Activity,
+  FileText
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -84,17 +85,23 @@ export const MyPage: React.FC = () => {
   }, [profile]);
 
   const checkPermission = async () => {
-    const isCapacitor = (window as any).Capacitor !== undefined;
-    if (isCapacitor) {
+    const capacitor = (window as any).Capacitor;
+    const isNative = !!(capacitor && capacitor.isNativePlatform && capacitor.isNativePlatform());
+    
+    if (isNative) {
       try {
         const { LocalNotifications } = await import('@capacitor/local-notifications');
         const status = await LocalNotifications.checkPermissions();
         setNotificationPermission(status.display);
-      } catch (e) {
-        console.error('Check native permission failed:', e);
+      } catch (e: any) {
+        // Only log if it's not a "not supported in browser" error
+        if (e?.message !== 'Notifications not supported in this browser.') {
+          console.warn('Native permission check failed:', e);
+        }
+        setNotificationPermission(typeof Notification !== 'undefined' ? Notification.permission : 'denied');
       }
     } else {
-      setNotificationPermission('Notification' in window ? Notification.permission : 'denied');
+      setNotificationPermission(typeof Notification !== 'undefined' ? Notification.permission : 'denied');
     }
   };
 
@@ -110,8 +117,9 @@ export const MyPage: React.FC = () => {
       toast.success('알림이 허용되었습니다.');
     } else {
       // 안드로이드 앱 또는 Capacitor 환경 감지
-      const isCapacitor = (window as any).Capacitor !== undefined;
-      const isAdminApp = isCapacitor || window.location.protocol === 'capacitor:' || /Android/i.test(navigator.userAgent);
+      const capacitor = (window as any).Capacitor;
+      const isNative = capacitor !== undefined && capacitor.isNativePlatform?.();
+      const isAdminApp = isNative || window.location.protocol === 'capacitor:' || /Android/i.test(navigator.userAgent);
       
       if (isAdminApp) {
         toast.error('기기 알람 권한이 필요합니다.', {
@@ -279,6 +287,7 @@ export const MyPage: React.FC = () => {
   const menuItems = [
     { label: '연차 내역', icon: CalendarDays, to: '/leave', color: 'text-blue-500', bgColor: 'bg-blue-500/10' },
     { label: '현물 신청', icon: Wallet, to: '/redemption', color: 'text-emerald-400', bgColor: 'bg-emerald-400/10' },
+    { label: '월급 명세서', icon: FileText, to: '/mypage/payslip', color: 'text-rose-500', bgColor: 'bg-rose-500/10' },
     { label: '엔터놀이터', icon: Trophy, to: '/entertainment', color: 'text-purple-500', bgColor: 'bg-purple-500/10' },
     { label: '로또 번호 생성기', icon: Ticket, to: '/lotto', color: 'text-orange-500', bgColor: 'bg-orange-500/10' },
     { label: '교육 이수증', icon: BookOpen, onClick: () => setIsExamHistoryOpen(true), color: 'text-emerald-500', bgColor: 'bg-emerald-500/10' },

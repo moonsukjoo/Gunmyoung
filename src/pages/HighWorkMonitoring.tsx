@@ -43,7 +43,9 @@ export const HighWorkMonitoring: React.FC = () => {
       const monitoredWorkers = allWorkers.filter(w => 
         w.isActive && (
           ((w.currentAltitude || 0) > 0.5 && (w.altitudeUpdatedAt || '') > tenMinutesAgo) ||
-          w.isImmobile
+          w.isImmobile ||
+          w.isFalling ||
+          w.hasImpacted
         )
       );
       
@@ -61,6 +63,8 @@ export const HighWorkMonitoring: React.FC = () => {
   if (loading) return <GlowLoading message="MONITOR" subMessage="Syncing Altitude Data..." />;
 
   const getRiskLevel = (worker: UserProfile) => {
+    if (worker.isFalling) return { color: 'text-red-600', bg: 'bg-red-600/20', label: '추락 감지', icon: ShieldAlert, pulse: true };
+    if (worker.hasImpacted) return { color: 'text-red-500', bg: 'bg-red-500/20', label: '충격 발생', icon: AlertTriangle, pulse: true };
     if (worker.isImmobile) return { color: 'text-red-500', bg: 'bg-red-500/10', label: '무동작 감지', icon: ShieldAlert };
     const altitude = worker.currentAltitude || 0;
     if (altitude > 10) return { color: 'text-red-500', bg: 'bg-red-500/10', label: '고위험', icon: ShieldAlert };
@@ -156,7 +160,14 @@ export const HighWorkMonitoring: React.FC = () => {
                         </div>
 
                         <div className="text-right shrink-0">
-                          {worker.isImmobile ? (
+                          {worker.isFalling || worker.hasImpacted ? (
+                            <div className="flex flex-col items-end">
+                               <Badge className="bg-red-600 text-white border-none animate-bounce mb-1">긴급 상황</Badge>
+                               <p className="text-[8px] font-black text-white/60 uppercase tracking-widest bg-red-600 px-2 py-0.5 rounded-full">
+                                 {worker.isFalling ? '추락 신호' : '강한 충격'}
+                               </p>
+                            </div>
+                          ) : worker.isImmobile ? (
                             <div className="flex flex-col items-end">
                                <Badge className="bg-red-500 text-white border-none animate-pulse mb-1">무반응</Badge>
                                <p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest">

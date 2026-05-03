@@ -26,13 +26,16 @@ import {
   Search,
   ChevronRight,
   Trash2,
-  X
+  X,
+  Download,
+  FileText
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
 import { GlowLoading } from '@/src/components/GlowLoading';
+import { exportToExcel, exportToPDF } from '@/src/lib/exportUtils';
 
 export const AccidentReport: React.FC = () => {
   const { profile } = useAuth();
@@ -144,6 +147,39 @@ export const AccidentReport: React.FC = () => {
     c.location.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const handleExportExcel = () => {
+    if (cases.length === 0) {
+      toast.error('내보낼 데이터가 없습니다.');
+      return;
+    }
+    const data = cases.map(c => ({
+      '날짜': c.date,
+      '사고명': c.title,
+      '장소': c.location,
+      '심각도': c.severity === 'HIGH' ? '중대' : c.severity === 'MEDIUM' ? '경미' : '아차',
+      '제보자': c.reportedBy,
+      '내용': c.description,
+      '조치사항': c.measures || '-'
+    }));
+    exportToExcel(data, `사고즉보내역_${format(new Date(), 'yyyyMMdd')}`, '사고기록');
+  };
+
+  const handleExportPDF = async () => {
+    if (cases.length === 0) {
+      toast.error('내보낼 데이터가 없습니다.');
+      return;
+    }
+    const headers = ['날짜', '사고명', '장소', '심각도', '제보자'];
+    const data = cases.map(c => [
+      c.date,
+      c.title,
+      c.location,
+      c.severity === 'HIGH' ? '중대' : c.severity === 'MEDIUM' ? '경미' : '아차',
+      c.reportedBy
+    ]);
+    await exportToPDF('사고 즉보 통합 보고서', headers, data, `사고보고서_${format(new Date(), 'yyyyMMdd')}`);
+  };
+
   if (pageLoading) return <GlowLoading message="SECURITY" subMessage="Accessing Accident Logs..." />;
 
   return (
@@ -153,51 +189,69 @@ export const AccidentReport: React.FC = () => {
            <h2 className="text-3xl font-black tracking-tight text-white leading-tight">사고 즉보</h2>
            <p className="text-muted-foreground font-bold">현장의 위험 요소를 즉시 보고하세요</p>
         </div>
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger 
-            className="inline-flex shrink-0 items-center justify-center rounded-2xl bg-red-500 hover:bg-red-600 px-4 h-12 text-white font-black shadow-lg shadow-red-500/20 gap-2 active:scale-95 transition-all"
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleExportExcel}
+            className="h-12 rounded-2xl bg-white/5 border-white/10 text-white font-black text-xs gap-2"
           >
-             <Plus className="w-4 h-4" /> 제보
-          </DialogTrigger>
-          <DialogContent className="bg-card border-none rounded-3xl text-white max-w-sm p-8 space-y-6 overflow-y-auto max-h-[90vh]">
-             <DialogHeader>
-                <DialogTitle className="text-xl font-black tracking-tight">사고 제보하기</DialogTitle>
-             </DialogHeader>
-             <div className="space-y-4">
-                <div className="space-y-2">
-                   <p className="text-[10px] uppercase font-black text-white/40 tracking-widest ml-1">사고명</p>
-                   <Input value={newCase.title} onChange={e => setNewCase({...newCase, title: e.target.value})} className="bg-white/5 border-none h-12 rounded-xl" placeholder="예: 낙하 위험 감지" />
-                </div>
-                <div className="space-y-2">
-                   <p className="text-[10px] uppercase font-black text-white/40 tracking-widest ml-1">발생 장소</p>
-                   <div className="relative">
-                      <Input value={newCase.location} onChange={e => setNewCase({...newCase, location: e.target.value})} className="bg-white/5 border-none h-12 rounded-xl pl-10" placeholder="위치 정보" />
-                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
-                   </div>
-                </div>
-                <div className="space-y-2">
-                   <p className="text-[10px] uppercase font-black text-white/40 tracking-widest ml-1">심각도</p>
-                   <div className="grid grid-cols-3 gap-2">
-                      {['LOW', 'MEDIUM', 'HIGH'].map(s => (
-                        <button key={s} onClick={() => setNewCase({...newCase, severity: s as any})} className={cn(
-                          "h-10 rounded-xl text-[10px] font-black transition-all",
-                          newCase.severity === s ? "bg-red-500 text-white" : "bg-white/5 text-muted-foreground"
-                        )}>
-                           {s === 'LOW' ? '아차' : s === 'MEDIUM' ? '경미' : '중대'}
-                        </button>
-                      ))}
-                   </div>
-                </div>
-                <div className="space-y-2">
-                   <p className="text-[10px] uppercase font-black text-white/40 tracking-widest ml-1">상세 내용</p>
-                   <Textarea value={newCase.description} onChange={e => setNewCase({...newCase, description: e.target.value})} className="bg-white/5 border-none rounded-xl min-h-[100px]" placeholder="상세 설명을 적어주세요" />
-                </div>
-             </div>
-             <Button className="w-full h-14 bg-red-500 hover:bg-red-600 text-white font-black rounded-2xl" onClick={handleAddCase} disabled={loading}>
-                {loading ? '등록 중...' : '보고서 제출'}
-             </Button>
-          </DialogContent>
-        </Dialog>
+            <Download className="w-4 h-4 text-emerald-400" /> 엑셀
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleExportPDF}
+            className="h-12 rounded-2xl bg-white/5 border-white/10 text-white font-black text-xs gap-2"
+          >
+            <FileText className="w-4 h-4 text-rose-400" /> PDF
+          </Button>
+          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+            <DialogTrigger 
+              className="inline-flex shrink-0 items-center justify-center rounded-2xl bg-red-500 hover:bg-red-600 px-4 h-12 text-white font-black shadow-lg shadow-red-500/20 gap-2 active:scale-95 transition-all"
+            >
+               <Plus className="w-4 h-4" /> 제보
+            </DialogTrigger>
+            <DialogContent className="bg-card border-none rounded-3xl text-white max-w-sm p-8 space-y-6 overflow-y-auto max-h-[90vh]">
+               <DialogHeader>
+                  <DialogTitle className="text-xl font-black tracking-tight">사고 제보하기</DialogTitle>
+               </DialogHeader>
+               <div className="space-y-4">
+                  <div className="space-y-2">
+                     <p className="text-[10px] uppercase font-black text-white/40 tracking-widest ml-1">사고명</p>
+                     <Input value={newCase.title} onChange={e => setNewCase({...newCase, title: e.target.value})} className="bg-white/5 border-none h-12 rounded-xl" placeholder="예: 낙하 위험 감지" />
+                  </div>
+                  <div className="space-y-2">
+                     <p className="text-[10px] uppercase font-black text-white/40 tracking-widest ml-1">발생 장소</p>
+                     <div className="relative">
+                        <Input value={newCase.location} onChange={e => setNewCase({...newCase, location: e.target.value})} className="bg-white/5 border-none h-12 rounded-xl pl-10" placeholder="위치 정보" />
+                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                     </div>
+                  </div>
+                  <div className="space-y-2">
+                     <p className="text-[10px] uppercase font-black text-white/40 tracking-widest ml-1">심각도</p>
+                     <div className="grid grid-cols-3 gap-2">
+                        {['LOW', 'MEDIUM', 'HIGH'].map(s => (
+                          <button key={s} onClick={() => setNewCase({...newCase, severity: s as any})} className={cn(
+                            "h-10 rounded-xl text-[10px] font-black transition-all",
+                            newCase.severity === s ? "bg-red-500 text-white" : "bg-white/5 text-muted-foreground"
+                          )}>
+                             {s === 'LOW' ? '아차' : s === 'MEDIUM' ? '경미' : '중대'}
+                          </button>
+                        ))}
+                     </div>
+                  </div>
+                  <div className="space-y-2">
+                     <p className="text-[10px] uppercase font-black text-white/40 tracking-widest ml-1">상세 내용</p>
+                     <Textarea value={newCase.description} onChange={e => setNewCase({...newCase, description: e.target.value})} className="bg-white/5 border-none rounded-xl min-h-[100px]" placeholder="상세 설명을 적어주세요" />
+                  </div>
+               </div>
+               <Button className="w-full h-14 bg-red-500 hover:bg-red-600 text-white font-black rounded-2xl" onClick={handleAddCase} disabled={loading}>
+                  {loading ? '등록 중...' : '보고서 제출'}
+               </Button>
+            </DialogContent>
+          </Dialog>
+        </div>
       </header>
 
       <div className="relative">

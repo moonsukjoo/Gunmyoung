@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/src/components/AuthProvider';
 import { auth, db } from '@/src/firebase';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, increment, getDocs, deleteDoc, orderBy, limit } from 'firebase/firestore';
@@ -31,6 +32,7 @@ const DEFAULT_ROULETTE_SETTINGS: RouletteSetting[] = [
 ];
 
 export const Entertainment: React.FC = () => {
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);

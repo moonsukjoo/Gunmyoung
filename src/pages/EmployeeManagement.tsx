@@ -45,7 +45,8 @@ import {
   MapPin,
   ArrowRight,
   Download,
-  RefreshCw
+  RefreshCw,
+  FileText
 } from 'lucide-react';
 import { 
   Dialog,
@@ -83,6 +84,7 @@ const PERMISSIONS = [
 ];
 
 import { GlowLoading } from '@/src/components/GlowLoading';
+import { exportToExcel, exportToPDF } from '@/src/lib/exportUtils';
 
 export const EmployeeManagement: React.FC = () => {
   const { profile } = useAuth();
@@ -530,16 +532,31 @@ export const EmployeeManagement: React.FC = () => {
         '잔여연차': u.annualLeaveBalance || 0
       }));
 
-      const worksheet = XLSX.utils.json_to_sheet(exportData);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "직원목록");
-      
-      const fileName = `직원명부_${new Date().toISOString().split('T')[0]}.xlsx`;
-      XLSX.writeFile(workbook, fileName);
+      exportToExcel(exportData, `직원명부_${new Date().toISOString().split('T')[0]}`, '직원목록');
       toast.success('사원정보 엑셀 파일이 다운로드되었습니다.');
     } catch (error) {
       console.error("Excel export error:", error);
       toast.error('엑셀 변환 중 오류가 발생했습니다.');
+    }
+  };
+
+  const exportEmployeesToPDF = async () => {
+    try {
+      const headers = ['부서', '직급', '사번', '이름', '연락처', '상태'];
+      const data = filteredUsers.map(u => [
+        u.departmentName || '-',
+        u.position || '사원',
+        u.employeeId,
+        u.displayName,
+        u.phoneNumber || '-',
+        u.isActive ? '재직' : '퇴사'
+      ]);
+
+      await exportToPDF('임직원 명부 보고서', headers, data, `직원명부_${new Date().toISOString().split('T')[0]}`);
+      toast.success('사원정보 PDF 리포트가 생성되었습니다.');
+    } catch (error) {
+      console.error("PDF export error:", error);
+      toast.error('PDF 생성 중 오류가 발생했습니다.');
     }
   };
 
@@ -635,7 +652,15 @@ export const EmployeeManagement: React.FC = () => {
                     onClick={exportEmployeesToExcel}
                     className="h-12 px-4 gap-2 font-black rounded-2xl border-white/10 bg-white/5 text-white hover:bg-white/10 active:scale-95 transition-all text-xs"
                   >
-                    <Download className="w-4 h-4 text-emerald-400" /> 엑셀 다운로드
+                    <Download className="w-4 h-4 text-emerald-400" /> 엑셀
+                  </Button>
+
+                  <Button 
+                    variant="outline" 
+                    onClick={exportEmployeesToPDF}
+                    className="h-12 px-4 gap-2 font-black rounded-2xl border-white/10 bg-white/5 text-white hover:bg-white/10 active:scale-95 transition-all text-xs"
+                  >
+                    <FileText className="w-4 h-4 text-rose-400" /> PDF
                   </Button>
 
                   {isHRAdmin && (

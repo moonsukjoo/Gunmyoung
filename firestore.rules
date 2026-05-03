@@ -203,6 +203,11 @@ service cloud.firestore {
       allow write: if isAuthenticated() && (isOwner(uid) || isSafetyManager());
     }
 
+    match /payslips/{payslipId} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.uid) || isHRManager());
+      allow write: if isHRManager();
+    }
+
     // Default deny at the end
     match /{document=**} {
       allow read, write: if false;

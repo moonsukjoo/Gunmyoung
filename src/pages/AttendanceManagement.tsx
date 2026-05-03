@@ -25,7 +25,9 @@ import {
   TrendingUp,
   AlertCircle,
   ArrowLeft,
-  Calculator
+  Calculator,
+  Download,
+  FileText
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,6 +37,7 @@ import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { calculateAttendanceHours } from '@/src/lib/attendance';
+import { exportToExcel, exportToPDF } from '@/src/lib/exportUtils';
 
 import { GlowLoading } from '@/src/components/GlowLoading';
 
@@ -170,6 +173,38 @@ export const AttendanceManagement: React.FC = () => {
     return { total, ot };
   }, [attendanceData]);
 
+  const handleExportExcel = () => {
+    if (!selectedUser || attendanceData.length === 0) {
+      toast.error('내보낼 데이터가 없습니다.');
+      return;
+    }
+    const data = attendanceData.map(att => ({
+      '날짜': att.date,
+      '출근시간': att.clockIn ? format(new Date(att.clockIn), 'HH:mm') : '-',
+      '퇴근시간': att.clockOut ? format(new Date(att.clockOut), 'HH:mm') : '-',
+      '기본시간': att.workHours || 0,
+      '잔업시간': att.overtimeHours || 0,
+      '총시간': (att.workHours || 0) + (att.overtimeHours || 0)
+    }));
+    exportToExcel(data, `${selectedUser.displayName}_근태보고서_${month}`, '근태기록');
+  };
+
+  const handleExportPDF = async () => {
+    if (!selectedUser || attendanceData.length === 0) {
+      toast.error('내보낼 데이터가 없습니다.');
+      return;
+    }
+    const headers = ['날짜', '출근', '퇴근', '기본(h)', '잔업(h)'];
+    const data = attendanceData.map(att => [
+      att.date,
+      att.clockIn ? format(new Date(att.clockIn), 'HH:mm') : '-',
+      att.clockOut ? format(new Date(att.clockOut), 'HH:mm') : '-',
+      att.workHours?.toFixed(1) || '0.0',
+      att.overtimeHours?.toFixed(1) || '0.0'
+    ]);
+    await exportToPDF(`${selectedUser.displayName} 근태 보고서 (${month})`, headers, data, `${selectedUser.displayName}_근태_${month}`);
+  };
+
   return (
     <div className="min-h-screen bg-background pb-24">
       <header className="p-6 sticky top-0 bg-background/80 backdrop-blur-md z-10">
@@ -189,42 +224,88 @@ export const AttendanceManagement: React.FC = () => {
         </div>
 
         <div className="flex flex-col gap-4">
-          <div className="flex gap-2">
+          <div className="flex gap-2 relative">
              <div className="relative flex-1">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input 
-                  placeholder="이름 또는 부서 검색" 
+                  placeholder="성명 검색으로 대상자 선택" 
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="pl-10 h-12 bg-card border-none text-sm font-bold rounded-xl"
                 />
+                
+                <AnimatePresence>
+                  {search.length > 0 && filteredUsers.length > 0 && !selectedUser && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="absolute top-full left-0 right-0 mt-2 bg-card border border-white/10 rounded-2xl shadow-2xl z-20 overflow-hidden max-h-60 overflow-y-auto search-results-dropdown"
+                      style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                    >
+                      <style>{`.search-results-dropdown::-webkit-scrollbar { display: none; }`}</style>
+                      {filteredUsers.map(user => (
+                        <button
+                          key={user.uid}
+                          onClick={() => {
+                            setSelectedUser(user);
+                            setSearch('');
+                          }}
+                          className="w-full px-6 py-4 flex items-center justify-between hover:bg-white/5 transition-colors border-b border-white/5 last:border-none"
+                        >
+                          <div className="text-left">
+                            <p className="text-sm font-black text-white">{user.displayName}</p>
+                            <p className="text-[10px] font-bold text-muted-foreground">{user.position} | {user.departmentName}</p>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
              </div>
+             
+             {selectedUser && (
+               <button 
+                onClick={() => setSelectedUser(null)}
+                className="shrink-0 h-12 px-4 bg-primary text-white rounded-xl flex items-center gap-2 animate-in fade-in slide-in-from-right-2"
+               >
+                 <span className="text-xs font-black">{selectedUser.displayName} </span>
+                 <X className="w-4 h-4" />
+               </button>
+             )}
+
              <Input 
                type="month" 
                value={month}
                onChange={(e) => setMonth(e.target.value)}
-               className="w-32 h-12 bg-card border-none text-xs font-black text-white rounded-xl text-center px-0 appearance-none"
+               className="w-32 h-12 bg-card border-none text-xs font-black text-white rounded-xl text-center px-0 appearance-none shrink-0"
                style={{ colorScheme: 'dark' }}
              />
           </div>
 
-          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-            {filteredUsers.map(user => (
-              <button
-                key={user.uid}
-                onClick={() => setSelectedUser(user)}
-                className={cn(
-                  "shrink-0 px-4 py-2 rounded-xl text-xs font-black transition-all border",
-                  selectedUser?.uid === user.uid 
-                    ? "bg-primary text-white border-primary shadow-lg shadow-primary/20" 
-                    : "bg-card text-muted-foreground border-white/5"
-                )}
+          {selectedUser && (
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleExportExcel}
+                className="flex-1 h-10 rounded-xl bg-white/5 border-white/10 text-white font-black text-[10px] gap-2"
               >
-                {user.displayName} 
-                <span className="ml-1 opacity-50 text-[10px]">{user.position || user.departmentName}</span>
-              </button>
-            ))}
-          </div>
+                <Download className="w-3.5 h-3.5 text-emerald-400" />
+                EXCEL 보고서
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleExportPDF}
+                className="flex-1 h-10 rounded-xl bg-white/5 border-white/10 text-white font-black text-[10px] gap-2"
+              >
+                <FileText className="w-3.5 h-3.5 text-rose-400" />
+                PDF 리포트
+              </Button>
+            </div>
+          )}
         </div>
       </header>
 

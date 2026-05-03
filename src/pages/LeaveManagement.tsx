@@ -24,7 +24,9 @@ import {
   UserPlus, 
   MinusCircle, 
   PlusCircle,
-  Search
+  Search,
+  Download,
+  FileText
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -32,6 +34,7 @@ import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 
 import { GlowLoading } from '@/src/components/GlowLoading';
+import { exportToExcel, exportToPDF } from '@/src/lib/exportUtils';
 
 export const LeaveManagement: React.FC = () => {
   const { profile } = useAuth();
@@ -143,11 +146,64 @@ export const LeaveManagement: React.FC = () => {
     u.displayName.includes(searchTerm) || u.employeeId?.includes(searchTerm)
   ).sort((a, b) => a.displayName.localeCompare(b.displayName));
 
+  const handleExportExcel = () => {
+    if (requests.length === 0) {
+      toast.error('내보낼 데이터가 없습니다.');
+      return;
+    }
+    const data = requests.map(req => ({
+      '신청일': format(new Date(req.createdAt), 'yyyy-MM-dd'),
+      '사원명': req.displayName,
+      '사번': req.employeeId,
+      '구분': req.type === 'ANNUAL' ? '연차' : '반차',
+      '기간': `${req.startDate} ~ ${req.endDate}`,
+      '사유': req.reason,
+      '상태': req.status === 'APPROVED' ? '승인' : req.status === 'REJECTED' ? '반려' : '대기'
+    }));
+    exportToExcel(data, `연차신청내역_${format(new Date(), 'yyyyMMdd')}`, '연차휴가기록');
+  };
+
+  const handleExportPDF = async () => {
+    if (requests.length === 0) {
+      toast.error('내보낼 데이터가 없습니다.');
+      return;
+    }
+    const headers = ['사원명', '구분', '시작일', '종료일', '상태'];
+    const data = requests.map(req => [
+      req.displayName,
+      req.type === 'ANNUAL' ? '연차' : '반차',
+      req.startDate,
+      req.endDate,
+      req.status === 'APPROVED' ? '승인' : req.status === 'REJECTED' ? '반려' : '대기'
+    ]);
+    await exportToPDF('연차/휴가 신청 통합 보고서', headers, data, `연차보고서_${format(new Date(), 'yyyyMMdd')}`);
+  };
+
   return (
     <div className="space-y-6 pb-24 px-1">
-      <header className="py-6">
-        <h2 className="text-3xl font-black tracking-tight text-white leading-tight">연차/휴가 통합 관리</h2>
-        <p className="text-muted-foreground font-bold">사원들의 휴가 신청을 검토하고 연차를 관리하세요</p>
+      <header className="py-6 flex justify-between items-end">
+        <div>
+          <h2 className="text-3xl font-black tracking-tight text-white leading-tight">연차/휴가 통합 관리</h2>
+          <p className="text-muted-foreground font-bold">사원들의 휴가 신청을 검토하고 연차를 관리하세요</p>
+        </div>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleExportExcel}
+            className="h-10 rounded-xl bg-white/5 border-white/10 text-white font-black text-[10px] gap-2"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-400" /> EXCEL
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleExportPDF}
+            className="h-10 rounded-xl bg-white/5 border-white/10 text-white font-black text-[10px] gap-2"
+          >
+            <FileText className="w-3.5 h-3.5 text-rose-400" /> PDF
+          </Button>
+        </div>
       </header>
 
       <div className="flex p-1 bg-white/5 rounded-2xl gap-1">

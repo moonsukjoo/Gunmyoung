@@ -6,21 +6,26 @@ import { toast } from 'sonner';
  */
 export const requestNotificationPermission = async () => {
   // Check for Capacitor environment
-  const isCapacitor = (window as any).Capacitor !== undefined;
+  const capacitor = (window as any).Capacitor;
+  const isCapacitor = capacitor !== undefined;
+  const isNative = isCapacitor && capacitor.isNativePlatform?.();
 
   // 1. Handle Capacitor (Native)
-  if (isCapacitor) {
+  if (isNative) {
     try {
       const { LocalNotifications } = await import('@capacitor/local-notifications');
       const status = await LocalNotifications.requestPermissions();
       return status.display === 'granted';
-    } catch (err) {
-      console.error('Native notification permission failed:', err);
+    } catch (err: any) {
+      if (err?.message !== 'Notifications not supported in this browser.') {
+        console.warn('Native notification permission failed:', err);
+      }
+      // Fall through to web check if native fails
     }
   }
 
   // 2. Fallback to Web Notification API
-  if (!('Notification' in window)) {
+  if (typeof Notification === 'undefined') {
     console.warn('이 브라우저는 알림 기능을 지원하지 않습니다.');
     return false;
   }
@@ -53,12 +58,14 @@ export const requestNotificationPermission = async () => {
  */
 export const sendPushNotification = async (title: string, options: NotificationOptions & { useToast?: boolean } = {}) => {
   const { useToast = true, ...navOptions } = options;
-  const isCapacitor = (window as any).Capacitor !== undefined;
+  const capacitor = (window as any).Capacitor;
+  const isCapacitor = capacitor !== undefined;
+  const isNative = isCapacitor && capacitor.isNativePlatform?.();
 
   let osNotificationShown = false;
 
   // 1. Native / Browser Level Notification
-  if (isCapacitor) {
+  if (isNative) {
     try {
       const { LocalNotifications } = await import('@capacitor/local-notifications');
       await LocalNotifications.schedule({
@@ -74,8 +81,10 @@ export const sendPushNotification = async (title: string, options: NotificationO
         ]
       });
       osNotificationShown = true;
-    } catch (err) {
-      console.warn('Native notification failed:', err);
+    } catch (err: any) {
+      if (err?.message !== 'Notifications not supported in this browser.') {
+        console.warn('Native notification failed:', err);
+      }
     }
   } else if ('Notification' in window && Notification.permission === 'granted') {
     const registration = await navigator.serviceWorker.ready.catch(() => null);

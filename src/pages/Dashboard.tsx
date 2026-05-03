@@ -75,8 +75,14 @@ export const Dashboard: React.FC = () => {
   });
   const [pendingTrainings, setPendingTrainings] = useState(0);
 
-  const isManager = profile && (['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER', 'GENERAL_AFFAIRS'].includes(profile.role) || profile.permissions?.includes('notice_mgmt'));
-  const canReportAccident = profile && (['CEO', 'SAFETY_MANAGER'].includes(profile.role) || profile.permissions?.includes('accident_mgmt'));
+  const isManager = profile && (
+    ['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER', 'GENERAL_AFFAIRS'].includes(profile.role) || 
+    profile.permissions?.some(p => ['notice_mgmt', 'employee_mgmt', 'accident_mgmt', 'work_log_mgmt', 'attendance_mgmt', 'training_mgmt', 'admin'].includes(p))
+  );
+  const canReportAccident = profile && (
+    ['CEO', 'SAFETY_MANAGER'].includes(profile.role) || 
+    profile.permissions?.includes('accident_mgmt')
+  );
 
   useEffect(() => {
     requestNotificationPermission();
@@ -680,27 +686,6 @@ export const Dashboard: React.FC = () => {
           )}
         </CardContent>
       </Card>
-
-      {/* SOS & Notifications */}
-      <div className="flex gap-4">
-        <Button 
-          variant="outline" 
-          className="flex-1 h-14 rounded-2xl bg-white/5 border-white/10 text-white font-black text-sm gap-2"
-          onClick={() => navigate('/notifications')}
-        >
-          <Bell className="w-4 h-4 text-primary" />
-          알림
-        </Button>
-        <Button 
-          variant="outline" 
-          className="flex-1 h-14 rounded-2xl bg-red-500/10 border-red-500/20 text-red-500 font-black text-sm gap-2"
-          onClick={handleSOS}
-          disabled={isSOSLoading}
-        >
-          <ShieldAlert className="w-4 h-4" />
-          {isSOSLoading ? '발생 중' : '긴급 SOS'}
-        </Button>
-      </div>
 
       {/* Admin Quick Actions */}
       {isManager && (

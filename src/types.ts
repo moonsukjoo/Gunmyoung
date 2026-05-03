@@ -38,6 +38,10 @@ export interface UserProfile {
   ghostGuardEnabled?: boolean;
   lastMovementAt?: string;
   isImmobile?: boolean;
+  isFalling?: boolean;
+  fallDetectedAt?: string;
+  hasImpacted?: boolean;
+  impactDetectedAt?: string;
 }
 
 export interface SafetyScoreLog {
@@ -102,6 +106,18 @@ export interface TrainingResult {
   totalQuestions: number;
   isPassed: boolean;
   completedAt: string;
+}
+
+export interface AttendanceLog {
+  id: string;
+  uid: string;
+  userName?: string;
+  date: string;
+  time: string;
+  type: 'check-in' | 'check-out';
+  latitude?: number;
+  longitude?: number;
+  timestamp: any;
 }
 
 export interface Attendance {
@@ -265,4 +281,40 @@ export interface EvacuationCheckin {
   displayName: string;
   departmentName: string;
   confirmedAt: string;
+}
+
+export interface Payslip {
+  id: string;
+  uid: string;
+  employeeId: string;
+  userName: string;
+  month: string; // YYYY-MM
+  baseHours: number;
+  weeklyHolidayHours: number;
+  paidLeaveHours: number;
+  trainingHours: number;
+  otherHours: number;
+  monthlyLeaveHours: number;
+  holidayWorkHours: number;
+  overtimeHours: number;
+  totalHours: number;
+  hourlyRate: number;
+  baseSalary: number;
+  experienceAllowance: number;
+  otherAllowance: number;
+  annualLeaveAllowance: number;
+  mealAllowance: number;
+  extraAllowance: number;
+  totalEarnings: number;
+  incomeTax: number;
+  localIncomeTax: number;
+  healthInsurance: number;
+  nationalPension: number;
+  employmentInsurance: number;
+  mealDeduction: number;
+  laundryDeduction: number;
+  totalDeductions: number;
+  netPay: number;
+  annualLeaveBaseDate?: string;
+  createdAt: string;
 }

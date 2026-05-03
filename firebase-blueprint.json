@@ -351,6 +351,46 @@
         "confirmedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "displayName", "confirmedAt"]
+    },
+    "Payslip": {
+      "title": "Payslip",
+      "description": "Monthly salary statement for an employee",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "employeeId": { "type": "string" },
+        "userName": { "type": "string" },
+        "month": { "type": "string", "description": "YYYY-MM" },
+        "baseHours": { "type": "number" },
+        "weeklyHolidayHours": { "type": "number" },
+        "paidLeaveHours": { "type": "number" },
+        "trainingHours": { "type": "number" },
+        "otherHours": { "type": "number" },
+        "monthlyLeaveHours": { "type": "number" },
+        "holidayWorkHours": { "type": "number" },
+        "overtimeHours": { "type": "number" },
+        "totalHours": { "type": "number" },
+        "hourlyRate": { "type": "number" },
+        "baseSalary": { "type": "number" },
+        "experienceAllowance": { "type": "number" },
+        "otherAllowance": { "type": "number" },
+        "annualLeaveAllowance": { "type": "number" },
+        "mealAllowance": { "type": "number" },
+        "extraAllowance": { "type": "number" },
+        "totalEarnings": { "type": "number" },
+        "incomeTax": { "type": "number" },
+        "localIncomeTax": { "type": "number" },
+        "healthInsurance": { "type": "number" },
+        "nationalPension": { "type": "number" },
+        "employmentInsurance": { "type": "number" },
+        "mealDeduction": { "type": "number" },
+        "laundryDeduction": { "type": "number" },
+        "totalDeductions": { "type": "number" },
+        "netPay": { "type": "number" },
+        "annualLeaveBaseDate": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "month", "totalEarnings", "netPay", "createdAt"]
     }
   },
   "firestore": {
@@ -441,6 +481,10 @@
     "/altitudeLogs/{logId}": {
       "schema": "object",
       "description": "Historical altitude data points for safety auditing"
+    },
+    "/payslips/{payslipId}": {
+      "schema": "Payslip",
+      "description": "Employee monthly payslips"
     }
   }
 }

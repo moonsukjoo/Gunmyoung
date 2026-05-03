@@ -18,10 +18,12 @@ import {
   Clock,
   Filter,
   ArrowRight,
-  ChevronLeft
+  ChevronLeft,
+  FileText
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useNavigate } from 'react-router-dom';
+import { exportToExcel, exportToPDF } from '@/src/lib/exportUtils';
 
 export const WorkLogManagement: React.FC = () => {
   const navigate = useNavigate();
@@ -102,6 +104,23 @@ export const WorkLogManagement: React.FC = () => {
     toast.success('엑셀 파일이 생성되었습니다.');
   };
 
+  const handleExportPDF = async () => {
+    if (filteredLogs.length === 0) {
+      toast.error('내보낼 데이터가 없습니다.');
+      return;
+    }
+    const headers = ['일자', '성명', '부서', '시간', '작업내용'];
+    const data = filteredLogs.map(log => [
+      log.date,
+      log.userName,
+      log.departmentName,
+      `${log.startTime}-${log.endTime}`,
+      log.content.substring(0, 30) + (log.content.length > 30 ? '...' : '')
+    ]);
+    await exportToPDF('작업 일지 통합 보고서', headers, data, `작업일지_${filters.startDate}_to_${filters.endDate}`);
+    toast.success('PDF 리포트가 생성되었습니다.');
+  };
+
   return (
     <div className="space-y-6 pb-24 px-1">
       <div className="flex items-center justify-between py-4">
@@ -116,13 +135,24 @@ export const WorkLogManagement: React.FC = () => {
           </Button>
           <h1 className="text-xl font-black text-white">작업일지 관리</h1>
         </div>
-        <Button 
-          onClick={handleExportExcel}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl gap-2 shadow-lg shadow-emerald-900/20"
-        >
-          <Download className="w-4 h-4" />
-          Excel
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            onClick={handleExportExcel}
+            size="sm"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl gap-2 shadow-lg shadow-emerald-900/20 text-xs"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Excel
+          </Button>
+          <Button 
+            onClick={handleExportPDF}
+            size="sm"
+            className="bg-rose-600 hover:bg-rose-700 text-white font-black rounded-xl gap-2 shadow-lg shadow-rose-900/20 text-xs"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            PDF
+          </Button>
+        </div>
       </div>
 
       {/* Filter Section */}

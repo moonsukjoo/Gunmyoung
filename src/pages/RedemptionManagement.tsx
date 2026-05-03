@@ -18,13 +18,13 @@ import {
   ThumbsUp,
   ThumbsDown,
   CircleDollarSign,
-  Download
+  Download,
+  FileText
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
-import * as XLSX from 'xlsx';
 import { 
   Dialog,
   DialogContent,
@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/dialog";
 
 import { GlowLoading } from '@/src/components/GlowLoading';
+import { exportToExcel, exportToPDF } from '@/src/lib/exportUtils';
 
 export const RedemptionManagement: React.FC = () => {
   const { profile } = useAuth();
@@ -124,11 +125,32 @@ export const RedemptionManagement: React.FC = () => {
       '승인자': r.processedByName || '-'
     }));
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '현물신청내역');
-    XLSX.writeFile(wb, `현물신청내역_${exportMonth}.xlsx`);
+    exportToExcel(data, `현물신청내역_${exportMonth}`, '현물신청내역');
     toast.success(`${exportMonth} 내역이 다운로드되었습니다.`);
+  };
+
+  const handleExportPDF = async () => {
+    const approvedRequests = requests.filter(r => 
+      (r.status === 'APPROVED' || r.status === 'COMPLETED') && 
+      r.createdAt.startsWith(exportMonth)
+    );
+
+    if (approvedRequests.length === 0) {
+      toast.error('해당 월의 승인/지급 내역이 없습니다.');
+      return;
+    }
+
+    const headers = ['성명', '포인트', '지급액', '상태', '처리일'];
+    const data = approvedRequests.map(r => [
+      r.userName,
+      r.pointsRequested,
+      r.amount.toLocaleString() + '원',
+      r.status === 'APPROVED' ? '승인' : '완료',
+      r.processedAt ? format(new Date(r.processedAt), 'MM.dd HH:mm') : '-'
+    ]);
+
+    await exportToPDF(`${exportMonth} 현물 지급 통합 리포트`, headers, data, `현물지급보고서_${exportMonth}`);
+    toast.success('PDF 리포트가 생성되었습니다.');
   };
 
   const statusMap = {
@@ -179,10 +201,17 @@ export const RedemptionManagement: React.FC = () => {
            </div>
            <Button 
              variant="outline" 
-             className="h-12 bg-primary/10 border-primary/20 text-primary font-black rounded-xl gap-2 text-xs"
+             className="h-12 bg-emerald-500/10 border-emerald-500/20 text-emerald-500 font-black rounded-xl gap-2 text-xs flex-1"
              onClick={handleExportExcel}
            >
-             <Download className="w-4 h-4" /> 엑셀 다운로드
+             <Download className="w-4 h-4" /> EXCEL
+           </Button>
+           <Button 
+             variant="outline" 
+             className="h-12 bg-rose-500/10 border-rose-500/20 text-rose-500 font-black rounded-xl gap-2 text-xs flex-1"
+             onClick={handleExportPDF}
+           >
+             <FileText className="w-4 h-4" /> PDF
            </Button>
         </div>
       </header>

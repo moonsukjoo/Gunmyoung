@@ -23,13 +23,14 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Trash2, BookOpen, Layers, HelpCircle, CheckCircle2, AlertCircle, FileUp, Clock, Eye, Send, Circle, Zap, Trophy } from 'lucide-react';
+import { Plus, Trash2, BookOpen, Layers, HelpCircle, CheckCircle2, AlertCircle, FileUp, Clock, Eye, Send, Circle, Zap, Trophy, Download, FileText } from 'lucide-react';
 import { useAuth } from '@/src/components/AuthProvider';
 import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { GoogleGenAI } from "@google/genai";
 
 import { GlowLoading } from '@/src/components/GlowLoading';
+import { exportToExcel, exportToPDF } from '@/src/lib/exportUtils';
 
 export const TrainingManagement: React.FC = () => {
   const { profile } = useAuth();
@@ -422,12 +423,52 @@ ${aiPrompt}`,
             </div>
           </div>
           
-          <Button 
-            onClick={() => setIsAddOpen(true)}
-            className="h-16 w-full rounded-3xl bg-primary hover:bg-primary/90 shadow-xl shadow-primary/20 gap-3 font-black text-lg active:scale-[0.98] transition-all border-b-4 border-primary/70 text-white"
-          >
-            <Plus className="w-6 h-6 text-white" /> 새 교육 자료 등록
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              onClick={() => setIsAddOpen(true)}
+              className="h-16 flex-1 rounded-3xl bg-primary hover:bg-primary/90 shadow-xl shadow-primary/20 gap-3 font-black text-lg active:scale-[0.98] transition-all border-b-4 border-primary/70 text-white"
+            >
+              <Plus className="w-6 h-6 text-white" /> 새 교육 자료 등록
+            </Button>
+            <div className="flex flex-col gap-2">
+              <Button 
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const data = trainings.map(t => ({
+                    '제목': t.title,
+                    '요약': t.description,
+                    '대상': t.targetJobRole || '전체',
+                    '상태': t.status === 'PUBLISHED' ? '게시' : '초안',
+                    '문제수': t.questions?.length || 0,
+                    '등록일': t.createdAt.split('T')[0]
+                  }));
+                  exportToExcel(data, '교육자료목록', '교육');
+                }}
+                className="h-7 rounded-lg bg-card border-white/5 text-muted-foreground font-black text-[9px] gap-1 px-2"
+              >
+                <Download className="w-3 h-3 text-emerald-400" /> EXCEL
+              </Button>
+              <Button 
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  const headers = ['제목', '대상', '상태', '문제수', '등록일'];
+                  const data = trainings.map(t => [
+                    t.title,
+                    t.targetJobRole || '전체',
+                    t.status === 'PUBLISHED' ? '게시' : '초안',
+                    t.questions?.length || 0,
+                    t.createdAt.split('T')[0]
+                  ]);
+                  await exportToPDF('교육 자료 통합 보고서', headers, data, '교육보고서');
+                }}
+                className="h-7 rounded-lg bg-card border-white/5 text-muted-foreground font-black text-[9px] gap-1 px-2"
+              >
+                <FileText className="w-3 h-3 text-rose-400" /> PDF
+              </Button>
+            </div>
+          </div>
         </div>
 
         {/* Custom Tab Switcher - More robust than standard Tabs component */}

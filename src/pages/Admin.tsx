@@ -22,6 +22,7 @@ import {
   Megaphone, 
   ShieldAlert, 
   AlertTriangle,
+  LayoutDashboard,
   BarChart3,
   CalendarDays, 
   Trophy,
@@ -56,6 +57,15 @@ const PERMISSIONS = [
   { id: 'praise_coupon', label: '칭찬쿠폰/룰렛 관리', icon: Trophy },
   { id: 'redemption_mgmt', label: '현물 신청 관리', icon: CircleDollarSign },
   { id: 'attendance_mgmt', label: '근태 관리', icon: Clock },
+  { id: 'work_log_mgmt', label: '작업일지 관리', icon: ClipboardList },
+  { id: 'training_mgmt', label: '교육/평가 관리', icon: HardHat },
+  { id: 'safety_score_admin', label: '안전지수 설정/관리', icon: ShieldCheck },
+  { id: 'pc_dashboard', label: 'PC 통합 대시보드', icon: LayoutDashboard, color: 'bg-emerald-600' },
+  { id: 'payslip_mgmt', label: '급여명세서 관리', icon: CircleDollarSign },
+  { id: 'safety_ranking', label: '나의 안전지수/랭킹 조회', icon: BarChart3 },
+  { id: 'qualification_mgmt', label: '자격/교육이력 관리', icon: ClipboardList },
+  { id: 'high_work_monitor', label: '고소작업 총괄 현황', icon: BarChart3 },
+  { id: 'emergency_rollcall', label: '비상 대피 롤콜 권한', icon: AlertTriangle },
 ];
 
 import { GlowLoading } from '@/src/components/GlowLoading';
@@ -184,17 +194,21 @@ export const Admin: React.FC = () => {
       { to: '/personnel', label: '인사등록', icon: UserPlus, permission: 'employee_mgmt' },
       { to: '/attendance-mgmt', label: '근태 관리', icon: Clock, permission: 'attendance_mgmt' },
       { to: '/leave-mgmt', label: '연차/휴가 관리', icon: CalendarDays, permission: 'leave_mgmt' },
-      { to: '/work-log-mgmt', label: '작업일지 관리', icon: ClipboardList, roles: ['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER'] },
+      { to: '/payslip-mgmt', label: '급여명세서 관리', icon: CircleDollarSign, permission: 'payslip_mgmt' },
+      { to: '/work-log-mgmt', label: '작업일지 관리', icon: ClipboardList, permission: 'work_log_mgmt' },
+      { to: '/qualification', label: '자격/교육이력 관리', icon: ClipboardList, permission: 'qualification_mgmt' },
       { to: '/redemption-mgmt', label: '현물 신청 관리', icon: CircleDollarSign, permission: 'redemption_mgmt' },
     ],
     safety: [
-      { onClick: () => navigate('/high-work-monitor'), label: '고소작업 총괄 현황', icon: BarChart3, roles: ['CEO', 'SAFETY_MANAGER'] },
-      { onClick: () => setIsEmergencyOpen(true), label: '비상 대피 롤콜', icon: AlertTriangle, roles: ['CEO', 'SAFETY_MANAGER'] },
+      { onClick: () => navigate('/high-work-monitor'), label: '고소작업 총괄 현황', icon: BarChart3, permission: 'high_work_monitor' },
+      { onClick: () => setIsEmergencyOpen(true), label: '비상 대피 롤콜', icon: AlertTriangle, permission: 'emergency_rollcall' },
       { to: '/accidents', label: '사고즉보 관리', icon: ShieldAlert, permission: 'accident_mgmt' },
       { to: '/training-mgmt', label: '교육/평가 관리', icon: HardHat, permission: 'training_mgmt' },
-      { to: '/safety-score', label: '안전지수 설정', icon: ShieldCheck, roles: ['CEO', 'SAFETY_MANAGER'] },
+      { to: '/safety-score', label: '나의 안전지수/랭킹 조회', icon: BarChart3, permission: 'safety_ranking' },
+      { to: '/safety-score', label: '안전지수 설정', icon: ShieldCheck, permission: 'safety_score_admin' },
     ],
     system: [
+      { to: '/admin/pc-dashboard', label: 'PC 통합 대시보드', icon: LayoutDashboard, permission: 'admin', newTab: true },
       { to: '/notifications', label: '공지사항 관리', icon: Megaphone, permission: 'notice_mgmt' },
       { onClick: () => setIsBannerSettingsOpen(true), label: '메인 배너 문구', icon:Megaphone, permission: 'admin' },
       { to: '/coupons', label: '포상/룰렛 관리', icon: Trophy, permission: 'praise_coupon' },
@@ -222,7 +236,15 @@ export const Admin: React.FC = () => {
     );
 
     return 'to' in link ? (
-      <Link key={idx} to={link.to} className="w-full">{Content}</Link>
+      <Link 
+        key={idx} 
+        to={link.to} 
+        className="w-full"
+        target={link.newTab ? "_blank" : undefined}
+        rel={link.newTab ? "noopener noreferrer" : undefined}
+      >
+        {Content}
+      </Link>
     ) : (
       <button key={idx} onClick={link.onClick} className="w-full">{Content}</button>
     );

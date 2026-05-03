@@ -20,7 +20,9 @@ import {
   User as UserIcon,
   Plus,
   Minus,
-  Save
+  Save,
+  Download,
+  FileText
 } from 'lucide-react';
 import { 
   Dialog, 
@@ -33,6 +35,7 @@ import {
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { exportToExcel, exportToPDF } from '@/src/lib/exportUtils';
 
 export const SafetyRanking: React.FC = () => {
   const { profile } = useAuth();
@@ -51,7 +54,7 @@ export const SafetyRanking: React.FC = () => {
   const [reason, setReason] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  const isAdmin = profile && (['CEO', 'SAFETY_MANAGER'].includes(profile.role));
+  const isAdmin = profile && (['CEO', 'SAFETY_MANAGER'].includes(profile.role) || profile.permissions?.includes('safety_score_admin'));
 
   useEffect(() => {
     const unsubscribeUsers = onSnapshot(query(collection(db, 'users')), (snapshot) => {
@@ -149,11 +152,86 @@ export const SafetyRanking: React.FC = () => {
     }
   };
 
+  const handleExportExcel = () => {
+    if (activeView === 'INDIVIDUAL') {
+      const data = filteredUsers.map((u, idx) => ({
+        '순위': idx + 1,
+        '성명': u.displayName,
+        '사번': u.employeeId,
+        '부서': u.departmentName,
+        '안전지수': u.safetyScore || 100
+      }));
+      exportToExcel(data, '개인별_안전지수', '랭킹');
+    } else if (activeView === 'TEAM') {
+      const data = teamRankings.map((t, idx) => ({
+        '순위': idx + 1,
+        '팀명': t.name,
+        '팀원수': t.count,
+        '평균지수': t.average.toFixed(1)
+      }));
+      exportToExcel(data, '팀별_안전지수', '팀랭킹');
+    } else {
+      const data = logs.map(l => ({
+        '대상자': l.targetName,
+        '점수변동': l.scoreDelta,
+        '변동후': l.newScore,
+        '사유': l.reason,
+        '관리자': l.adminName,
+        '일시': format(new Date(l.createdAt), 'yyyy-MM-dd HH:mm')
+      }));
+      exportToExcel(data, '안전지수_히스토리', '히스토리');
+    }
+    toast.success('엑셀 다운로드 완료');
+  };
+
+  const handleExportPDF = async () => {
+    let title = '안전 지수 보고서';
+    let headers: string[] = [];
+    let data: any[][] = [];
+
+    if (activeView === 'INDIVIDUAL') {
+      title = '개인별 안전 지수 랭킹 리포트';
+      headers = ['순위', '성명', '부서', '지수'];
+      data = filteredUsers.map((u, idx) => [idx + 1, u.displayName, u.departmentName, u.safetyScore || 100]);
+    } else if (activeView === 'TEAM') {
+      title = '팀별 안전 지수 평균 리포트';
+      headers = ['순위', '팀명', '인원', '평균'];
+      data = teamRankings.map((t, idx) => [idx + 1, t.name, t.count, t.average.toFixed(1)]);
+    } else {
+      title = '안전 지수 변동 히스토리 리포트';
+      headers = ['대상', '변동', '잔여', '사유'];
+      data = logs.map(l => [l.targetName, l.scoreDelta > 0 ? `+${l.scoreDelta}` : l.scoreDelta, l.newScore, l.reason]);
+    }
+
+    await exportToPDF(title, headers, data, '안전지수_보고서');
+    toast.success('PDF 리포트 생성 완료');
+  };
+
   return (
     <div className="space-y-6 pb-24 px-1">
-      <header className="py-6">
-        <h2 className="text-3xl font-black tracking-tight text-white leading-tight">안전 지수</h2>
-        <p className="text-muted-foreground font-bold">우리 회사의 안전 랭킹을 확인하세요</p>
+      <header className="py-6 flex items-end justify-between">
+        <div>
+          <h2 className="text-3xl font-black tracking-tight text-white leading-tight">안전 지수</h2>
+          <p className="text-muted-foreground font-bold">우리 회사의 안전 랭킹을 확인하세요</p>
+        </div>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline"
+            size="sm"
+            onClick={handleExportExcel}
+            className="h-10 rounded-xl bg-white/5 border-white/10 text-white font-black text-[10px] gap-2"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-400" /> EXCEL
+          </Button>
+          <Button 
+            variant="outline"
+            size="sm"
+            onClick={handleExportPDF}
+            className="h-10 rounded-xl bg-white/5 border-white/10 text-white font-black text-[10px] gap-2"
+          >
+            <FileText className="w-3.5 h-3.5 text-rose-400" /> PDF
+          </Button>
+        </div>
       </header>
 
       <div className="bg-white/5 p-1 rounded-2xl flex gap-1">
