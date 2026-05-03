@@ -9,10 +9,31 @@ import html2canvas from 'html2canvas';
  * @param sheetName Name of the sheet
  */
 export const exportToExcel = (data: any[], fileName: string, sheetName: string = 'Sheet1') => {
-  const worksheet = XLSX.utils.json_to_sheet(data);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
-  XLSX.writeFile(workbook, `${fileName}_${new Date().getTime()}.xlsx`);
+  try {
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+    
+    // Use manual blob generation for better compatibility in some environments
+    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${fileName}_${new Date().getTime()}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    
+    // Cleanup
+    setTimeout(() => {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }, 100);
+  } catch (error) {
+    console.error('Excel export failed:', error);
+    throw error;
+  }
 };
 
 /**
@@ -45,14 +66,13 @@ export const exportToPDF = async (title: string, headers: string[], data: any[][
       <!-- Header -->
       <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #111827; padding-bottom: 30px; margin-bottom: 40px;">
         <div style="display: flex; align-items: center; gap: 15px;">
-          <img src="/assets/icon.png" style="width: 48px; height: 48px; border-radius: 12px; object-fit: contain;" />
+          <div style="width: 48px; height: 48px; background: #3b82f6; border-radius: 12px; display: flex; items-center; justify-center; color: white; font-weight: 900; font-size: 20px;">KM</div>
           <div>
             <h2 style="font-size: 24px; font-weight: 900; color: #111827; margin: 0; letter-spacing: -0.01em;">건명기업</h2>
             <p style="font-size: 12px; color: #6b7280; font-weight: 500; margin: 0;">스마트 안전 및 인사 관리 솔루션</p>
           </div>
         </div>
         <div style="text-align: right;">
-          <img src="/company_logo.png" style="height: 32px; margin-bottom: 10px; object-fit: contain;" />
           <h1 style="font-size: 32px; font-weight: 900; color: #111827; margin: 0; letter-spacing: -0.02em;">${title}</h1>
         </div>
       </div>
@@ -130,15 +150,28 @@ export const exportToPDF = async (title: string, headers: string[], data: any[][
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
     
-    // If report is longer than one page, jsPDF can manage paging if we split canvas, 
-    // but for most business reports we'll scale to fit or add paging logic. 
-    // Here we'll stick to a high-quality single page view for standard reports.
     pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    pdf.save(`${fileName}_${new Date().getTime()}.pdf`);
+    
+    // Use manual blob generation for better compatibility
+    const pdfBlob = pdf.output('blob');
+    const url = URL.createObjectURL(pdfBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${fileName}_${new Date().getTime()}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    
+    // Cleanup
+    setTimeout(() => {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }, 100);
   } catch (error) {
     console.error('PDF generation failed:', error);
     throw error;
   } finally {
-    document.body.removeChild(container);
+    if (container.parentNode) {
+      document.body.removeChild(container);
+    }
   }
 };

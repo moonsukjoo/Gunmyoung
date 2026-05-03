@@ -97,10 +97,7 @@ export const WorkLogManagement: React.FC = () => {
       '작성일시': format(new Date(log.createdAt), 'yyyy-MM-dd HH:mm:ss')
     }));
 
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '작업일지');
-    XLSX.writeFile(wb, `작업일지_${filters.startDate}_to_${filters.endDate}.xlsx`);
+    exportToExcel(exportData, `작업일지_${filters.startDate}_to_${filters.endDate}`, '작업일지');
     toast.success('엑셀 파일이 생성되었습니다.');
   };
 

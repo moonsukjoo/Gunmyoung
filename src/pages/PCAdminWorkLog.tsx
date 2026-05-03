@@ -87,6 +87,29 @@ const PCAdminWorkLog: React.FC = () => {
     }
   };
 
+  const handleExportExcel = () => {
+    if (logs.length === 0) {
+      toast.error('내보낼 데이터가 없습니다.');
+      return;
+    }
+    const exportData = logs.map(log => ({
+      '상태': log.status === 'completed' ? '완료' : log.status === 'in-progress' ? '진행 중' : '대기',
+      '날짜': log.date,
+      '공구': log.section,
+      '세부공구': log.subSection,
+      '공정명': log.workType,
+      '인원수': log.workersCount,
+      '팀장': log.leaderName,
+      '주요성과': log.mainAchievement,
+      '특이사항': log.safetyIssue || '없음'
+    }));
+
+    import('../lib/exportUtils').then(m => {
+      m.exportToExcel(exportData, `일일작업현황_${selectedDate}_${selectedSection}`, '작업일지');
+      toast.success('엑셀 파일이 다운로드되었습니다.');
+    });
+  };
+
   return (
     <PCAdminLayout title="작업일지 총괄 관리">
       <div className="max-w-[1600px] mx-auto space-y-8">
@@ -96,7 +119,10 @@ const PCAdminWorkLog: React.FC = () => {
             <p className="text-slate-500 font-medium">건명기업 각 현장의 일일 작업 기록 및 자원 투입 현황을 확인합니다.</p>
           </div>
           <div className="flex gap-3">
-            <button className="px-6 py-4 bg-white border border-slate-200 text-slate-700 rounded-2xl font-black text-sm flex items-center gap-3 hover:bg-slate-50 transition-all shadow-sm">
+            <button 
+              onClick={handleExportExcel}
+              className="px-6 py-4 bg-white border border-slate-200 text-slate-700 rounded-2xl font-black text-sm flex items-center gap-3 hover:bg-slate-50 transition-all shadow-sm"
+            >
               <Download className="w-5 h-5" />
               일일 통합 리포트 출력
             </button>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, setDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Payslip, UserProfile } from '../types';
-import { read, utils, writeFile } from 'xlsx';
+import { read, utils, write } from 'xlsx';
 import { Upload, Download, Save, Trash2, CheckCircle2, AlertCircle, FileSpreadsheet, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -264,7 +264,23 @@ const PayslipManagement: React.FC = () => {
 
     const wb = utils.book_new();
     utils.book_append_sheet(wb, ws, '급여명세서_양식');
-    writeFile(wb, `급여명세서_양식_${month}.xlsx`);
+    
+    // Use manual blob generation for better compatibility
+    const excelBuffer = write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `급여명세서_양식_${month}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    
+    // Cleanup
+    setTimeout(() => {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }, 100);
   };
 
   return (

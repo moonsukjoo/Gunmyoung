@@ -57,6 +57,25 @@ const PCAdminDashboard: React.FC = () => {
     { id: 'notice', label: '공지사항 관리', icon: Bell, to: '/admin/pc/notices' },
   ];
 
+  const handleExportStats = async () => {
+    try {
+      const headers = ['구분', '수치', '상세 내용'];
+      const data = [
+        ['활성 임직원', `${stats.totalEmployees}명`, '전체 인적 자원 내역'],
+        ['금일 가동률', '98.4%', '출근 인원 및 장비 가동 수치'],
+        ['미결재 서류', `${stats.pendingLeaves}건`, '연차/휴가 결재 대기 중'],
+        ['종합 안전 지수', '96.8점', '무재해 365일 달성 중'],
+      ];
+
+      const { exportToPDF } = await import('../lib/exportUtils');
+      await exportToPDF('건명기업 통합 운영 현황 리포트', headers, data, `Enterprise_Overview_${new Date().toISOString().split('T')[0]}`);
+      toast.success('운영 현황 리포트가 생성되었습니다.');
+    } catch (error) {
+      console.error(error);
+      toast.error('리포트 생성 중 오류가 발생했습니다.');
+    }
+  };
+
   return (
     <PCAdminLayout title="통합 관제 센터">
       <div className="max-w-[1600px] mx-auto space-y-10">
@@ -66,7 +85,12 @@ const PCAdminDashboard: React.FC = () => {
             <p className="text-slate-500 text-lg font-medium">관리자님, 건명기업의 실시간 운영 현황입니다.</p>
           </div>
           <div className="flex items-center gap-3">
-            <button className="px-6 py-3 bg-white border border-slate-200 rounded-2xl font-black text-sm shadow-sm hover:shadow-md hover:translate-y-[-2px] transition-all">전체 리포트 생성</button>
+            <button 
+              onClick={handleExportStats}
+              className="px-6 py-3 bg-white border border-slate-200 rounded-2xl font-black text-sm shadow-sm hover:shadow-md hover:translate-y-[-2px] transition-all"
+            >
+              전체 리포트 생성
+            </button>
             <button className="px-6 py-3 bg-slate-900 text-white rounded-2xl font-black text-sm shadow-lg shadow-slate-900/10 hover:bg-slate-800 hover:translate-y-[-2px] transition-all flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-blue-400" />
               긴급 제어 모드

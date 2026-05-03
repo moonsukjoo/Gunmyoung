@@ -21,6 +21,7 @@ import { Gift, Trophy, Settings, MapPin, Search, ShieldCheck, Download, History,
 import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
 import * as XLSX from 'xlsx';
+import { exportToExcel } from '@/src/lib/exportUtils';
 import { 
   Table, 
   TableBody, 
@@ -124,12 +125,7 @@ export const Coupons: React.FC = () => {
         };
       });
 
-      const worksheet = XLSX.utils.json_to_sheet(exportData);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "칭찬쿠폰 내역");
-      
-      const fileName = `칭찬쿠폰지급내역_${new Date().toISOString().split('T')[0]}.xlsx`;
-      XLSX.writeFile(workbook, fileName);
+      exportToExcel(exportData, `칭찬쿠폰지급내역_${new Date().toISOString().split('T')[0]}`, "칭찬쿠폰 내역");
       toast.success('칭찬쿠폰 내역 엑셀 파일이 다운로드되었습니다.');
     } catch (error) {
       console.error("Excel export error:", error);

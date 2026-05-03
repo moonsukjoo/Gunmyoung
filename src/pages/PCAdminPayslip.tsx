@@ -51,6 +51,96 @@ const PCAdminPayslip: React.FC = () => {
     }
   };
 
+  const downloadTemplate = async () => {
+    try {
+      const data = [
+        ['항목', '예시 데이터 (이 열을 복사해서 여러 명을 추가하세요)'],
+        ['사번', 'x66626'],
+        ['성명', '문서주'],
+        ['정취', 160],
+        ['주차', 32],
+        ['유휴', 8],
+        ['훈련', 0],
+        ['기타시간', 0],
+        ['월휴', 24],
+        ['휴일근로', 0],
+        ['연장근로', 11],
+        ['시간계', 235],
+        ['시급', 0],
+        ['시간급여액(가)', 3500000],
+        ['경력', 0],
+        ['기타수당', 0],
+        ['년차', 0.0],
+        ['중식', 0],
+        ['기타', 0],
+        ['총급여액', 3500000],
+        ['갑근세', 127220],
+        ['주민세', 12720],
+        ['건강보험', 146420],
+        ['국민연금', 171000],
+        ['고용보험', 31500],
+        ['식권대', 0],
+        ['세탁비', 0],
+        ['공제액계', 488860],
+        ['지급액', 3011140],
+        ['연차기준일', '2025.12.01']
+      ];
+
+      const { exportToExcel } = await import('../lib/exportUtils');
+      // Transpose back if needed, but the utility expects array of objects or AOAs.
+      // For templates, we can just pass the AOAs.
+      // exportToExcel usually handles arrays of objects. 
+      // Let's use the manual blob approach for template since it's very specific.
+      
+      const XLSX = await import('xlsx');
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      ws['!cols'] = [{ wch: 20 }, { wch: 40 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, '급여명세서_양식');
+      const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `급여명세서_양식_${selectedMonth}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }, 100);
+      
+      toast.success('템플릿 서식이 다운로드되었습니다.');
+    } catch (error) {
+      console.error(error);
+      toast.error('템플릿 다운로드 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleExportReport = async () => {
+    if (payslips.length === 0) {
+      toast.error('내보낼 데이터가 없습니다.');
+      return;
+    }
+    try {
+      const headers = ['이름', '지급월', '총 지급액', '총 공제액', '실 수령액'];
+      const data = payslips.map(p => [
+        p.userName,
+        p.month,
+        p.totalEarnings.toLocaleString() + '원',
+        p.totalDeductions.toLocaleString() + '원',
+        p.netPay.toLocaleString() + '원'
+      ]);
+
+      const { exportToPDF } = await import('../lib/exportUtils');
+      await exportToPDF(`${selectedMonth} 급여 발행 실적 리포트`, headers, data, `Salary_Report_${selectedMonth}`);
+      toast.success('실적 리포트가 생성되었습니다.');
+    } catch (error) {
+      console.error(error);
+      toast.error('리포트 생성 중 오류가 발생했습니다.');
+    }
+  };
+
   return (
     <PCAdminLayout title="급여명세서 중앙 관리">
       <div className="max-w-[1600px] mx-auto space-y-10">
@@ -58,7 +148,7 @@ const PCAdminPayslip: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
            <div className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm flex items-center gap-8">
               <div className="w-20 h-20 bg-blue-50 rounded-[2rem] flex items-center justify-center text-blue-600 shadow-inner">
-                <FileSpreadsheet className="w-10 h-10" />
+                 <FileSpreadsheet className="w-10 h-10" />
               </div>
               <div>
                 <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">금월 발행 결과</h3>
@@ -74,10 +164,16 @@ const PCAdminPayslip: React.FC = () => {
                 <h3 className="text-xs font-black text-blue-400 uppercase tracking-widest mb-4">Batch Processing</h3>
                 <p className="text-2xl font-black mb-6 tracking-tight leading-none">급여 데이터 대량 업로드</p>
                 <div className="flex gap-4">
-                   <button className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-black text-xs hover:bg-blue-500 transition-all flex items-center gap-2">
+                   <button 
+                     onClick={() => toast.info('급여 관리 페이지에서 업로드를 진행해 주세요.')}
+                     className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-black text-xs hover:bg-blue-500 transition-all flex items-center gap-2"
+                   >
                      <Upload className="w-4 h-4" /> 엑셀 파일 선택
                    </button>
-                   <button className="px-6 py-2.5 bg-white/10 text-white rounded-xl font-black text-xs hover:bg-white/20 transition-all border border-white/10">
+                   <button 
+                     onClick={downloadTemplate}
+                     className="px-6 py-2.5 bg-white/10 text-white rounded-xl font-black text-xs hover:bg-white/20 transition-all border border-white/10"
+                   >
                      템플릿 서식 다운
                    </button>
                 </div>
@@ -90,7 +186,12 @@ const PCAdminPayslip: React.FC = () => {
                 <CheckCircle2 className="w-10 h-10 mb-4 opacity-50" />
                 <p className="text-sm font-bold text-emerald-100 opacity-80">이번 달에도 모든 임직원의 급여 발행이<br/>정상적으로 완료되었습니다.</p>
               </div>
-              <button className="w-fit text-xs font-black bg-white/20 px-4 py-2 rounded-xl text-white hover:bg-white/30 transition-all">실적 리포트 확인</button>
+              <button 
+                onClick={handleExportReport}
+                className="w-fit text-xs font-black bg-white/20 px-4 py-2 rounded-xl text-white hover:bg-white/30 transition-all"
+              >
+                실적 리포트 확인
+              </button>
            </div>
         </div>
 

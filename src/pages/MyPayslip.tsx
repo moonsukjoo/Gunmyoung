@@ -64,7 +64,22 @@ const MyPayslip: React.FC = () => {
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       
       pdf.addImage(imgData, 'PNG', 0, 10, imgWidth, imgHeight);
-      pdf.save(`급여명세서_${payslips[currentIndex].month}_${profile?.displayName}.pdf`);
+      
+      // Use manual blob generation for better compatibility
+      const pdfBlob = pdf.output('blob');
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `급여명세서_${payslips[currentIndex].month}_${profile?.displayName}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      
+      // Cleanup
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }, 100);
+
       toast.dismiss();
       toast.success('PDF 다운로드가 완료되었습니다.');
     } catch (error) {

@@ -83,6 +83,27 @@ const PCAdminPersonnel: React.FC = () => {
     }
   };
 
+  const handleExportExcel = () => {
+    try {
+      const exportData = filteredUsers.map((u, idx) => ({
+        'No': idx + 1,
+        '이름': u.displayName,
+        '이메일': u.email || '-',
+        '전화번호': u.phoneNumber || '-',
+        '직책': u.role || 'WORKER',
+        '부서': '건명기업 본사 / 현장 A',
+        '상태': 'ACTIVE'
+      }));
+      import('../lib/exportUtils').then(module => {
+        module.exportToExcel(exportData, `임직원목록_${new Date().toISOString().split('T')[0]}`, '임직원');
+      });
+      toast.success('사원정보 엑셀 파일이 다운로드되었습니다.');
+    } catch (error) {
+      console.error("Excel export error:", error);
+      toast.error('엑셀 변환 중 오류가 발생했습니다.');
+    }
+  };
+
   return (
     <PCAdminLayout title="임직원 정보 관리">
       <div className="max-w-[1600px] mx-auto space-y-6">
@@ -115,7 +136,10 @@ const PCAdminPersonnel: React.FC = () => {
           </div>
           
           <div className="flex items-center gap-3 w-full md:w-auto">
-            <button className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-2xl font-black text-sm hover:bg-slate-50 transition-all">
+            <button 
+              onClick={handleExportExcel}
+              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-2xl font-black text-sm hover:bg-slate-50 transition-all"
+            >
               <Download className="w-4 h-4" />
               엑셀 다운로드
             </button>
