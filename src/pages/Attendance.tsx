@@ -51,6 +51,7 @@ import {
   ResponsiveContainer 
 } from 'recharts';
 import { calculateAttendanceHours } from '@/src/lib/attendance';
+import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
 
 export const Attendance: React.FC = () => {
   const { profile } = useAuth();
@@ -75,7 +76,7 @@ export const Attendance: React.FC = () => {
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setHistoryData(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceType)));
-    }, (error) => console.error("Attendance history listener error:", error));
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'attendance_history'));
     return () => unsubscribe();
   }, [profile, historyMonth, isHistoryOpen]);
 
@@ -123,7 +124,7 @@ export const Attendance: React.FC = () => {
           }
         }
       });
-    }, (error) => console.error("Monthly attendance listener error:", error));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'attendance_monthly'));
     return () => unsubscribe();
   }, [profile, month, todayStr]);
 

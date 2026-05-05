@@ -27,12 +27,13 @@ import {
   ClipboardList,
   Heart,
   Sparkles,
-  User as UserIcon
+  User as UserIcon,
+  FileBox
 } from 'lucide-react';
 import { db } from '@/src/firebase';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, limit, orderBy, getDocs, Timestamp } from 'firebase/firestore';
 import { Attendance, Notice, Role, AccidentCase, LeaveRequest, Task, UserProfile } from '@/src/types';
-import { format, startOfMonth, subMonths } from 'date-fns';
+import { format, startOfMonth, subMonths, differenceInDays } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -51,8 +52,10 @@ import { grantRandomShipPart } from '@/src/services/shipService';
 import { sendPushNotification, requestNotificationPermission } from '@/src/services/notificationService';
 import { calculateAttendanceHours } from '@/src/lib/attendance';
 
+import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
+
 export const Dashboard: React.FC = () => {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [todayAttendance, setTodayAttendance] = useState<Attendance | null>(null);
   const [recentNotices, setRecentNotices] = useState<Notice[]>([]);
@@ -75,13 +78,39 @@ export const Dashboard: React.FC = () => {
   });
   const [pendingTrainings, setPendingTrainings] = useState(0);
 
-  const isManager = profile && (
+  // Specific restrictions as requested: Hide for 조장, 반장, 사원, 팀장
+  const isExcludedRole = profile && (
+    ['EMPLOYEE', 'TEAM_LEADER', 'WORKER'].includes(profile.role?.toUpperCase() || '') || 
+    ['조장', '반장', '사원'].includes(profile.position?.trim() || '') ||
+    profile.employeeId?.trim().toLowerCase().includes('x66626') ||
+    profile.displayName?.toLowerCase().includes('x66626') ||
+    profile.email?.toLowerCase().includes('x66626') ||
+    user?.email?.toLowerCase().includes('x66626') ||
+    user?.email?.split('@')[0]?.toLowerCase() === 'x66626' ||
+    (user?.email && user.email.toLowerCase().startsWith('x66626@')) ||
+    (user?.displayName && user.displayName.toLowerCase().includes('x66626'))
+  );
+
+  useEffect(() => {
+    if (profile && profile.employeeId?.trim().toLowerCase() === 'x66626') {
+      console.log("Excluded role detected in Dashboard:", profile.uid, profile.role, profile.employeeId);
+    }
+  }, [profile]);
+
+  const isManager = profile && !isExcludedRole && (
     ['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER', 'GENERAL_AFFAIRS'].includes(profile.role) || 
     profile.permissions?.some(p => ['notice_mgmt', 'employee_mgmt', 'accident_mgmt', 'work_log_mgmt', 'attendance_mgmt', 'training_mgmt', 'admin'].includes(p))
   );
+
   const canReportAccident = profile && (
     ['CEO', 'SAFETY_MANAGER'].includes(profile.role) || 
-    profile.permissions?.includes('accident_mgmt')
+    (profile.permissions?.includes('accident_mgmt') && !isExcludedRole)
+  );
+
+  const canWriteHealth = profile && (
+    ['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'CLERK', 'SAFETY_MANAGER', 'TEAM_LEADER'].includes(profile.role) ||
+    profile.permissions?.includes('health_mgmt') ||
+    (profile.position && ['반장', '조장', '팀장'].some(p => profile.position?.includes(p)))
   );
 
   useEffect(() => {
@@ -103,50 +132,67 @@ export const Dashboard: React.FC = () => {
       } else {
         setTodayAttendance(null);
       }
-    }, (error) => console.error("Attendance listener error:", error));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'attendance');
+    });
 
-    const noticeQ = query(
-      collection(db, 'notices'),
-      orderBy('createdAt', 'desc'),
-      limit(3)
-    );
+    let unsubscribeNotices = () => {};
+    if (!isExcludedRole) {
+      const noticeQ = query(
+        collection(db, 'notices'),
+        orderBy('createdAt', 'desc'),
+        limit(3)
+      );
 
-    const unsubscribeNotices = onSnapshot(noticeQ, (snapshot) => {
-      setRecentNotices(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notice)));
-    }, (error) => console.error("Notices listener error:", error));
-
-    const accidentQ = query(
-      collection(db, 'accidentCases'),
-      orderBy('createdAt', 'desc'),
-      limit(3)
-    );
-    const unsubscribeAccidents = onSnapshot(accidentQ, (snapshot) => {
-      setRecentAccidents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AccidentCase)));
-    }, (error) => console.error("Accidents listener error:", error));
-
-    const trendQ = query(
-      collection(db, 'safetyScoreLogs'),
-      where('targetUid', '==', profile.uid)
-    );
-    const unsubscribeTrend = onSnapshot(trendQ, (snapshot) => {
-      const now = new Date();
-      const currentMonthStart = startOfMonth(now);
-      const prevMonthStart = startOfMonth(subMonths(now, 1));
-      
-      let currentMonthDelta = 0;
-      let prevMonthDelta = 0;
-      
-      snapshot.docs.forEach(doc => {
-        const data = doc.data();
-        const logDate = new Date(data.createdAt);
-        if (logDate >= currentMonthStart) {
-          currentMonthDelta += data.scoreDelta;
-        } else if (logDate >= prevMonthStart && logDate < currentMonthStart) {
-          prevMonthDelta += data.scoreDelta;
-        }
+      unsubscribeNotices = onSnapshot(noticeQ, (snapshot) => {
+        setRecentNotices(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notice)));
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'notices');
       });
-      setUserTrend(currentMonthDelta - prevMonthDelta);
-    }, (error) => console.error("Trend listener error:", error));
+    }
+
+    let unsubscribeAccidents = () => {};
+    if (!isExcludedRole) {
+      const accidentQ = query(
+        collection(db, 'accidentCases'),
+        orderBy('createdAt', 'desc'),
+        limit(3)
+      );
+      unsubscribeAccidents = onSnapshot(accidentQ, (snapshot) => {
+        setRecentAccidents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AccidentCase)));
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'accidentCases');
+      });
+    }
+
+    let unsubscribeTrend = () => {};
+    if (!isExcludedRole) {
+      const trendQ = query(
+        collection(db, 'safetyScoreLogs'),
+        where('targetUid', '==', profile.uid)
+      );
+      unsubscribeTrend = onSnapshot(trendQ, (snapshot) => {
+        const now = new Date();
+        const currentMonthStart = startOfMonth(now);
+        const prevMonthStart = startOfMonth(subMonths(now, 1));
+        
+        let currentMonthDelta = 0;
+        let prevMonthDelta = 0;
+        
+        snapshot.docs.forEach(doc => {
+          const data = doc.data();
+          const logDate = new Date(data.createdAt);
+          if (logDate >= currentMonthStart) {
+            currentMonthDelta += data.scoreDelta;
+          } else if (logDate >= prevMonthStart && logDate < currentMonthStart) {
+            prevMonthDelta += data.scoreDelta;
+          }
+        });
+        setUserTrend(currentMonthDelta - prevMonthDelta);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'safetyScoreLogs');
+      });
+    }
 
     // Fetch My Tasks for employees
     const tasksQ = query(
@@ -158,7 +204,9 @@ export const Dashboard: React.FC = () => {
     );
     const unsubscribeTasks = onSnapshot(tasksQ, (snapshot) => {
       setMyTasks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task)));
-    }, (error) => console.error("Tasks listener error:", error));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'tasks');
+    });
 
     // Fetch training status for employees
     const trainingQ = query(collection(db, 'trainings'), where('status', '==', 'PUBLISHED'));
@@ -169,8 +217,12 @@ export const Dashboard: React.FC = () => {
         const completedIds = new Set(rSnap.docs.map(doc => doc.data().trainingId));
         const pending = tSnap.docs.filter(doc => !completedIds.has(doc.id)).length;
         setPendingTrainings(pending);
-      }).catch(err => console.error("Training results fetch error:", err));
-    }).catch(err => console.error("Trainings fetch error:", err));
+      }).catch(err => {
+        handleFirestoreError(err, OperationType.LIST, 'trainingResults');
+      });
+    }).catch(err => {
+      handleFirestoreError(err, OperationType.LIST, 'trainings');
+    });
 
     // Fetch Admin Stats if manager
     let unsubscribeAdminStats = () => {};
@@ -179,25 +231,33 @@ export const Dashboard: React.FC = () => {
       // 1. Total Employees
       getDocs(collection(db, 'users')).then(snap => {
         setAdminStats(prev => ({ ...prev, totalEmployees: snap.size }));
-      }).catch(err => console.error("Users list error", err));
+      }).catch(err => {
+        handleFirestoreError(err, OperationType.LIST, 'users');
+      });
 
       // 2. Present Today
       const todayInQ = query(collection(db, 'attendance'), where('date', '==', today));
       const unsubAttendance = onSnapshot(todayInQ, (snap) => {
         setAdminStats(prev => ({ ...prev, presentToday: snap.size }));
-      }, (err) => console.error("Attendance stats error", err));
+      }, (err) => {
+        handleFirestoreError(err, OperationType.LIST, 'attendance_stats');
+      });
 
       // 3. Pending Leaves
       const leaveQ = query(collection(db, 'leaveRequests'), where('status', '==', 'PENDING'));
       const unsubLeaves = onSnapshot(leaveQ, (snap) => {
         setAdminStats(prev => ({ ...prev, pendingLeaves: snap.size }));
-      }, (err) => console.error("Leave stats error", err));
+      }, (err) => {
+        handleFirestoreError(err, OperationType.LIST, 'leave_stats');
+      });
 
       // 4. Open Accident Reports
       const accidentCheckQ = query(collection(db, 'accidentCases'), orderBy('createdAt', 'desc'), limit(10));
       const unsubAccidents = onSnapshot(accidentCheckQ, (snap) => {
         setAdminStats(prev => ({ ...prev, openAccidents: snap.size }));
-      }, (err) => console.error("Accident stats error", err));
+      }, (err) => {
+        handleFirestoreError(err, OperationType.LIST, 'accident_stats');
+      });
 
       unsubscribeAdminStats = () => {
         unsubAttendance();
@@ -210,7 +270,9 @@ export const Dashboard: React.FC = () => {
       if (snapshot.exists()) {
         setBannerText(snapshot.data().text || '안전한 하루가 되세요');
       }
-    }, (error) => console.error("Banner listener error:", error));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/banner');
+    });
 
     return () => {
       unsubscribeAttendance();
@@ -437,6 +499,8 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  const workingDays = profile?.joinedAt ? differenceInDays(new Date(), new Date(profile.joinedAt)) + 1 : null;
+
   return (
     <div className="w-full max-w-xl mx-auto space-y-6 pb-24 px-4 overflow-x-hidden">
       {/* Toss-style Greeting Header */}
@@ -446,8 +510,34 @@ export const Dashboard: React.FC = () => {
         </p>
         <h1 className="text-3xl font-black text-white tracking-tight leading-tight whitespace-pre-wrap">
           {bannerText}
+          {workingDays !== null && (
+            <span className="ml-3 inline-flex items-center px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-sm font-black text-emerald-400 align-middle">
+              건명기업 입사 {workingDays}일째
+            </span>
+          )}
         </h1>
       </div>
+
+      {/* Health Management Quick Action (for Team Leaders/Admins) */}
+      {canWriteHealth && (
+        <Card 
+          className="bg-emerald-500/5 border-emerald-500/10 rounded-3xl p-5 overflow-hidden relative cursor-pointer active:scale-[0.98] transition-all group hover:bg-emerald-500/10"
+          onClick={() => navigate('/health-mgmt')}
+        >
+          <div className="absolute top-0 right-0 p-5 opacity-5 group-hover:opacity-10 transition-opacity">
+            <Activity className="w-16 h-16 text-emerald-500" />
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-900/20">
+              <Activity className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-0.5">보건 관리</p>
+              <h3 className="text-lg font-black text-white">매일 보건 이상무 보고하기</h3>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Daily Work Log Quick Action */}
       <Card 
@@ -586,51 +676,61 @@ export const Dashboard: React.FC = () => {
             <ChevronRight className="w-5 h-5 text-muted-foreground opacity-30" />
           </div>
 
-          <div 
-            className="p-6 py-5 flex items-center justify-between group active:bg-white/5 transition-colors cursor-pointer"
-            onClick={() => navigate('/safety-score')}
-          >
-            <div className="flex items-center gap-4 overflow-hidden">
-              <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center text-amber-500 shrink-0">
-                <ShieldCheck className="w-5 h-5" />
+          {!isExcludedRole && (
+            <div 
+              className="p-6 py-5 flex items-center justify-between group active:bg-white/5 transition-colors cursor-pointer"
+              onClick={() => navigate('/safety-score')}
+            >
+              <div className="flex items-center gap-4 overflow-hidden">
+                <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center text-amber-500 shrink-0">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div className="flex flex-col overflow-hidden">
+                  <span className="text-base font-black text-white tracking-tight">나의 안전 지수</span>
+                  <span className="text-xs text-muted-foreground font-bold truncate">점수 랭킹 확인</span>
+                </div>
               </div>
-              <div className="flex flex-col overflow-hidden">
-                <span className="text-base font-black text-white tracking-tight">나의 안전 지수</span>
-                <span className="text-xs text-muted-foreground font-bold truncate">점수 랭킹 확인</span>
+              <div className="text-right flex flex-col items-end shrink-0">
+                <span className="text-lg font-black text-amber-500">{profile?.safetyScore ?? 100}점</span>
+                {userTrend !== 0 && (
+                  <span className={cn("text-[10px] font-black", userTrend > 0 ? "text-emerald-500" : "text-red-500")}>
+                    {userTrend > 0 ? <TrendingUp className="w-3 h-3 inline" /> : <TrendingDown className="w-3 h-3 inline" />} {Math.abs(userTrend)}
+                  </span>
+                )}
               </div>
             </div>
-            <div className="text-right flex flex-col items-end shrink-0">
-              <span className="text-lg font-black text-amber-500">{profile?.safetyScore ?? 100}점</span>
-              {userTrend !== 0 && (
-                <span className={cn("text-[10px] font-black", userTrend > 0 ? "text-emerald-500" : "text-red-500")}>
-                  {userTrend > 0 ? <TrendingUp className="w-3 h-3 inline" /> : <TrendingDown className="w-3 h-3 inline" />} {Math.abs(userTrend)}
-                </span>
-              )}
-            </div>
-          </div>
+          )}
         </div>
 
         <div className="flex items-center p-2 bg-white/5">
-          <button 
-            onClick={() => navigate('/notices')}
-            className="flex-1 py-3 text-sm font-black text-muted-foreground hover:text-white transition-colors"
-          >
-            공지사항
-          </button>
-          <div className="w-px h-4 bg-white/10" />
+          {!isExcludedRole && (
+            <>
+              <button 
+                onClick={() => navigate('/notices')}
+                className="flex-1 py-3 text-sm font-black text-muted-foreground hover:text-white transition-colors"
+              >
+                공지사항
+              </button>
+              <div className="w-px h-4 bg-white/10" />
+            </>
+          )}
           <button 
             onClick={() => navigate('/leave')}
             className="flex-1 py-3 text-sm font-black text-muted-foreground hover:text-white transition-colors"
           >
             연차신청
           </button>
-          <div className="w-px h-4 bg-white/10" />
-          <button 
-            onClick={() => navigate('/accidents')}
-            className="flex-1 py-3 text-sm font-black text-muted-foreground hover:text-white transition-colors"
-          >
-            사고사례
-          </button>
+          {!isExcludedRole && (
+            <>
+              <div className="w-px h-4 bg-white/10" />
+              <button 
+                onClick={() => navigate('/accidents')}
+                className="flex-1 py-3 text-sm font-black text-muted-foreground hover:text-white transition-colors"
+              >
+                사고사례
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -688,23 +788,30 @@ export const Dashboard: React.FC = () => {
       </Card>
 
       {/* Admin Quick Actions */}
-      {isManager && (
+      {isManager && !isExcludedRole && (
         <div className="flex flex-col gap-3 pt-6">
           <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest text-center">관리자 바로가기</p>
-          <div className="flex gap-3">
+          <div className="flex gap-2">
              <Button 
                 variant="ghost" 
-                className="flex-1 bg-white/5 border border-white/5 rounded-2xl h-12 text-xs font-black text-white"
+                className="flex-1 bg-white/5 border border-white/5 rounded-2xl h-12 text-[10px] font-black text-white px-2"
                 onClick={() => setIsNoticeDialogOpen(true)}
              >
                공지등록
              </Button>
              <Button 
                 variant="ghost" 
-                className="flex-1 bg-white/5 border border-white/5 rounded-2xl h-12 text-xs font-black text-white"
+                className="flex-1 bg-white/5 border border-white/5 rounded-2xl h-12 text-[10px] font-black text-white px-2"
                 onClick={() => navigate('/accidents')}
              >
                사고보고
+             </Button>
+             <Button 
+                variant="ghost" 
+                className="flex-1 bg-primary/10 border border-primary/20 rounded-2xl h-12 text-[10px] font-black text-primary px-2"
+                onClick={() => navigate('/admin/reports')}
+             >
+               <FileBox className="w-3 h-3 mr-1" /> 보고서 추출
              </Button>
           </div>
         </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/src/components/AuthProvider';
-import { auth, db } from '@/src/firebase';
+import { auth, db, handleFirestoreError, OperationType } from '@/src/firebase';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, increment, getDocs, deleteDoc, orderBy, limit } from 'firebase/firestore';
 import { UserProfile, PraiseCoupon } from '@/src/types';
 import { Card, CardContent } from '@/components/ui/card';
@@ -50,7 +50,9 @@ export const Entertainment: React.FC = () => {
     const qGame = query(collection(db, 'lottoHistory'), where('uid', '==', profile.uid), orderBy('createdAt', 'desc'), limit(5));
     const unsubscribeGame = onSnapshot(qGame, (snapshot) => {
       setGameHistory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
-    }, (error) => console.error("Game history listener error:", error));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'lottoHistory');
+    });
     return () => unsubscribeGame();
   }, [profile]);
 

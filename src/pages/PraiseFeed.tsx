@@ -24,6 +24,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
 import { 
   Heart, 
   Search, 
@@ -117,7 +118,7 @@ const CommentSection: React.FC<{ praiseId: string; userProfile: UserProfile | nu
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setComments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PraiseComment)));
-    });
+    }, (error) => handleFirestoreError(error, OperationType.LIST, `praises/${praiseId}/comments`));
 
     return () => unsubscribe();
   }, [praiseId, isOpen]);
@@ -241,7 +242,7 @@ export const PraiseFeed: React.FC = () => {
       setPraises(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Praise)));
       setLoading(false);
     }, (error) => {
-      console.error("Praises listener error:", error);
+      handleFirestoreError(error, OperationType.LIST, 'praises');
       setLoading(false);
     });
 
@@ -264,7 +265,7 @@ export const PraiseFeed: React.FC = () => {
         .sort((a, b) => (b.monthlyKudosCount || 0) - (a.monthlyKudosCount || 0))
         .slice(0, 3);
       setRankings(top3);
-    });
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'users_rankings'));
 
     return () => unsubscribe();
   }, []);

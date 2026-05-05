@@ -58,7 +58,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
-const ROLES: Role[] = ['CEO', 'DIRECTOR', 'GENERAL_AFFAIRS', 'GENERAL_MANAGER', 'CLERK', 'SAFETY_MANAGER', 'TEAM_LEADER', 'EMPLOYEE'];
+const ROLES: Role[] = ['CEO', 'DIRECTOR', 'GENERAL_AFFAIRS', 'GENERAL_MANAGER', 'CLERK', 'SAFETY_MANAGER', 'TEAM_LEADER', 'EMPLOYEE', 'WORKER'];
 
 const ROLE_LABELS: Record<Role, string> = {
   CEO: '사장 (CEO)',
@@ -68,7 +68,8 @@ const ROLE_LABELS: Record<Role, string> = {
   CLERK: '서무 (CLERK)',
   SAFETY_MANAGER: '안전관리자 (SAFETY)',
   TEAM_LEADER: '팀장 (LEADER)',
-  EMPLOYEE: '일반사원 (EMPLOYEE)'
+  EMPLOYEE: '일반사원 (EMPLOYEE)',
+  WORKER: '작업자 (WORKER)'
 };
 
 const POSITIONS = ['사장', '소장', '실장', '팀장', '조장', '반장', '사원'];
@@ -81,6 +82,8 @@ const PERMISSIONS = [
   { id: 'employee_mgmt', label: '인사/사원 관리' },
   { id: 'training_mgmt', label: '교육/평가 관리' },
   { id: 'praise_coupon', label: '칭찬쿠폰 발행' },
+  { id: 'health_mgmt', label: '보건관리(이상무)' },
+  { id: 'unified_report', label: '통합 보고서 관리' },
 ];
 
 import { GlowLoading } from '@/src/components/GlowLoading';
@@ -107,6 +110,11 @@ export const EmployeeManagement: React.FC = () => {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteName, setDeleteName] = useState<string>('');
+  
+  // Bulk Import State
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+  const [bulkImportText, setBulkImportText] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
   
   // Praise Coupon States
   const [isGrantCouponOpen, setIsGrantCouponOpen] = useState(false);
@@ -403,7 +411,9 @@ export const EmployeeManagement: React.FC = () => {
         uid: `manual_${Date.now()}`,
         isActive: true,
         departmentName: departments.find(d => d.id === newUser.departmentId)?.name || '',
-        kudosCount: 0
+        kudosCount: 0,
+        points: 0,
+        createdAt: new Date().toISOString()
       });
       
       await updateDoc(doc(db, 'users', userRef.id), { uid: userRef.id });
@@ -427,6 +437,92 @@ export const EmployeeManagement: React.FC = () => {
     } catch (error) {
       console.error("Error adding user:", error);
       toast.error('임직원 등록 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleBulkImport = async () => {
+    if (!bulkImportText.trim()) {
+      toast.error('가져올 데이터를 입력해주세요.');
+      return;
+    }
+
+    setIsImporting(true);
+    const lines = bulkImportText.trim().split('\n');
+    let importedCount = 0;
+    let skipCount = 0;
+
+    try {
+      for (const line of lines) {
+        // Skip header lines or empty lines
+        if (!line.includes('|') || line.includes('성명') || line.includes('---')) continue;
+
+        const parts = line.split('|').map(p => p.trim()).filter(Boolean);
+        if (parts.length < 5) continue; // Basic validation
+
+        // Mapping based on the table structure:
+        // | 순번 | 직종 | 직위 | 사번 | 성명 | 생년월일 | 휴대폰 | 입사년도 |
+        // index: 0,   1,    2,    3,    4,     5,       6,      7
+        
+        const jobRole = parts[1];
+        const position = parts[2];
+        const employeeId = parts[3];
+        const displayName = parts[4];
+        const birthDate = parts[5];
+        const phoneNumber = parts[6].replace(/-/g, '');
+        const joinedAt = parts[7] === '-' ? '' : parts[7].replace(/\./g, '-');
+
+        // Skip if employeeId or displayName is missing
+        if (!employeeId || !displayName) {
+          skipCount++;
+          continue;
+        }
+
+        // Check if user already exists
+        const existingUser = users.find(u => u.employeeId === employeeId);
+        if (existingUser) {
+          skipCount++;
+          continue;
+        }
+
+        // Determine Role
+        let role: Role = 'EMPLOYEE';
+        if (position === '대표' || displayName === '강형규') role = 'CEO';
+        else if (position === '실장') role = 'GENERAL_MANAGER';
+        else if (position === '서무') role = 'CLERK';
+        else if (position === '소장') role = 'DIRECTOR';
+        else if (position === '안전') role = 'SAFETY_MANAGER';
+        else if (position === '팀장') role = 'TEAM_LEADER';
+
+        await addDoc(collection(db, 'users'), {
+          displayName,
+          employeeId,
+          role,
+          position,
+          jobRole,
+          birthDate,
+          phoneNumber,
+          joinedAt,
+          isActive: true,
+          kudosCount: 0,
+          points: 0,
+          permissions: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+
+        importedCount++;
+      }
+
+      toast.success(`${importedCount}명의 직원이 성공적으로 등록되었습니다.`, {
+        description: skipCount > 0 ? `${skipCount}명은 이미 등록되어 있거나 데이터가 부실하여 건너뛰었습니다.` : undefined
+      });
+      setIsBulkImportOpen(false);
+      setBulkImportText('');
+    } catch (error) {
+      console.error("Bulk Import Error:", error);
+      toast.error('일괄 등록 중 오류가 발생했습니다.');
+    } finally {
+      setIsImporting(false);
     }
   };
 
@@ -542,13 +638,13 @@ export const EmployeeManagement: React.FC = () => {
 
   const exportEmployeesToPDF = async () => {
     try {
-      const headers = ['부서', '직급', '사번', '이름', '연락처', '상태'];
+      const headers = ['부서', '직급', '사번', '이름', '입사일', '상태'];
       const data = filteredUsers.map(u => [
         u.departmentName || '-',
         u.position || '사원',
         u.employeeId,
         u.displayName,
-        u.phoneNumber || '-',
+        u.joinedAt || '-',
         u.isActive ? '재직' : '퇴사'
       ]);
 
@@ -664,12 +760,66 @@ export const EmployeeManagement: React.FC = () => {
                   </Button>
 
                   {isHRAdmin && (
-                    <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
-                      <DialogTrigger asChild>
-                        <Button className="h-12 px-6 gap-2 font-black rounded-2xl shadow-lg shadow-primary/20 hover:shadow-primary/30 active:scale-95 transition-all text-sm ml-auto lg:ml-0 bg-primary text-white">
-                          <UserPlus className="w-4 h-4" /> 사원 추가
-                        </Button>
-                      </DialogTrigger>
+                    <div className="flex gap-2 ml-auto lg:ml-0">
+                      <Dialog open={isBulkImportOpen} onOpenChange={setIsBulkImportOpen}>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" className="h-12 px-6 gap-2 font-black rounded-2xl border-primary/20 text-primary hover:bg-primary/10 active:scale-95 transition-all text-sm">
+                            <Plus className="w-4 h-4" /> 일괄 등록
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="bg-card border-white/10 rounded-[2.5rem] shadow-2xl max-w-2xl w-[95%] p-0 overflow-hidden flex flex-col max-h-[90dvh] text-white">
+                          <DialogHeader className="p-8 pb-6 bg-white/5 border-b border-white/10 text-left shrink-0">
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center">
+                                <Users className="w-6 h-6 text-primary" />
+                              </div>
+                              <div>
+                                <DialogTitle className="text-2xl font-black tracking-tighter text-white">사원 일괄 등록</DialogTitle>
+                                <DialogDescription className="text-white/50 font-bold">마크다운 테이블 형식의 엑셀 데이터를 붙여넣으세요.</DialogDescription>
+                              </div>
+                            </div>
+                          </DialogHeader>
+                          
+                          <div className="p-8 space-y-4 flex-grow overflow-hidden flex flex-col">
+                            <div className="space-y-2 flex-grow flex flex-col">
+                              <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">테이블 데이터 (순번|직종|직위|사번|성명|생년월일|휴대폰|입사년도)</label>
+                              <textarea
+                                value={bulkImportText}
+                                onChange={(e) => setBulkImportText(e.target.value)}
+                                placeholder="| 1 | 취부 | 사원 | X12345 | 홍길동 | 1990-01 | 01012345678 | 2024.01.01 |"
+                                className="w-full flex-grow bg-white/5 border border-white/10 rounded-2xl p-4 font-mono text-sm focus:outline-none focus:border-primary/50 text-white placeholder:text-white/10 resize-none min-h-[300px]"
+                              />
+                            </div>
+                            
+                            <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 flex gap-3 items-start">
+                              <Clock className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+                              <p className="text-xs text-blue-100 leading-relaxed font-medium">
+                                입력하신 사번을 기준으로 중복 여부를 체크하며, 기존에 등록된 사번은 건너뜁니다. 
+                                연락처의 하이픈(-)은 자동으로 제거되며, 입사년도는 YYYY-MM-DD 형식으로 변환됩니다.
+                              </p>
+                            </div>
+                          </div>
+
+                          <DialogFooter className="p-8 pt-0 flex gap-3">
+                            <Button variant="ghost" onClick={() => setIsBulkImportOpen(false)} className="flex-1 h-12 font-black rounded-xl text-white">취소</Button>
+                            <Button 
+                              onClick={handleBulkImport} 
+                              disabled={isImporting || !bulkImportText.trim()}
+                              className="flex-[2] h-12 font-black rounded-xl bg-primary text-white hover:bg-primary/90 disabled:opacity-50"
+                            >
+                              {isImporting ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                              {isImporting ? '처리 중...' : '가져오기 및 등록'}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+
+                      <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
+                        <DialogTrigger asChild>
+                          <Button className="h-12 px-6 gap-2 font-black rounded-2xl shadow-lg shadow-primary/20 hover:shadow-primary/30 active:scale-95 transition-all text-sm bg-primary text-white">
+                            <UserPlus className="w-4 h-4" /> 사원 추가
+                          </Button>
+                        </DialogTrigger>
                       <DialogContent className="bg-card border-white/10 rounded-[2.5rem] shadow-2xl max-w-lg w-[95%] p-0 overflow-hidden flex flex-col max-h-[90dvh] text-white">
                         <DialogHeader className="p-8 pb-6 bg-white/5 border-b border-white/10 text-left shrink-0">
                           <div className="flex items-center gap-4">
@@ -862,10 +1012,11 @@ export const EmployeeManagement: React.FC = () => {
                         </DialogFooter>
                       </DialogContent>
                     </Dialog>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             </div>
+          </div>
 
             <div className="p-4 sm:p-6 space-y-3">
               {filteredUsers.length > 0 ? filteredUsers.map((user) => {
@@ -1314,6 +1465,18 @@ export const EmployeeManagement: React.FC = () => {
                     )}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">입사일</label>
+                <div className="relative">
+                  <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                  <Input 
+                    type="date"
+                    value={editingUser?.joinedAt || ''}
+                    onChange={(e) => setEditingUser(prev => prev ? {...prev, joinedAt: e.target.value} : null)}
+                    className="h-12 pl-12 bg-white/5 border-white/5 rounded-xl font-bold text-white"
+                  />
+                </div>
               </div>
             </div>
 

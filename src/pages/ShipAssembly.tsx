@@ -30,33 +30,81 @@ export const ShipAssembly: React.FC = () => {
   const [isAssembling, setIsAssembling] = useState(false);
 
   useEffect(() => {
-    if (profile?.shipParts) setOwnedParts(profile.shipParts);
+    if (profile?.shipParts) {
+      setOwnedParts(profile.shipParts);
+    }
   }, [profile]);
 
   const uniqueOwnedParts = [...new Set(ownedParts)];
   const isComplete = SHIP_PARTS.every(part => uniqueOwnedParts.includes(part.id));
 
-  const handleAssemble = async () => {
-    if (!profile) return;
-    if (!isComplete) {
-      toast.error('부품이 부족합니다.');
-      return;
+  // Automatic assembly trigger
+  useEffect(() => {
+    if (isComplete && !isAssembling && profile) {
+      handleAssemble();
     }
+  }, [isComplete, isAssembling, profile]);
+
+  const handleAssemble = async () => {
+    if (!profile || isAssembling) return;
+    if (!isComplete) return;
+
     setIsAssembling(true);
     try {
       const newParts = [...ownedParts];
+      // Remove one of each required part
       SHIP_PARTS.forEach(part => {
         const index = newParts.indexOf(part.id);
         if (index > -1) newParts.splice(index, 1);
       });
+
+      // 1. Create a praise coupon automatically
+      const couponId = Math.random().toString(36).substring(2, 9);
+      const today = new Date();
+      const dateStr = today.toISOString().split('T')[0];
+      const timeStr = today.toTimeString().slice(0, 5);
+
+      const { addDoc, collection } = await import('firebase/firestore');
+
+      await addDoc(collection(db, 'praiseCoupons'), {
+        id: couponId,
+        senderUid: 'SYSTEM',
+        senderName: '함선 건조 시스템',
+        senderRole: 'SYSTEM' as any,
+        receiverUid: profile.uid,
+        receiverName: profile.displayName,
+        date: dateStr,
+        time: timeStr,
+        location: '선박 조립 공장',
+        reason: '함선 1척 건조 완료 보상',
+        points: 1, // Award 1 praise point/coupon
+        createdAt: new Date().toISOString()
+      });
+
+      // 2. Update user profile
       await updateDoc(doc(db, 'users', profile.uid), {
         shipParts: newParts,
-        points: increment(50),
         completedShips: increment(1)
       });
+
+      // 3. Send notification
+      await addDoc(collection(db, 'notifications'), {
+        uid: profile.uid,
+        title: '함선 조립 성공! 🚢',
+        message: '함선 조립을 완료하여 칭찬쿠폰 1매가 지급되었습니다.',
+        type: 'COUPON',
+        isRead: false,
+        createdAt: new Date().toISOString()
+      });
+
       confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
-      toast.success('함선 조립 완료!', { description: '보너스 50P가 지급되었습니다.' });
-    } catch (error) { toast.error('실패'); } finally { setIsAssembling(false); }
+      toast.success('함선 조립 완료!', { description: '칭찬쿠폰 1매가 지급되었습니다.' });
+    } catch (error) { 
+      console.error("Assembly error:", error);
+      toast.error('함선 조립 중 오류가 발생했습니다.'); 
+    } finally { 
+      setIsAssembling(false); 
+    }
   };
 
   return (

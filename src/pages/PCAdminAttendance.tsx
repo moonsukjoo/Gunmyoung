@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, getDocs, orderBy, limit, where, Timestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import { AttendanceLog } from '../types';
 import PCAdminLayout from '../components/PCAdminLayout';
 import { 
@@ -40,7 +40,7 @@ const PCAdminAttendance: React.FC = () => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceLog));
       setRecords(data);
     } catch (error) {
-      console.error('Error fetching attendance:', error);
+      handleFirestoreError(error, OperationType.LIST, 'pc_attendance_fetch');
       toast.error('근태 기록을 불러오는데 실패했습니다.');
     } finally {
       setLoading(false);

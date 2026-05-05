@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/src/components/AuthProvider';
-import { db } from '@/src/firebase';
+import { db, handleFirestoreError, OperationType } from '@/src/firebase';
 import { collection, addDoc, query, where, onSnapshot, orderBy, doc, updateDoc, increment } from 'firebase/firestore';
 import { LottoHistory } from '@/src/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,7 +31,7 @@ export const Lotto: React.FC = () => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LottoHistory));
       setHistory(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
     }, (error) => {
-      console.error("Lotto history subscription error:", error);
+      handleFirestoreError(error, OperationType.LIST, 'lottoHistory');
     });
 
     return () => unsubscribe();

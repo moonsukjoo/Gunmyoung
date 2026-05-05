@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { db } from '@/src/firebase';
+import { db, handleFirestoreError, OperationType } from '@/src/firebase';
 import { 
   collection, 
   query, 
@@ -68,11 +68,11 @@ export const AttendanceManagement: React.FC = () => {
     const minLoadTime = new Promise(resolve => setTimeout(resolve, 800));
     const q = query(collection(db, 'users'), orderBy('displayName', 'asc'));
     const unsubscribe = onSnapshot(q, async (snapshot) => {
-      setUsers(snapshot.docs.map(doc => ({ ...doc.data() } as UserProfile)));
+      setUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
       await minLoadTime;
       setInitialLoading(false);
     }, (error) => {
-      console.error("Users list listener error (AttendanceMgmt):", error);
+      handleFirestoreError(error, OperationType.LIST, 'users');
       setInitialLoading(false);
     });
     return () => unsubscribe();
@@ -101,7 +101,7 @@ export const AttendanceManagement: React.FC = () => {
       setAttendanceData(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Attendance)));
       setLoading(false);
     }, (error) => {
-      console.error("Attendance data listener error (AttendanceMgmt):", error);
+      handleFirestoreError(error, OperationType.LIST, 'attendance');
       setLoading(false);
     });
 

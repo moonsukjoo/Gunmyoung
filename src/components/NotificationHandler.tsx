@@ -7,6 +7,8 @@ import { sendPushNotification } from '../services/notificationService';
 import { initializeFCM } from '../services/fcmService';
 import { Notification } from '../types';
 
+import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
+
 /**
  * Global component that listens for new notifications in Firestore
  * and triggers system-style push alerts
@@ -50,7 +52,9 @@ export const NotificationHandler: React.FC = () => {
           });
         }
       });
-    }, (error) => console.error("Notification handler listener error:", error));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'notifications');
+    });
 
     return () => unsubscribe();
   }, [user]);

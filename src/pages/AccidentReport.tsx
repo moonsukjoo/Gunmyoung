@@ -67,7 +67,7 @@ export const AccidentReport: React.FC = () => {
       await minLoadTime;
       setPageLoading(false);
     }, (error) => {
-      console.error("Accident cases listener error:", error);
+      handleFirestoreError(error, OperationType.LIST, 'accidentCases');
       setPageLoading(false);
     });
     return () => unsubscribe();

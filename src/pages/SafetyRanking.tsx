@@ -36,6 +36,7 @@ import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { exportToExcel, exportToPDF } from '@/src/lib/exportUtils';
+import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
 
 export const SafetyRanking: React.FC = () => {
   const { profile } = useAuth();
@@ -60,15 +61,21 @@ export const SafetyRanking: React.FC = () => {
     const unsubscribeUsers = onSnapshot(query(collection(db, 'users')), (snapshot) => {
       setUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
       setLoading(false);
-    }, (error) => console.error("SafetyRanking users listener error:", error));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'users');
+    });
 
     const unsubscribeDepts = onSnapshot(query(collection(db, 'departments'), orderBy('name')), (snapshot) => {
       setDepartments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Department)));
-    }, (error) => console.error("SafetyRanking departments listener error:", error));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'departments');
+    });
 
     const unsubscribeLogs = onSnapshot(query(collection(db, 'safetyScoreLogs'), orderBy('createdAt', 'desc')), (snapshot) => {
       setLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SafetyScoreLog)));
-    }, (error) => console.error("SafetyRanking logs listener error:", error));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'safetyScoreLogs');
+    });
 
     return () => {
       unsubscribeUsers();

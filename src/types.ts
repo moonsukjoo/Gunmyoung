@@ -1,4 +1,4 @@
-export type Role = 'CEO' | 'DIRECTOR' | 'GENERAL_AFFAIRS' | 'GENERAL_MANAGER' | 'CLERK' | 'SAFETY_MANAGER' | 'TEAM_LEADER' | 'EMPLOYEE';
+export type Role = 'CEO' | 'DIRECTOR' | 'GENERAL_AFFAIRS' | 'GENERAL_MANAGER' | 'CLERK' | 'SAFETY_MANAGER' | 'TEAM_LEADER' | 'EMPLOYEE' | 'WORKER';
 
 export interface UserProfile {
   uid: string;
@@ -281,6 +281,19 @@ export interface EvacuationCheckin {
   displayName: string;
   departmentName: string;
   confirmedAt: string;
+}
+
+export interface HealthReport {
+  id: string;
+  authorUid: string;
+  authorName: string;
+  authorRole: Role;
+  teamId?: string;
+  teamName?: string;
+  status: string; // e.g., "이상무"
+  content: string;
+  date: string; // YYYY-MM-DD
+  createdAt: string;
 }
 
 export interface Payslip {

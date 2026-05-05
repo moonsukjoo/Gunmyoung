@@ -14,18 +14,21 @@ import {
   Trophy,
   ClipboardList,
   HardHat,
-  CircleDollarSign
+  CircleDollarSign,
+  Radio
 } from 'lucide-react';
-import { collection, query, getDocs, limit } from 'firebase/firestore';
-import { db } from '../firebase';
+import { collection, query, getDocs, limit, orderBy } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import PCAdminLayout from '../components/PCAdminLayout';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 const PCAdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState({
     totalEmployees: 0,
     pendingLeaves: 0,
+    activeBeacons: 0
   });
 
   useEffect(() => {
@@ -36,13 +39,15 @@ const PCAdminDashboard: React.FC = () => {
     try {
       const usersSnap = await getDocs(collection(db, 'users'));
       const leavesSnap = await getDocs(query(collection(db, 'leaveRequests'), limit(100)));
+      const beaconsSnap = await getDocs(collection(db, 'beacons'));
       
       setStats({
         totalEmployees: usersSnap.size,
         pendingLeaves: leavesSnap.docs.filter(d => d.data().status === 'pending').length,
+        activeBeacons: beaconsSnap.docs.filter(d => d.data().status === 'ACTIVE').length
       });
     } catch (e) {
-      console.error(e);
+      handleFirestoreError(e, OperationType.GET, 'multiple_stats_collections');
     }
   };
 
@@ -54,7 +59,7 @@ const PCAdminDashboard: React.FC = () => {
     { id: 'safety', label: '안전지수 설정', icon: ShieldCheck, to: '/admin/pc/safety' },
     { id: 'worklog', label: '작업일지 총괄', icon: ClipboardList, to: '/admin/pc/worklog' },
     { id: 'training', label: '교육/평가 현황', icon: HardHat, to: '/admin/pc/training' },
-    { id: 'notice', label: '공지사항 관리', icon: Bell, to: '/admin/pc/notices' },
+    { id: 'beacons', label: '밀폐공간 관제', icon: Radio, to: '/admin/pc/beacons' },
   ];
 
   const handleExportStats = async () => {
@@ -102,9 +107,9 @@ const PCAdminDashboard: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {[
             { label: '활성 임직원', value: stats.totalEmployees, unit: '명', sub: '전체 인적 자원 내역', icon: Users, color: 'text-blue-600', bg: 'bg-blue-100/50' },
-            { label: '금일 가동률', value: '98.4', unit: '%', sub: '출근 인원 및 장비 가동 수치', icon: Clock, color: 'text-emerald-600', bg: 'bg-emerald-100/50' },
+            { label: '밀폐공간 활성 비콘', value: stats.activeBeacons, unit: '개', sub: '잠수함 내 위치 추적 상태', icon: Radio, color: 'text-indigo-600', bg: 'bg-indigo-100/50' },
             { label: '미결재 서류', value: stats.pendingLeaves, unit: '건', sub: '연차/휴가 결재 대기 중', icon: CalendarDays, color: 'text-amber-600', bg: 'bg-amber-100/50' },
-            { label: '종합 안전 지수', value: '96.8', unit: '점', sub: '무재해 365일 달성 중', icon: ShieldCheck, color: 'text-indigo-600', bg: 'bg-indigo-100/50' },
+            { label: '종합 안전 지수', value: '96.8', unit: '점', sub: '무재해 365일 달성 중', icon: ShieldCheck, color: 'text-rose-600', bg: 'bg-rose-100/50' },
           ].map((card, i) => (
             <div key={i} className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-xl hover:shadow-slate-200/50 transition-all group overflow-hidden relative">
               <div className={`w-16 h-16 rounded-[1.5rem] ${card.bg} flex items-center justify-center mb-6 ${card.color} group-hover:scale-110 transition-transform`}>

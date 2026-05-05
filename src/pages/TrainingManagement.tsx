@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '@/src/firebase';
+import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
 import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { Training, JobRole, QuizQuestion, UserProfile, TrainingResult } from '@/src/types';
 import { Card, CardContent } from '@/components/ui/card';
@@ -82,18 +83,18 @@ export const TrainingManagement: React.FC = () => {
       await minLoadTime;
       setLoading(false);
     }, (error) => {
-      console.error("Trainings list listener error:", error);
+      handleFirestoreError(error, OperationType.LIST, 'trainings');
       setLoading(false);
     });
     const unsubscribeJR = onSnapshot(query(collection(db, 'jobRoles'), orderBy('name')), (snap) => {
       setJobRoles(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as JobRole)));
-    }, (error) => console.error("Job roles listener error:", error));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'jobRoles'));
     const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snap) => {
       setUsers(snap.docs.map(doc => ({ ...doc.data() } as UserProfile)));
-    }, (error) => console.error("Users list listener error:", error));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'users'));
     const unsubscribeResults = onSnapshot(collection(db, 'trainingResults'), (snap) => {
       setAllResults(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as TrainingResult)));
-    }, (error) => console.error("Training results listener error:", error));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'trainingResults'));
     return () => {
       unsubscribeT();
       unsubscribeJR();

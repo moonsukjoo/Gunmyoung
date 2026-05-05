@@ -38,7 +38,10 @@ import {
   HardHat,
   CircleDollarSign,
   Clock,
-  ClipboardList
+  ClipboardList,
+  Radio,
+  FileBarChart,
+  Activity
 } from 'lucide-react';
 import { db } from '@/src/firebase';
 import { collection, query, onSnapshot, updateDoc, doc, setDoc } from 'firebase/firestore';
@@ -66,12 +69,16 @@ const PERMISSIONS = [
   { id: 'qualification_mgmt', label: '자격/교육이력 관리', icon: ClipboardList },
   { id: 'high_work_monitor', label: '고소작업 총괄 현황', icon: BarChart3 },
   { id: 'emergency_rollcall', label: '비상 대피 롤콜 권한', icon: AlertTriangle },
+  { id: 'health_mgmt', label: '보건관리(이상무) 보고 권한', icon: Activity },
+  { id: 'report_mgmt', label: '통합 보고서 관리 권한', icon: FileBarChart },
 ];
 
 import { GlowLoading } from '@/src/components/GlowLoading';
 
+import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
+
 export const Admin: React.FC = () => {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]);
@@ -83,6 +90,18 @@ export const Admin: React.FC = () => {
   const [isPermissionSettingsOpen, setIsPermissionSettingsOpen] = useState(false);
   const [isEmergencyOpen, setIsEmergencyOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const isExcludedRole = profile && (
+    ['EMPLOYEE', 'TEAM_LEADER', 'WORKER'].includes(profile.role?.toUpperCase() || '') || 
+    ['조장', '반장', '사원'].includes(profile.position?.trim() || '') ||
+    profile.employeeId?.trim().toLowerCase().includes('x66626') ||
+    profile.displayName?.toLowerCase().includes('x66626') ||
+    profile.email?.toLowerCase().includes('x66626') ||
+    user?.email?.toLowerCase().includes('x66626') ||
+    user?.email?.split('@')[0]?.toLowerCase() === 'x66626' ||
+    (user?.email && user.email.toLowerCase().startsWith('x66626@')) ||
+    (user?.displayName && user.displayName.toLowerCase().includes('x66626'))
+  );
 
   const [snailProbs, setSnailProbs] = useState<number[]>([1, 1, 1, 1, 1]);
   const [shipSettings, setShipSettings] = useState({
@@ -102,6 +121,8 @@ export const Admin: React.FC = () => {
       } else {
         setEvacuationStatus(null);
       }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'evacuation/status');
     });
 
     return () => unsubEvacuation();
@@ -112,6 +133,8 @@ export const Admin: React.FC = () => {
       const q = query(collection(db, 'evacuations', evacuationStatus.id, 'checkins'));
       const unsubscribe = onSnapshot(q, (snapshot) => {
         setEvacuationCheckins(snapshot.docs.map(doc => doc.data()));
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'evacuation_checkins');
       });
       return () => unsubscribe();
     } else {
@@ -131,7 +154,7 @@ export const Admin: React.FC = () => {
       setFilteredUsers(data);
       setLoading(false);
     }, (error) => {
-      console.error("Users listener error (Admin):", error);
+      handleFirestoreError(error, OperationType.LIST, 'users');
       setLoading(false);
     });
     return () => unsubscribe();
@@ -145,7 +168,9 @@ export const Admin: React.FC = () => {
         const data = snapshot.data();
         if (data.snailProbabilities) setSnailProbs(data.snailProbabilities);
       }
-    }, (error) => console.error("Entertainment settings listener error (Admin):", error));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/entertainment');
+    });
 
     const unsubShip = onSnapshot(doc(db, 'settings', 'shipParts'), (snapshot) => {
       if (snapshot.exists()) {
@@ -155,13 +180,17 @@ export const Admin: React.FC = () => {
           disabledParts: data.disabledParts ?? []
         });
       }
-    }, (error) => console.error("Ship settings listener error (Admin):", error));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/shipParts');
+    });
 
     const unsubBanner = onSnapshot(doc(db, 'settings', 'banner'), (snapshot) => {
       if (snapshot.exists()) {
         setBannerText(snapshot.data().text || '안전한 하루가 되세요');
       }
-    }, (error) => console.error("Banner settings listener error (Admin):", error));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/banner');
+    });
 
     return () => {
       unsubEntertainment();
@@ -198,11 +227,14 @@ export const Admin: React.FC = () => {
       { to: '/work-log-mgmt', label: '작업일지 관리', icon: ClipboardList, permission: 'work_log_mgmt' },
       { to: '/qualification', label: '자격/교육이력 관리', icon: ClipboardList, permission: 'qualification_mgmt' },
       { to: '/redemption-mgmt', label: '현물 신청 관리', icon: CircleDollarSign, permission: 'redemption_mgmt' },
+      { to: '/admin/reports', label: '통합 보고서 관리', icon: FileBarChart, permission: 'admin' },
     ],
     safety: [
       { onClick: () => navigate('/high-work-monitor'), label: '고소작업 총괄 현황', icon: BarChart3, permission: 'high_work_monitor' },
       { onClick: () => setIsEmergencyOpen(true), label: '비상 대피 롤콜', icon: AlertTriangle, permission: 'emergency_rollcall' },
       { to: '/accidents', label: '사고즉보 관리', icon: ShieldAlert, permission: 'accident_mgmt' },
+      { to: '/health-mgmt', label: '보건관리(이상무) 보고', icon: Activity, permission: 'health_mgmt' },
+      { to: '/enclosed-monitoring', label: '밀폐공간 위치관제', icon: Radio, permission: 'admin' },
       { to: '/training-mgmt', label: '교육/평가 관리', icon: HardHat, permission: 'training_mgmt' },
       { to: '/safety-score', label: '나의 안전지수/랭킹 조회', icon: BarChart3, permission: 'safety_ranking' },
       { to: '/safety-score', label: '안전지수 설정', icon: ShieldCheck, permission: 'safety_score_admin' },
@@ -219,10 +251,16 @@ export const Admin: React.FC = () => {
   };
 
   const renderLink = (link: any, idx: number) => {
+    if (isExcludedRole) {
+      // Specifically hide these as requested if they are in the excluded roles
+      if (link.label === '공지사항 관리' || link.label === '사고즉보 관리' || link.label === '나의 안전지수/랭킹 조회') {
+        return null;
+      }
+    }
+
     const isAllowed = isAdminMode || 
       (link.roles && profile && link.roles.includes(profile.role)) ||
-      (link.permission && profile && profile.permissions?.includes(link.permission)) ||
-      (!link.roles && !link.permission);
+      (link.permission && profile && profile.permissions?.includes(link.permission));
 
     if (!isAllowed) return null;
 
@@ -252,7 +290,7 @@ export const Admin: React.FC = () => {
 
   if (loading) return <GlowLoading message="ADMIN" subMessage="Scanning Authority..." />;
 
-  const isAdminMode = profile && (
+  const isAdminMode = profile && !isExcludedRole && (
     profile.role === 'CEO' || 
     profile.permissions?.includes('admin') ||
     profile.email === 'tjrwnfjqm1@gmail.com'
@@ -608,7 +646,15 @@ export const Admin: React.FC = () => {
                     className="flex-1 h-14 rounded-2xl bg-slate-900 text-white font-black border border-white/5"
                     onClick={async () => {
                       if (window.confirm('대피 상황을 종료하시겠습니까?')) {
+                        const now = new Date().toISOString();
                         await updateDoc(doc(db, 'evacuation', 'status'), { isActive: false });
+                        if (evacuationStatus?.id) {
+                          await updateDoc(doc(db, 'evacuations', evacuationStatus.id), {
+                            status: 'FINISHED',
+                            finishedAt: now,
+                            confirmedCount: evacuationCheckins.length
+                          });
+                        }
                         toast.success('대피 상황이 종료되었습니다.');
                       }
                     }}
@@ -619,6 +665,17 @@ export const Admin: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-6 pt-4">
+                <div className="flex justify-between items-center px-1">
+                  <p className="text-sm font-black text-white">최근 대피 이력</p>
+                  <Button 
+                    variant="ghost" 
+                    className="text-xs text-primary font-black p-0 h-auto"
+                    onClick={() => navigate('/admin/evacuation-history')}
+                  >
+                   전체 보기 <ChevronRight className="w-3 h-3 ml-1" />
+                  </Button>
+                </div>
+
                 <div className="p-6 bg-red-600/10 rounded-3xl border border-red-600/20 text-center space-y-2">
                   <p className="text-sm font-black text-red-600">현재 활성화된 대피령이 없습니다.</p>
                   <p className="text-xs font-bold text-red-400">비상 상황 발생 시 아래 버튼을 눌러 대피령을 발동하세요.</p>
@@ -638,16 +695,25 @@ export const Admin: React.FC = () => {
                   onClick={async () => {
                     const reason = (document.getElementById('emergency-reason') as HTMLInputElement)?.value || '긴급 상황이 발생했습니다.';
                     const id = new Date().getTime().toString();
-                    await setDoc(doc(db, 'evacuation', 'status'), {
+                    const now = new Date().toISOString();
+                    
+                    const evData = {
                       id,
                       isActive: true,
-                      activatedAt: new Date().toISOString(),
+                      activatedAt: now,
                       activatedByUid: profile?.uid,
                       activatedByName: profile?.displayName,
                       reason,
                       totalWorkers: users.length,
                       confirmedCount: 0
+                    };
+
+                    await setDoc(doc(db, 'evacuation', 'status'), evData);
+                    await setDoc(doc(db, 'evacuations', id), {
+                      ...evData,
+                      status: 'ACTIVE'
                     });
+                    
                     toast.error('비상 대피령이 발동되었습니다!');
                   }}
                 >

@@ -12,6 +12,7 @@ import {
 import { useAuth } from './AuthProvider';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
 
 export const GhostGuardTracker: React.FC = () => {
   const { profile } = useAuth();
@@ -38,6 +39,8 @@ export const GhostGuardTracker: React.FC = () => {
     const unsubscribeAttendance = onSnapshot(q, (snapshot) => {
       const att = snapshot.docs[0]?.data();
       isClockedInRef.current = !!(att && att.clockIn && !att.clockOut);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'attendance_daily_ghost');
     });
 
     // 2. 가속도 센서 시작

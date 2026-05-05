@@ -391,9 +391,48 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "month", "totalEarnings", "netPay", "createdAt"]
+    },
+    "Beacon": {
+      "title": "Bluetooth Beacon",
+      "description": "BLE Beacon registered in the system for location tracking in enclosed spaces",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique beacon ID / Address" },
+        "name": { "type": "string" },
+        "submarineName": { "type": "string", "description": "Submarine or vessel name" },
+        "location": { "type": "string", "description": "Specific location description inside (e.g., Entrance, Engine Room)" },
+        "order": { "type": "number", "description": "Sequential order from entrance" },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE", "ERROR"] },
+        "batteryLevel": { "type": "number" },
+        "lastSeenAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "submarineName", "location", "order", "status", "createdAt"]
+    },
+    "BeaconLog": {
+      "title": "Beacon Activity Log",
+      "description": "Log of worker signal detections by beacons",
+      "type": "object",
+      "properties": {
+        "beaconId": { "type": "string" },
+        "beaconLocation": { "type": "string" },
+        "uid": { "type": "string" },
+        "userName": { "type": "string" },
+        "rssi": { "type": "number" },
+        "detectedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["beaconId", "uid", "detectedAt"]
     }
   },
   "firestore": {
+    "/beacons/{beaconId}": {
+      "schema": "Beacon",
+      "description": "Registered BLE beacons"
+    },
+    "/beaconLogs/{logId}": {
+      "schema": "BeaconLog",
+      "description": "Worker proximity logs"
+    },
     "/users/{uid}": {
       "schema": "User",
       "description": "User profiles"

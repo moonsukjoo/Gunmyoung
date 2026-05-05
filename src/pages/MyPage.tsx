@@ -36,7 +36,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { updatePassword, signOut } from 'firebase/auth';
-import { auth, db } from '@/src/firebase';
+import { auth, db, handleFirestoreError, OperationType } from '@/src/firebase';
 import { doc, updateDoc, collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { TrainingResult } from '@/src/types';
@@ -74,13 +74,13 @@ export const MyPage: React.FC = () => {
           const checkinRef = doc(db, 'evacuations', data.id, 'checkins', profile.uid);
           const unsubscribeCheckin = onSnapshot(checkinRef, (checkSnap) => {
             setHasConfirmed(checkSnap.exists());
-          });
+          }, (error) => handleFirestoreError(error, OperationType.GET, `evacuations/${data.id}/checkins/${profile.uid}`));
           return () => unsubscribeCheckin();
         }
       } else {
         setEvacuationStatus(null);
       }
-    });
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'evacuation/status'));
     return () => unsubStatus();
   }, [profile]);
 
@@ -143,7 +143,7 @@ export const MyPage: React.FC = () => {
     );
     const unsubscribe = onSnapshot(q, (snap) => {
       setExamHistory(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as TrainingResult)));
-    }, (error) => console.error("Exam history listener error:", error));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'trainingResults_history'));
     return () => unsubscribe();
   }, [profile]);
 
@@ -155,7 +155,7 @@ export const MyPage: React.FC = () => {
     );
     const unsubscribe = onSnapshot(q, (snap) => {
       setAllResults(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as TrainingResult)));
-    }, (error) => console.error("All results search listener error:", error));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'trainingResults_all'));
     return () => unsubscribe();
   }, []);
 

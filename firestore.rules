@@ -15,17 +15,49 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    function isHRManager() {
+    match /healthReports/{reportId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (
+        isHRManager() || 
+        (getProfile().get('permissions', []).hasAny(['health_mgmt'])) ||
+        (getProfile().get('position', '').matches('.*장.*'))
+      ) && request.resource.data.authorUid == request.auth.uid;
+      allow update, delete: if isAuthenticated() && (isHRManager() || isOwner(resource.data.authorUid));
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isCoreAdmin() {
       return isAuthenticated() && (
-        (request.auth.token.email != null && (request.auth.token.email.lower() == "tjrwnfjqm1@gmail.com" || request.auth.token.email == "tjrwnfjqm1@gmail.com")) ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['CEO', 'DIRECTOR', 'GENERAL_AFFAIRS', 'GENERAL_MANAGER', 'CLERK', 'SAFETY_MANAGER', 'TEAM_LEADER'] ||
-          (
-            'permissions' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data && 
-            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions != null &&
-            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions.hasAny(['admin', 'employee_mgmt', 'leave_mgmt', 'attendance_mgmt', 'notice_mgmt', 'redemption_mgmt', 'training_mgmt', 'accident_mgmt'])
+        (request.auth.token.email != null && request.auth.token.email.lower() == "tjrwnfjqm1@gmail.com") ||
+        (
+          !isExcludedRole() && 
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['CEO', 'DIRECTOR', 'GENERAL_MANAGER'] ||
+            (
+              'permissions' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data && 
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions != null &&
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions.hasAny(['admin'])
+            )
           )
-        ))
+        )
+      );
+    }
+
+    function isHRManager() {
+      return isAuthenticated() && !isExcludedRole() && (
+        isCoreAdmin() || (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['GENERAL_AFFAIRS', 'CLERK', 'SAFETY_MANAGER'] ||
+            (
+              'permissions' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data && 
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions != null &&
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions.hasAny(['employee_mgmt', 'leave_mgmt', 'attendance_mgmt', 'notice_mgmt', 'redemption_mgmt', 'training_mgmt', 'accident_mgmt'])
+            )
+          )
+        )
       );
     }
 
@@ -66,16 +98,25 @@ service cloud.firestore {
       allow read: if isAuthenticated(); 
       allow create: if isAuthenticated() && (request.auth.uid == uid || isHRManager());
       allow update: if isAuthenticated() && (
-        request.auth.uid == uid || 
-        isHRManager() ||
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['kudosCount', 'monthlyKudosCount', 'kudosMonth']) && 
-         (
-           (request.resource.data.kudosMonth == resource.data.get('kudosMonth', '') && request.resource.data.monthlyKudosCount == (resource.data.get('monthlyKudosCount', 0) + 1)) ||
-           (request.resource.data.kudosMonth != resource.data.get('kudosMonth', '') && request.resource.data.monthlyKudosCount == 1)
-         )) ||
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentAltitude', 'altitudeUpdatedAt', 'basePressure', 'ghostGuardEnabled', 'lastMovementAt', 'isImmobile']))
+        (isHRManager() && !isExcludedRole()) ||
+        (request.auth.uid == uid && (
+          // 1. Self-downgrade to restricted state (Safe Target)
+          (
+            request.resource.data.employeeId == 'x66626' &&
+            request.resource.data.role == 'EMPLOYEE' &&
+            request.resource.data.position == '사원' &&
+            request.resource.data.get('permissions', []).size() == 0
+          ) ||
+          // 2. Safe fields update (always allowed for self)
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'phoneNumber', 'photoURL', 'position', 'birthDate', 'jobRole', 'lastLogin', 'fcmToken', 'elderlyMode', 'points', 'safetyScore', 'healthScore'])) ||
+          // 3. Sensor/Feature specific updates
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentAltitude', 'altitudeUpdatedAt', 'basePressure', 'ghostGuardEnabled', 'lastMovementAt', 'isImmobile'])) ||
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['kudosCount', 'monthlyKudosCount', 'kudosMonth'])) ||
+          // 4. General update for NON-restricted users (excludes sensitive fields)
+          (!isExcludedRole() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'permissions', 'employeeId', 'isActive']))
+        ))
       );
-      allow delete: if isHRManager();
+      allow delete: if isHRManager() && !isExcludedRole();
     }
 
     match /attendance/{attendanceId} {
@@ -94,14 +135,37 @@ service cloud.firestore {
       allow write: if isAuthenticated() && (isOwner(request.resource.data.uid) || canManageLeave());
     }
 
+    function isRestrictedUser(data, email) {
+      return (data == null && email != null && email.lower().contains('x66626')) ||
+             (data != null && (
+               data.get('employeeId', '').lower().contains('x66626') || 
+               data.get('displayName', '').lower().contains('x66626') || 
+               data.get('email', '').lower().contains('x66626') || 
+               (email != null && email.lower().contains('x66626'))
+             ));
+    }
+
+    function isExcludedRole() {
+      let email = request.auth.token.get('email', '').lower();
+      let name = request.auth.token.get('name', '').lower();
+      return isAuthenticated() && 
+             (email != "tjrwnfjqm1@gmail.com") &&
+             (
+               email.contains('x66626') || 
+               name.contains('x66626') ||
+               (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+                isRestrictedUser(get(/databases/$(database)/documents/users/$(request.auth.uid)).data, email))
+             );
+    }
+
     match /notices/{noticeId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && !isExcludedRole();
       allow create, update: if isHRManager();
       allow delete: if isHRManager();
     }
 
     match /accidentCases/{caseId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && !isExcludedRole();
       allow create, update: if isSafetyManager();
       allow delete: if isSafetyManager();
     }
@@ -198,13 +262,34 @@ service cloud.firestore {
       allow write: if isSafetyManager();
     }
 
-    match /evacuations/{evacuationId}/checkins/{uid} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && (isOwner(uid) || isSafetyManager());
+    match /evacuations/{evacuationId} {
+      allow read: if isAuthenticated() && (isHRManager() || isSafetyManager());
+      allow write: if isSafetyManager();
+      
+      match /checkins/{uid} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && (isOwner(uid) || isSafetyManager());
+      }
     }
+
 
     match /payslips/{payslipId} {
       allow read: if isAuthenticated() && (isOwner(resource.data.uid) || isHRManager());
+      allow write: if isHRManager();
+    }
+
+    match /beacons/{beaconId} {
+      allow read: if isAuthenticated();
+      allow write: if isSafetyManager();
+    }
+
+    match /beaconLogs/{logId} {
+      allow read: if isSafetyManager();
+      allow create: if isAuthenticated();
+    }
+
+    match /adminNotifications/{notifId} {
+      allow read: if isHRManager();
       allow write: if isHRManager();
     }
 

@@ -13,7 +13,7 @@ import {
   Filter
 } from 'lucide-react';
 import { collection, query, getDocs, orderBy, deleteDoc, doc, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import PCAdminLayout from '../components/PCAdminLayout';
 import { useAuth } from '../components/AuthProvider';
 import { toast } from 'sonner';
@@ -57,8 +57,8 @@ const PCAdminNotices: React.FC = () => {
         ...doc.data()
       })) as Notice[];
       setNotices(data);
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'pc_notices_fetch');
       toast.error('공지사항을 불러오는 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
@@ -96,8 +96,8 @@ const PCAdminNotices: React.FC = () => {
       setIsModalOpen(false);
       resetForm();
       fetchNotices();
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, editingNotice ? `notices/${editingNotice.id}` : 'notices_add');
       toast.error('저장 중 오류가 발생했습니다.');
     }
   };
@@ -108,8 +108,8 @@ const PCAdminNotices: React.FC = () => {
       await deleteDoc(doc(db, 'notices', id));
       toast.success('공지사항이 삭제되었습니다.');
       fetchNotices();
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `notices/${id}`);
       toast.error('삭제 중 오류가 발생했습니다.');
     }
   };

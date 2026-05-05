@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/src/components/AuthProvider';
-import { db } from '@/src/firebase';
+import { db, handleFirestoreError, OperationType } from '@/src/firebase';
 import { collection, addDoc, query, where, onSnapshot, orderBy, doc, updateDoc, getDocs } from 'firebase/firestore';
 import { LeaveRequest } from '@/src/types';
 import { Card, CardContent } from '@/components/ui/card';
@@ -32,7 +32,9 @@ export const Leave: React.FC = () => {
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaveRequest)));
-    }, (error) => console.error("Leave requests listener error (Leave):", error));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'leaveRequests');
+    });
     return () => unsubscribe();
   }, [profile]);
 

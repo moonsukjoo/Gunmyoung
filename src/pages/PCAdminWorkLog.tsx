@@ -62,7 +62,7 @@ const PCAdminWorkLog: React.FC = () => {
       })) as DailyLog[];
       setLogs(data);
     } catch (e) {
-      console.error(e);
+      console.warn("Index not ready for workLogs, falling back", e);
       // Fallback if index not ready
       try {
          const qFallback = query(collection(db, 'workLogs'), where('date', '==', selectedDate));

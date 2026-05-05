@@ -38,7 +38,7 @@ export const Notices: React.FC = () => {
     const q = query(collection(db, 'notices'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setNotices(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notice)));
-    }, (error) => console.error("Notices listener error:", error));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'notices'));
     return () => unsubscribe();
   }, []);
 

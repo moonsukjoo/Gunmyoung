@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/src/components/AuthProvider';
-import { db } from '@/src/firebase';
+import { db, handleFirestoreError, OperationType } from '@/src/firebase';
 import { collection, query, where, onSnapshot, orderBy, updateDoc, doc, writeBatch } from 'firebase/firestore';
 import { Notification } from '@/src/types';
 import { Button } from '@/components/ui/button';
@@ -29,7 +29,7 @@ export const Notifications: React.FC = () => {
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setNotifications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification)));
-    }, (error) => console.error("Notifications listener error:", error));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'notifications'));
     return () => unsubscribe();
   }, [profile]);
 

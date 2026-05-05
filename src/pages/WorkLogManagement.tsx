@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '@/src/firebase';
+import { db, handleFirestoreError, OperationType } from '@/src/firebase';
 import { collection, query, where, orderBy, onSnapshot, getDocs, Timestamp } from 'firebase/firestore';
 import { WorkLog, UserProfile, Department } from '@/src/types';
 import { Card, CardContent } from '@/components/ui/card';
@@ -66,7 +66,7 @@ export const WorkLogManagement: React.FC = () => {
       setLogs(allLogs);
       setLoading(false);
     }, (error) => {
-      console.error('Work logs fetch error:', error);
+      handleFirestoreError(error, OperationType.LIST, 'workLogs');
       toast.error('데이터를 불러오는 중 오류가 발생했습니다.');
       setLoading(false);
     });

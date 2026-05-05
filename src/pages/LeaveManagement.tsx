@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/src/components/AuthProvider';
-import { db } from '@/src/firebase';
+import { db, handleFirestoreError, OperationType } from '@/src/firebase';
 import { 
   collection, 
   query, 
@@ -52,14 +52,14 @@ export const LeaveManagement: React.FC = () => {
       await minLoadTime;
       setLoading(false);
     }, (error) => {
-      console.error("Leave requests listener error:", error);
+      handleFirestoreError(error, OperationType.LIST, 'leaveRequests');
       setLoading(false);
     });
 
     const uQ = query(collection(db, 'users'));
     const unsubscribeUsers = onSnapshot(uQ, (snapshot) => {
       setUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
-    }, (error) => console.error("Users list listener error:", error));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'users'));
 
     return () => {
       unsubscribe();

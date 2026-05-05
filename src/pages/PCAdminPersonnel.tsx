@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, getDocs, orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import { UserProfile } from '../types';
 import PCAdminLayout from '../components/PCAdminLayout';
 import { 
@@ -42,8 +42,7 @@ const PCAdminPersonnel: React.FC = () => {
       const data = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
       setUsers(data);
     } catch (error) {
-      console.error('Error fetching users:', error);
-      toast.error('사용자 정보를 불러오는데 실패했습니다.');
+      handleFirestoreError(error, OperationType.GET, 'users');
     } finally {
       setLoading(false);
     }

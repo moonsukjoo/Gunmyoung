@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/src/components/AuthProvider';
-import { db } from '@/src/firebase';
+import { db, handleFirestoreError, OperationType } from '@/src/firebase';
 import { collection, query, onSnapshot, orderBy, doc, updateDoc, increment, getDoc, addDoc } from 'firebase/firestore';
 import { RedemptionRequest } from '@/src/types';
 import { Card, CardContent } from '@/components/ui/card';
@@ -57,7 +57,7 @@ export const RedemptionManagement: React.FC = () => {
       await minLoadTime;
       setLoading(false);
     }, (error) => {
-      console.error("Redemption requests listener error (RedemptionMgmt):", error);
+      handleFirestoreError(error, OperationType.LIST, 'redemptionRequests');
       setLoading(false);
     });
     return () => unsubscribe();

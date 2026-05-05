@@ -15,9 +15,13 @@ import {
   Menu,
   X,
   Trophy,
+  History,
   FileText,
   LayoutDashboard,
-  Zap
+  Zap,
+  Radio,
+  FileBarChart,
+  Activity
 } from 'lucide-react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthProvider';
@@ -43,6 +47,36 @@ const PCAdminLayout: React.FC<PCAdminLayoutProps> = ({ children, title }) => {
     }
   };
 
+  const isExcludedRole = profile && (
+    ['EMPLOYEE', 'TEAM_LEADER', 'WORKER'].includes(profile.role?.toUpperCase() || '') || 
+    ['조장', '반장', '사원'].includes(profile.position?.trim() || '') ||
+    profile.employeeId?.trim().toLowerCase().includes('x66626') ||
+    profile.displayName?.toLowerCase().includes('x66626') ||
+    profile.email?.toLowerCase().includes('x66626') ||
+    user?.email?.toLowerCase().includes('x66626') ||
+    user?.email?.split('@')[0]?.toLowerCase() === 'x66626' ||
+    (user?.email && user.email.toLowerCase().startsWith('x66626@')) ||
+    (user?.displayName && user.displayName.toLowerCase().includes('x66626'))
+  );
+
+  if (isExcludedRole) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-10">
+        <div className="max-w-md w-full bg-white p-10 rounded-[2rem] shadow-xl text-center border border-slate-200">
+          <ShieldCheck className="w-16 h-16 text-rose-500 mx-auto mb-6" />
+          <h1 className="text-2xl font-black text-slate-900 mb-4">접근 권한이 없습니다</h1>
+          <p className="text-slate-500 font-medium mb-8">관리자 전용 페이지입니다. 일반 사원 계정인 {profile?.displayName}님은 이 페이지에 접근할 수 없습니다.</p>
+          <button 
+            onClick={() => navigate('/')}
+            className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-sm hover:bg-slate-800 transition-all"
+          >
+            메인 페이지로 돌아가기
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const navGroups = [
     {
       group: '대시보드',
@@ -66,6 +100,15 @@ const PCAdminLayout: React.FC<PCAdminLayoutProps> = ({ children, title }) => {
         { id: 'worklog', label: '작업일지 총괄', icon: ClipboardList, to: '/admin/pc/worklog' },
         { id: 'training', label: '교육/평가 현황', icon: HardHat, to: '/admin/pc/training' },
         { id: 'highwork', label: '고소작업 모니터링', icon: BarChart3, to: '/admin/pc/highwork' },
+        { id: 'beacons', label: '밀폐공간 관제', icon: Radio, to: '/admin/pc/beacons' },
+      ]
+    },
+    {
+      group: '분석 및 리포트',
+      items: [
+        { id: 'unified_reports', label: '통합 보고서 센터', icon: FileBarChart, to: '/admin/reports' },
+        { id: 'health_reports_status', label: '보건관리(이상무) 현황', icon: Activity, to: '/health-mgmt' },
+        { id: 'evacuation_history', label: '비상 대피 이력', icon: History, to: '/admin/evacuation-history' },
       ]
     },
     {

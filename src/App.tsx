@@ -45,6 +45,12 @@ import PCAdminRedemption from './pages/PCAdminRedemption';
 import PCAdminCoupons from './pages/PCAdminCoupons';
 import PCAdminHighWork from './pages/PCAdminHighWork';
 import PCAdminNotifications from './pages/PCAdminNotifications';
+import PCAdminBeacons from './pages/PCAdminBeacons';
+import PCAdminEvacuationHistory from './pages/PCAdminEvacuationHistory';
+import EvacuationHistory from './pages/EvacuationHistory';
+import HealthManagement from './pages/HealthManagement';
+import UnifiedReportCenter from './pages/UnifiedReportCenter';
+import EnclosedSpaceMonitoring from './pages/EnclosedSpaceMonitoring';
 import { Toaster } from '@/components/ui/sonner';
 import { CompanyLogo } from './components/CompanyLogo';
 import { EmergencyOverlay } from './components/EmergencyOverlay';
@@ -63,13 +69,37 @@ const ProtectedRoute = ({ children, roles, permission }: { children: React.React
   if (loading) return <GlowLoading />;
   if (!user) return <Navigate to="/login" />;
   
+  const isExcludedRole = profile && (
+    ['EMPLOYEE', 'TEAM_LEADER', 'WORKER'].includes(profile.role?.toUpperCase() || '') || 
+    ['조장', '반장', '사원'].includes(profile.position?.trim() || '') ||
+    profile.employeeId?.trim().toLowerCase() === 'x66626' ||
+    profile.employeeId?.trim().toUpperCase() === 'X66626' ||
+    profile.displayName?.toLowerCase().includes('x66626') ||
+    profile.email?.toLowerCase().includes('x66626') ||
+    user?.email?.toLowerCase().includes('x66626') ||
+    user?.email?.split('@')[0]?.toLowerCase() === 'x66626'
+  );
+
   const hasAccess = (() => {
-    if (!roles && !permission) return true;
     if (!profile) return false;
-    if (profile.email === 'tjrwnfjqm1@gmail.com') return true;
+    
+    // Explicit blacklist for x66626 or anyone identified as excluded role
+    // They should NOT have access to any restricted route regardless of other permissions
+    if (isExcludedRole) {
+      const restrictedPaths = ['/admin', '/personnel', '/work-log-mgmt', '/leave-mgmt', '/attendance-mgmt', '/accidents', '/notices', '/training-mgmt', '/redemption-mgmt', '/payslip-mgmt'];
+      if (roles || permission || restrictedPaths.some(path => location.pathname === path || location.pathname.startsWith(path + '/'))) {
+        return false;
+      }
+    }
+
+    if (!roles && !permission) return true;
+    
+    // CEO Email override - ONLY for the real CEO email
+    if (profile.email?.toLowerCase() === 'tjrwnfjqm1@gmail.com') return true;
+    
     if (roles && roles.includes(profile.role)) return true;
     if (permission && profile.permissions?.includes(permission)) return true;
-    if (location.pathname === '/admin' && ['CEO', 'SAFETY_MANAGER'].includes(profile.role)) return true;
+    if (location.pathname === '/admin' && ['CEO', 'SAFETY_MANAGER', 'DIRECTOR', 'GENERAL_MANAGER'].includes(profile.role)) return true;
     return false;
   })();
 
@@ -97,11 +127,15 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute permission="admin"><Admin /></ProtectedRoute>} />
-            <Route path="/personnel" element={<ProtectedRoute><EmployeeManagement /></ProtectedRoute>} />
+            <Route path="/admin/evacuation-history" element={<ProtectedRoute permission="admin"><EvacuationHistory /></ProtectedRoute>} />
+            <Route path="/admin/reports" element={<ProtectedRoute permission="admin"><UnifiedReportCenter /></ProtectedRoute>} />
+            <Route path="/health-mgmt" element={<ProtectedRoute><HealthManagement /></ProtectedRoute>} />
+            <Route path="/pc-admin/evacuation-history" element={<ProtectedRoute permission="admin"><PCAdminEvacuationHistory /></ProtectedRoute>} />
+            <Route path="/personnel" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="employee_mgmt"><EmployeeManagement /></ProtectedRoute>} />
             <Route path="/attendance" element={<ProtectedRoute><Attendance /></ProtectedRoute>} />
-            <Route path="/accidents" element={<ProtectedRoute><AccidentReport /></ProtectedRoute>} />
+            <Route path="/accidents" element={<ProtectedRoute permission="accident_mgmt"><AccidentReport /></ProtectedRoute>} />
             <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-            <Route path="/notices" element={<ProtectedRoute><Notices /></ProtectedRoute>} />
+            <Route path="/notices" element={<ProtectedRoute permission="notice_mgmt"><Notices /></ProtectedRoute>} />
             <Route path="/leave" element={<ProtectedRoute><Leave /></ProtectedRoute>} />
             <Route path="/leave-mgmt" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="leave_mgmt"><LeaveManagement /></ProtectedRoute>} />
             <Route path="/coupons" element={<ProtectedRoute><Coupons /></ProtectedRoute>} />
@@ -126,6 +160,8 @@ export default function App() {
             <Route path="/admin/pc/redemption" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="admin"><PCAdminRedemption /></ProtectedRoute>} />
             <Route path="/admin/pc/coupons" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="admin"><PCAdminCoupons /></ProtectedRoute>} />
             <Route path="/admin/pc/highwork" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER']} permission="admin"><PCAdminHighWork /></ProtectedRoute>} />
+            <Route path="/admin/pc/beacons" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER']} permission="admin"><PCAdminBeacons /></ProtectedRoute>} />
+            <Route path="/enclosed-monitoring" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER']}><EnclosedSpaceMonitoring /></ProtectedRoute>} />
             <Route path="/admin/pc/notifications" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="admin"><PCAdminNotifications /></ProtectedRoute>} />
             <Route path="/payslip-mgmt" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="payslip_mgmt"><PayslipManagement /></ProtectedRoute>} />
             <Route path="/praise-feed" element={<ProtectedRoute><PraiseFeed /></ProtectedRoute>} />

@@ -137,20 +137,34 @@ export const exportToPDF = async (title: string, headers: string[], data: any[][
   
   try {
     const canvas = await html2canvas(container, {
-      scale: 2, // High resolution for professional look
+      scale: 1.5, // Balanced resolution
       useCORS: true,
       logging: false,
-      backgroundColor: '#f8fafc'
+      backgroundColor: '#ffffff'
     });
     
-    const imgData = canvas.toDataURL('image/png');
+    const imgData = canvas.toDataURL('image/jpeg', 0.85); // Use JPEG with compression to reduce 80MB size
     const pdf = new jsPDF('p', 'mm', 'a4');
     
-    const imgProps = pdf.getImageProperties(imgData);
     const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+    const pdfPageHeight = pdf.internal.pageSize.getHeight();
+    const imgProps = pdf.getImageProperties(imgData);
+    const imgHeightInPdf = (imgProps.height * pdfWidth) / imgProps.width;
     
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+    let heightLeft = imgHeightInPdf;
+    let position = 0;
+
+    // Add first page
+    pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeightInPdf);
+    heightLeft -= pdfPageHeight;
+
+    // Add subsequent pages if content is longer than one page
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeightInPdf;
+      pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeightInPdf);
+      heightLeft -= pdfPageHeight;
+    }
     
     // Use manual blob generation for better compatibility
     const pdfBlob = pdf.output('blob');

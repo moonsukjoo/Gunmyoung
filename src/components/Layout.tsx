@@ -29,6 +29,8 @@ import {
 import { toast } from 'sonner';
 import { sendPushNotification } from '../services/notificationService';
 
+import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
+
 interface NavItemProps {
   to: string;
   icon: any;
@@ -58,7 +60,7 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon: Icon, label, active }) => (
 );
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [unreadCount, setUnreadCount] = useState(0);
@@ -89,7 +91,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           }
         }
       });
-    }, (error) => console.error("Unread count listener error:", error));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'notifications_unread');
+    });
     return () => unsubscribe();
   }, [profile]);
 
@@ -168,16 +172,27 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     }
   };
 
-  const isAdmin = profile && (['CEO', 'SAFETY_MANAGER'].includes(profile.role) || profile.permissions?.includes('admin'));
+  const isExcludedRole = profile && (
+    ['EMPLOYEE', 'TEAM_LEADER', 'WORKER'].includes(profile.role?.toUpperCase() || '') || 
+    ['조장', '반장', '사원'].includes(profile.position?.trim() || '') ||
+    profile.employeeId?.trim().toLowerCase().includes('x66626') ||
+    profile.displayName?.toLowerCase().includes('x66626') ||
+    profile.email?.toLowerCase().includes('x66626') ||
+    user?.email?.toLowerCase().includes('x66626') ||
+    user?.email?.split('@')[0]?.toLowerCase() === 'x66626' ||
+    (user?.email && user.email.toLowerCase().startsWith('x66626@')) ||
+    (user?.displayName && user.displayName.toLowerCase().includes('x66626'))
+  );
+
+  const isAdmin = profile && !isExcludedRole && (['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER'].includes(profile.role) || profile.permissions?.includes('admin'));
+  const canSeePersonnel = profile && !isExcludedRole && (['CEO', 'DIRECTOR', 'GENERAL_MANAGER'].includes(profile.role) || profile.permissions?.includes('employee_mgmt'));
 
   const navItems = [
     { to: '/', icon: LayoutDashboard, label: '홈' },
     { to: '/attendance', icon: Clock, label: '근태' },
-    isAdmin 
-      ? { to: '/admin', icon: Settings, label: '관리' } 
-      : { to: '/personnel', icon: Users, label: '직원' },
+    isAdmin && { to: '/admin', icon: Settings, label: '관리' },
     { to: '/mypage', icon: User, label: '마이' },
-  ];
+  ].filter(Boolean) as any[];
 
   return (
     <div className="flex flex-col h-screen bg-[#121212] font-sans text-white select-none">
