@@ -69,7 +69,7 @@ export const Notices: React.FC = () => {
                   profile?.email === 'tjrwnef@gmail.com'; // Added other variants if needed, but the primary one is tjrwnfjqm1@gmail.com
 
   return (
-    <div className="space-y-6 pb-24 px-1">
+    <div className="space-y-6 pb-24 px-2">
       <header className="py-6">
         <h2 className="text-3xl font-black tracking-tight text-white leading-tight">공지사항</h2>
         <p className="text-muted-foreground font-bold">회사 소식을 가장 빠르게 확인하세요</p>

@@ -95,7 +95,7 @@ const EnclosedSpaceMonitoring: React.FC = () => {
           </div>
           <div className="flex items-center gap-1.5 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
             <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-            <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Live</span>
+            <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">실시간</span>
           </div>
         </div>
         <p className="text-gray-400 font-bold text-sm">잠수함 내부 작업자 위치 및 안전 상태</p>
@@ -134,7 +134,6 @@ const EnclosedSpaceMonitoring: React.FC = () => {
                 <Waves className="w-5 h-5 text-blue-400" />
                 <h3 className="font-black text-lg">{subName}</h3>
               </div>
-              <span className="text-[10px] font-black text-gray-500">{beacons.filter(b => b.submarineName === subName).length} Detection Zones</span>
             </div>
 
             <div className="space-y-3">
@@ -162,7 +161,7 @@ const EnclosedSpaceMonitoring: React.FC = () => {
                     </div>
                     <div className="bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20 flex items-center gap-1.5">
                       <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                      <span className="text-[10px] font-black text-emerald-500">Safe</span>
+                      <span className="text-[10px] font-black text-emerald-500">안전</span>
                     </div>
                   </div>
 
@@ -223,7 +222,7 @@ const EnclosedSpaceMonitoring: React.FC = () => {
               </div>
               <div>
                 <h4 className="font-black text-sm text-rose-200">미등록 비콘 신호 감지</h4>
-                <p className="text-[10px] font-bold text-rose-500/60 uppercase tracking-widest mt-0.5">External Signal Detected</p>
+                <p className="text-[10px] font-bold text-rose-500/60 uppercase tracking-widest mt-0.5">외부 신호가 감지되었습니다</p>
               </div>
             </div>
             <ChevronRight className="w-5 h-5 text-rose-500/30" />

@@ -204,7 +204,7 @@ const PCAdminPersonnel: React.FC = () => {
                       <td className="px-6 py-5 text-center">
                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black border border-emerald-100">
                            <UserCheck className="w-3 h-3" />
-                           ACTIVE
+                           재직 중
                          </span>
                       </td>
                       <td className="px-8 py-5 text-right">

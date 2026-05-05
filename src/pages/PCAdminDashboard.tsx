@@ -86,7 +86,7 @@ const PCAdminDashboard: React.FC = () => {
       <div className="max-w-[1600px] mx-auto space-y-10">
         <header className="flex justify-between items-center">
           <div>
-            <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-2">건명기업 Enterprise Overview</h1>
+            <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-2">건명기업 통합 운영 총괄</h1>
             <p className="text-slate-500 text-lg font-medium">관리자님, 건명기업의 실시간 운영 현황입니다.</p>
           </div>
           <div className="flex items-center gap-3">
@@ -139,7 +139,7 @@ const PCAdminDashboard: React.FC = () => {
                   </div>
                   <h3 className="text-2xl font-black text-slate-800 tracking-tight">서비스 통합 제어관</h3>
                 </div>
-                <span className="text-xs font-black text-slate-400 bg-white px-4 py-2 rounded-full border border-slate-100">QUICK ACCESS PANEL</span>
+                <span className="text-xs font-black text-slate-400 bg-white px-4 py-2 rounded-full border border-slate-100">빠른 실행 패널</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 p-10">
                 {quickActions.map((item) => (
@@ -160,7 +160,7 @@ const PCAdminDashboard: React.FC = () => {
             <div className="bg-slate-900 rounded-[3rem] p-12 text-white relative overflow-hidden shadow-2xl shadow-slate-900/20 ring-1 ring-white/10">
               <div className="relative z-10 max-w-2xl">
                 <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/20 text-blue-400 rounded-full text-[10px] font-black uppercase tracking-widest mb-6 border border-blue-500/30">
-                   AI Intelligence Active
+                   AI 인텔리전스 가동 중
                 </div>
                 <h2 className="text-4xl font-black mb-6 leading-tight tracking-tight">모든 관리 도구가<br/>하나의 공간에 집약되었습니다.</h2>
                 <p className="text-slate-400 text-lg font-medium mb-10 leading-relaxed">
@@ -190,7 +190,7 @@ const PCAdminDashboard: React.FC = () => {
                 </h3>
                 <div className="flex items-center gap-2">
                    <div className="w-2 h-2 bg-green-500 rounded-full animate-ping" />
-                   <span className="text-[10px] font-black text-slate-400 uppercase">Live</span>
+                   <span className="text-[10px] font-black text-slate-400 uppercase">실시간</span>
                 </div>
               </div>
               <div className="divide-y divide-slate-50 overflow-y-auto max-h-[500px] custom-scrollbar">
@@ -231,7 +231,7 @@ const PCAdminDashboard: React.FC = () => {
                   <div className="p-5 bg-white/10 rounded-2xl border border-white/10 backdrop-blur-md">
                     <div className="flex justify-between items-start mb-2">
                        <p className="text-xs font-black text-white/60">오후 2시 예정</p>
-                       <span className="bg-white text-rose-600 px-2 py-0.5 rounded text-[9px] font-black uppercase">Action Needed</span>
+                       <span className="bg-white text-rose-600 px-2 py-0.5 rounded text-[9px] font-black uppercase">조치 필요</span>
                     </div>
                     <p className="text-sm font-black leading-snug">
                       H-3 구역 대형 크레인 인근 고소 작업이 예정되어 있습니다. 현장 안전 수칙 준수 여부를 최종 확인 바랍니다.

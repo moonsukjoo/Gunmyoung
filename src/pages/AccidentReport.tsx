@@ -183,7 +183,7 @@ export const AccidentReport: React.FC = () => {
   if (pageLoading) return <GlowLoading message="SECURITY" subMessage="Accessing Accident Logs..." />;
 
   return (
-    <div className="space-y-6 pb-24 px-1">
+    <div className="space-y-6 pb-24 px-2">
       <header className="py-6 flex justify-between items-end">
         <div>
            <h2 className="text-3xl font-black tracking-tight text-white leading-tight">사고 즉보</h2>

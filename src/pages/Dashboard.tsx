@@ -498,7 +498,7 @@ export const Dashboard: React.FC = () => {
   const workingDays = profile?.joinedAt ? differenceInDays(new Date(), new Date(profile.joinedAt)) + 1 : null;
 
   return (
-    <div className="w-full max-w-xl mx-auto space-y-6 pb-24 px-4 overflow-x-hidden">
+    <div className="w-full space-y-6 pb-24 px-2 overflow-x-hidden">
       {/* Toss-style Greeting Header */}
       <div className="py-8 space-y-2">
         <p className="text-muted-foreground font-black text-lg">

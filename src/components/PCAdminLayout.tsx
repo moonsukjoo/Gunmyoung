@@ -135,7 +135,7 @@ const PCAdminLayout: React.FC<PCAdminLayoutProps> = ({ children, title }) => {
             </div>
             <div>
               <span className="font-black text-xl tracking-tighter text-white block leading-none">KM ADMIN</span>
-              <span className="text-[10px] font-bold text-slate-500 tracking-[0.2em] uppercase mt-1 block">Management Console</span>
+              <span className="text-[10px] font-bold text-slate-500 tracking-[0.2em] uppercase mt-1 block">관리자 콘솔</span>
             </div>
           </div>
           <button 

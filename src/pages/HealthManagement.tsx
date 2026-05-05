@@ -133,7 +133,7 @@ const HealthManagement: React.FC = () => {
   );
 
   return (
-    <div className="p-4 space-y-6 pb-24">
+    <div className="p-2 space-y-6 pb-24">
       {/* Header */}
         <header className="flex flex-col gap-1 px-2">
           <div className="flex items-center justify-between">
@@ -152,7 +152,6 @@ const HealthManagement: React.FC = () => {
               </Button>
             )}
           </div>
-          <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mt-1 ml-9">Health & Safety Daily Report</p>
         </header>
 
         {/* Search */}

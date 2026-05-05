@@ -220,7 +220,7 @@ const UnifiedReportCenter: React.FC = () => {
   ];
 
   return (
-    <div className="p-4 space-y-6 pb-24">
+    <div className="p-2 space-y-6 pb-24">
       {/* Header */}
         <header className="flex flex-col gap-1 px-2">
           <div className="flex items-center gap-2">
@@ -229,7 +229,6 @@ const UnifiedReportCenter: React.FC = () => {
             </div>
             <h2 className="text-xl font-black text-white">통합 보고서 관리</h2>
           </div>
-          <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mt-1 ml-9">Unified Reporting & Export Center</p>
         </header>
 
         {/* Report Type Selector */}

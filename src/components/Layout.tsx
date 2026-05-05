@@ -197,7 +197,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   return (
     <div className="flex flex-col h-screen bg-[#121212] font-sans text-white select-none">
       <header className="h-16 bg-[#121212]/80 backdrop-blur-xl border-b border-white/5 flex items-center justify-center flex-shrink-0 sticky top-0 z-50">
-        <div className="max-w-4xl w-full px-5 flex items-center justify-between">
+        <div className="w-full px-5 flex items-center justify-between">
           <div className="flex items-center gap-1">
             {location.pathname !== '/' && (
               <Button
@@ -269,7 +269,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       </header>
 
       <main className="flex-1 overflow-y-auto bg-[#121212]">
-        <div className="w-full max-w-4xl mx-auto px-4 pb-24">
+        <div className="w-full pb-24">
           {children}
         </div>
       </main>

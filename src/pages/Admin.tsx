@@ -299,7 +299,7 @@ export const Admin: React.FC = () => {
   return (
     <div className="space-y-8 pb-24 px-1">
       <header className="py-6">
-        <h2 className="text-3xl font-black tracking-tight text-white leading-tight">Admin OS</h2>
+        <h2 className="text-3xl font-black tracking-tight text-white leading-tight">관리자 시스템</h2>
         <p className="text-muted-foreground font-bold">건명기업 시스템의 코어 설정을 제어합니다</p>
       </header>
 
@@ -579,7 +579,7 @@ export const Admin: React.FC = () => {
                   <AlertTriangle className="w-6 h-6" />
                 </div>
                 <div>
-                  <DialogTitle className="font-black text-xl">비상 대피 실시간 롤콜</DialogTitle>
+                  <DialogTitle className="font-black text-xl">비상 대피 실시간 인원 파악</DialogTitle>
                   <DialogDescription className="font-bold">현장 인원들의 안전을 실시간으로 확인합니다.</DialogDescription>
                 </div>
               </div>
@@ -717,7 +717,7 @@ export const Admin: React.FC = () => {
                     toast.error('비상 대피령이 발동되었습니다!');
                   }}
                 >
-                  비상 대피령 발동 (ROLL-CALL 시작)
+                  비상 대피령 발동 (인원 파악 시작)
                 </Button>
               </div>
             )}

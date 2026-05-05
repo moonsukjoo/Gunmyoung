@@ -9,8 +9,8 @@ interface GlowLoadingProps {
 }
 
 export const GlowLoading: React.FC<GlowLoadingProps> = ({ 
-  message = "GUNMYUNG", 
-  subMessage = "System Initializing", 
+  message = "건명기업", 
+  subMessage = "시스템 초기화 중", 
   fullScreen = true 
 }) => {
   return (
@@ -28,7 +28,7 @@ export const GlowLoading: React.FC<GlowLoadingProps> = ({
         className="absolute w-[250px] h-[250px] bg-primary/10 rounded-full pointer-events-none"
         style={{ filter: 'blur(60px)' }}
       />
-
+      
       <div className="relative flex flex-col items-center gap-10 z-10">
         {/* Complex Orbital System */}
         <div className="relative w-32 h-32 flex items-center justify-center">
@@ -106,7 +106,7 @@ export const GlowLoading: React.FC<GlowLoadingProps> = ({
             transition={{ duration: 1.5, repeat: Infinity }}
             className="text-[8px] font-mono text-gray-500 font-bold"
           >
-            SECURE_DATA_ACCESS_...
+            보안 데이터 접속 중...
           </motion.span>
         </div>
       </div>

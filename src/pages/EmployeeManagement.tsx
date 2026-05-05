@@ -61,15 +61,15 @@ import {
 const ROLES: Role[] = ['CEO', 'DIRECTOR', 'GENERAL_AFFAIRS', 'GENERAL_MANAGER', 'CLERK', 'SAFETY_MANAGER', 'TEAM_LEADER', 'EMPLOYEE', 'WORKER'];
 
 const ROLE_LABELS: Record<Role, string> = {
-  CEO: '사장 (CEO)',
-  DIRECTOR: '소장 (DIRECTOR)',
-  GENERAL_AFFAIRS: '총무 (AFFAIRS)',
-  GENERAL_MANAGER: '실장 (MANAGER)',
-  CLERK: '서무 (CLERK)',
-  SAFETY_MANAGER: '안전관리자 (SAFETY)',
-  TEAM_LEADER: '팀장 (LEADER)',
-  EMPLOYEE: '일반사원 (EMPLOYEE)',
-  WORKER: '작업자 (WORKER)'
+  CEO: '사장',
+  DIRECTOR: '소장',
+  GENERAL_AFFAIRS: '총무',
+  GENERAL_MANAGER: '실장',
+  CLERK: '서무',
+  SAFETY_MANAGER: '안전관리자',
+  TEAM_LEADER: '팀장',
+  EMPLOYEE: '일반사원',
+  WORKER: '작업자'
 };
 
 const POSITIONS = ['사장', '소장', '실장', '팀장', '조장', '반장', '사원'];

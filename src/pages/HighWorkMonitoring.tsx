@@ -86,7 +86,6 @@ export const HighWorkMonitoring: React.FC = () => {
           </Button>
           <div>
             <h2 className="text-2xl font-black text-white tracking-tight text-glow">고소 작업 모니터링</h2>
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Real-time Altitude Awareness</p>
           </div>
         </div>
         <div className="w-12 h-12 bg-primary/20 rounded-2xl flex items-center justify-center text-primary">

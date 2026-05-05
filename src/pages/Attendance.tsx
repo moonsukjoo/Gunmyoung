@@ -235,7 +235,7 @@ export const Attendance: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 pb-24 px-1">
+    <div className="space-y-6 pb-24 px-2">
       <header className="py-6">
           <h2 className="text-3xl font-black tracking-tight text-white leading-tight">근태 관리</h2>
           <p className="text-muted-foreground font-bold">{format(now, 'yyyy.MM.dd EEEE', { locale: ko })}</p>
