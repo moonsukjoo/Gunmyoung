@@ -3,7 +3,6 @@ import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, query, where, orderBy, limit, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../components/AuthProvider';
 import { HealthReport, Role } from '../types';
-import { Layout } from '../components/Layout';
 import { 
   HeartPulse, 
   Plus, 
@@ -134,9 +133,8 @@ const HealthManagement: React.FC = () => {
   );
 
   return (
-    <Layout>
-      <div className="p-4 space-y-6 pb-24">
-        {/* Header */}
+    <div className="p-4 space-y-6 pb-24">
+      {/* Header */}
         <header className="flex flex-col gap-1 px-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -253,7 +251,6 @@ const HealthManagement: React.FC = () => {
             </div>
           )}
         </div>
-      </div>
 
       {/* Write Dialog */}
       <Dialog open={isWriteOpen} onOpenChange={setIsWriteOpen}>
@@ -358,7 +355,7 @@ const HealthManagement: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Layout>
+    </div>
   );
 };
 

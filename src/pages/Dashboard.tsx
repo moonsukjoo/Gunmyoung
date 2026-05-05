@@ -136,34 +136,30 @@ export const Dashboard: React.FC = () => {
       handleFirestoreError(error, OperationType.GET, 'attendance');
     });
 
-    let unsubscribeNotices = () => {};
-    if (!isExcludedRole) {
-      const noticeQ = query(
-        collection(db, 'notices'),
-        orderBy('createdAt', 'desc'),
-        limit(3)
-      );
+    // Notices for everyone
+    const noticeQ = query(
+      collection(db, 'notices'),
+      orderBy('createdAt', 'desc'),
+      limit(3)
+    );
 
-      unsubscribeNotices = onSnapshot(noticeQ, (snapshot) => {
-        setRecentNotices(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notice)));
-      }, (error) => {
-        handleFirestoreError(error, OperationType.LIST, 'notices');
-      });
-    }
+    const unsubscribeNotices = onSnapshot(noticeQ, (snapshot) => {
+      setRecentNotices(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notice)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'notices');
+    });
 
-    let unsubscribeAccidents = () => {};
-    if (!isExcludedRole) {
-      const accidentQ = query(
-        collection(db, 'accidentCases'),
-        orderBy('createdAt', 'desc'),
-        limit(3)
-      );
-      unsubscribeAccidents = onSnapshot(accidentQ, (snapshot) => {
-        setRecentAccidents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AccidentCase)));
-      }, (error) => {
-        handleFirestoreError(error, OperationType.LIST, 'accidentCases');
-      });
-    }
+    // Accidents for everyone
+    const accidentQ = query(
+      collection(db, 'accidentCases'),
+      orderBy('createdAt', 'desc'),
+      limit(3)
+    );
+    const unsubscribeAccidents = onSnapshot(accidentQ, (snapshot) => {
+      setRecentAccidents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AccidentCase)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'accidentCases');
+    });
 
     let unsubscribeTrend = () => {};
     if (!isExcludedRole) {
@@ -703,34 +699,26 @@ export const Dashboard: React.FC = () => {
         </div>
 
         <div className="flex items-center p-2 bg-white/5">
-          {!isExcludedRole && (
-            <>
-              <button 
-                onClick={() => navigate('/notices')}
-                className="flex-1 py-3 text-sm font-black text-muted-foreground hover:text-white transition-colors"
-              >
-                공지사항
-              </button>
-              <div className="w-px h-4 bg-white/10" />
-            </>
-          )}
+          <button 
+            onClick={() => navigate('/notices')}
+            className="flex-1 py-3 text-sm font-black text-muted-foreground hover:text-white transition-colors"
+          >
+            공지사항
+          </button>
+          <div className="w-px h-4 bg-white/10" />
           <button 
             onClick={() => navigate('/leave')}
             className="flex-1 py-3 text-sm font-black text-muted-foreground hover:text-white transition-colors"
           >
             연차신청
           </button>
-          {!isExcludedRole && (
-            <>
-              <div className="w-px h-4 bg-white/10" />
-              <button 
-                onClick={() => navigate('/accidents')}
-                className="flex-1 py-3 text-sm font-black text-muted-foreground hover:text-white transition-colors"
-              >
-                사고사례
-              </button>
-            </>
-          )}
+          <div className="w-px h-4 bg-white/10" />
+          <button 
+            onClick={() => navigate('/accidents')}
+            className="flex-1 py-3 text-sm font-black text-muted-foreground hover:text-white transition-colors"
+          >
+            사고사례
+          </button>
         </div>
       </div>
 

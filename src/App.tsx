@@ -86,7 +86,7 @@ const ProtectedRoute = ({ children, roles, permission }: { children: React.React
     // Explicit blacklist for x66626 or anyone identified as excluded role
     // They should NOT have access to any restricted route regardless of other permissions
     if (isExcludedRole) {
-      const restrictedPaths = ['/admin', '/personnel', '/work-log-mgmt', '/leave-mgmt', '/attendance-mgmt', '/accidents', '/notices', '/training-mgmt', '/redemption-mgmt', '/payslip-mgmt'];
+      const restrictedPaths = ['/admin', '/personnel', '/work-log-mgmt', '/leave-mgmt', '/attendance-mgmt', '/training-mgmt', '/redemption-mgmt', '/payslip-mgmt'];
       if (roles || permission || restrictedPaths.some(path => location.pathname === path || location.pathname.startsWith(path + '/'))) {
         return false;
       }
@@ -133,9 +133,9 @@ export default function App() {
             <Route path="/pc-admin/evacuation-history" element={<ProtectedRoute permission="admin"><PCAdminEvacuationHistory /></ProtectedRoute>} />
             <Route path="/personnel" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="employee_mgmt"><EmployeeManagement /></ProtectedRoute>} />
             <Route path="/attendance" element={<ProtectedRoute><Attendance /></ProtectedRoute>} />
-            <Route path="/accidents" element={<ProtectedRoute permission="accident_mgmt"><AccidentReport /></ProtectedRoute>} />
+            <Route path="/accidents" element={<ProtectedRoute><AccidentReport /></ProtectedRoute>} />
             <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-            <Route path="/notices" element={<ProtectedRoute permission="notice_mgmt"><Notices /></ProtectedRoute>} />
+            <Route path="/notices" element={<ProtectedRoute><Notices /></ProtectedRoute>} />
             <Route path="/leave" element={<ProtectedRoute><Leave /></ProtectedRoute>} />
             <Route path="/leave-mgmt" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="leave_mgmt"><LeaveManagement /></ProtectedRoute>} />
             <Route path="/coupons" element={<ProtectedRoute><Coupons /></ProtectedRoute>} />

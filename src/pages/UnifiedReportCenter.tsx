@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
-import { Layout } from '../components/Layout';
 import { 
   FileBox, 
   Search, 
@@ -221,9 +220,8 @@ const UnifiedReportCenter: React.FC = () => {
   ];
 
   return (
-    <Layout>
-      <div className="p-4 space-y-6 pb-24">
-        {/* Header */}
+    <div className="p-4 space-y-6 pb-24">
+      {/* Header */}
         <header className="flex flex-col gap-1 px-2">
           <div className="flex items-center gap-2">
             <div className="p-2 bg-primary/10 rounded-xl">
@@ -361,7 +359,6 @@ const UnifiedReportCenter: React.FC = () => {
           </CardContent>
         </Card>
       </div>
-    </Layout>
   );
 };
 

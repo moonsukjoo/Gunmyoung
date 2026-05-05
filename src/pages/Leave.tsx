@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Calendar, ChevronRight } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, differenceInMonths, parseISO, differenceInDays } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { DayPicker } from 'react-day-picker';
@@ -23,20 +23,47 @@ export const Leave: React.FC = () => {
   const [reason, setReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [accruedDays, setAccruedDays] = useState(0);
+  const [usedDays, setUsedDays] = useState(0);
+
+  useEffect(() => {
+    if (!profile?.joinedAt) return;
+    
+    // Calculate accrued days: 1 day per month of service
+    const joinedDate = parseISO(profile.joinedAt);
+    const today = new Date();
+    const months = differenceInMonths(today, joinedDate);
+    setAccruedDays(months);
+  }, [profile?.joinedAt]);
+
   useEffect(() => {
     if (!profile) return;
     const q = query(
       collection(db, 'leaveRequests'),
-      where('uid', '==', profile.uid),
-      orderBy('createdAt', 'desc')
+      where('uid', '==', profile.uid)
     );
+    
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaveRequest)));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'leaveRequests');
+      const allRequests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaveRequest));
+      setRequests(allRequests.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      
+      // Calculate used days from approved requests
+      const approved = allRequests.filter(r => r.status === 'APPROVED');
+      const totalUsed = approved.reduce((acc, curr) => {
+        if (curr.type === 'ANNUAL') {
+          const start = parseISO(curr.startDate);
+          const end = parseISO(curr.endDate);
+          return acc + differenceInDays(end, start) + 1;
+        } else {
+          return acc + 0.5;
+        }
+      }, 0);
+      setUsedDays(totalUsed);
     });
     return () => unsubscribe();
   }, [profile]);
+
+  const currentBalance = accruedDays - usedDays;
 
   const handleSubmit = async () => {
     if (!profile || !selectedRange.from || !reason.trim()) {
@@ -49,13 +76,12 @@ export const Leave: React.FC = () => {
 
     let diffDays = 0;
     if (leaveType === 'ANNUAL') {
-      const diffTime = Math.abs((endDate || startDate).getTime() - startDate.getTime());
-      diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      diffDays = differenceInDays(endDate, startDate) + 1;
     } else {
       diffDays = 0.5;
     }
 
-    if ((profile.annualLeaveBalance || 0) < diffDays) {
+    if (currentBalance < diffDays) {
       toast.error('잔여 연차가 부족합니다.');
       return;
     }
@@ -68,15 +94,14 @@ export const Leave: React.FC = () => {
         employeeId: profile.employeeId,
         type: leaveType,
         startDate: format(startDate, 'yyyy-MM-dd'),
-        endDate: format(endDate || startDate, 'yyyy-MM-dd'),
+        endDate: format(endDate, 'yyyy-MM-dd'),
         reason: reason.trim(),
         status: 'PENDING',
         createdAt: new Date().toISOString()
       });
 
-      await updateDoc(doc(db, 'users', profile.uid), {
-        annualLeaveBalance: (profile.annualLeaveBalance || 0) - diffDays
-      });
+      // We no longer manually update annualLeaveBalance in user doc 
+      // as it's calculated dynamically now.
 
       const managersQuery = query(
         collection(db, 'users'),
@@ -120,7 +145,10 @@ export const Leave: React.FC = () => {
           <div className="bg-white/5 p-5 rounded-2xl flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">사용 가능 연차</span>
-              <span className="text-2xl font-black text-white">{profile?.annualLeaveBalance || 0}일</span>
+              <span className="text-2xl font-black text-white">{currentBalance}일</span>
+              <span className="text-[10px] font-bold text-white/20 mt-1">
+                (발생: {accruedDays}일 / 사용: {usedDays}일)
+              </span>
             </div>
             <div className="w-12 h-12 bg-primary/20 rounded-2xl flex items-center justify-center text-primary">
               <Calendar className="w-6 h-6" />

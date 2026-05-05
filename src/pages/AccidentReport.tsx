@@ -206,51 +206,53 @@ export const AccidentReport: React.FC = () => {
           >
             <FileText className="w-4 h-4 text-rose-400" /> PDF
           </Button>
-          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-            <DialogTrigger 
-              className="inline-flex shrink-0 items-center justify-center rounded-2xl bg-red-500 hover:bg-red-600 px-4 h-12 text-white font-black shadow-lg shadow-red-500/20 gap-2 active:scale-95 transition-all"
-            >
-               <Plus className="w-4 h-4" /> 제보
-            </DialogTrigger>
-            <DialogContent className="bg-card border-none rounded-3xl text-white max-w-sm p-8 space-y-6 overflow-y-auto max-h-[90vh]">
-               <DialogHeader>
-                  <DialogTitle className="text-xl font-black tracking-tight">사고 제보하기</DialogTitle>
-               </DialogHeader>
-               <div className="space-y-4">
-                  <div className="space-y-2">
-                     <p className="text-[10px] uppercase font-black text-white/40 tracking-widest ml-1">사고명</p>
-                     <Input value={newCase.title} onChange={e => setNewCase({...newCase, title: e.target.value})} className="bg-white/5 border-none h-12 rounded-xl" placeholder="예: 낙하 위험 감지" />
-                  </div>
-                  <div className="space-y-2">
-                     <p className="text-[10px] uppercase font-black text-white/40 tracking-widest ml-1">발생 장소</p>
-                     <div className="relative">
-                        <Input value={newCase.location} onChange={e => setNewCase({...newCase, location: e.target.value})} className="bg-white/5 border-none h-12 rounded-xl pl-10" placeholder="위치 정보" />
-                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
-                     </div>
-                  </div>
-                  <div className="space-y-2">
-                     <p className="text-[10px] uppercase font-black text-white/40 tracking-widest ml-1">심각도</p>
-                     <div className="grid grid-cols-3 gap-2">
-                        {['LOW', 'MEDIUM', 'HIGH'].map(s => (
-                          <button key={s} onClick={() => setNewCase({...newCase, severity: s as any})} className={cn(
-                            "h-10 rounded-xl text-[10px] font-black transition-all",
-                            newCase.severity === s ? "bg-red-500 text-white" : "bg-white/5 text-muted-foreground"
-                          )}>
-                             {s === 'LOW' ? '아차' : s === 'MEDIUM' ? '경미' : '중대'}
-                          </button>
-                        ))}
-                     </div>
-                  </div>
-                  <div className="space-y-2">
-                     <p className="text-[10px] uppercase font-black text-white/40 tracking-widest ml-1">상세 내용</p>
-                     <Textarea value={newCase.description} onChange={e => setNewCase({...newCase, description: e.target.value})} className="bg-white/5 border-none rounded-xl min-h-[100px]" placeholder="상세 설명을 적어주세요" />
-                  </div>
-               </div>
-               <Button className="w-full h-14 bg-red-500 hover:bg-red-600 text-white font-black rounded-2xl" onClick={handleAddCase} disabled={loading}>
-                  {loading ? '등록 중...' : '보고서 제출'}
-               </Button>
-            </DialogContent>
-          </Dialog>
+          {isSafetyManager && (
+            <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+              <DialogTrigger 
+                className="inline-flex shrink-0 items-center justify-center rounded-2xl bg-red-500 hover:bg-red-600 px-4 h-12 text-white font-black shadow-lg shadow-red-500/20 gap-2 active:scale-95 transition-all"
+              >
+                 <Plus className="w-4 h-4" /> 제보
+              </DialogTrigger>
+              <DialogContent className="bg-card border-none rounded-3xl text-white max-w-sm p-8 space-y-6 overflow-y-auto max-h-[90vh]">
+                 <DialogHeader>
+                    <DialogTitle className="text-xl font-black tracking-tight">사고 제보하기</DialogTitle>
+                 </DialogHeader>
+                 <div className="space-y-4">
+                    <div className="space-y-2">
+                       <p className="text-[10px] uppercase font-black text-white/40 tracking-widest ml-1">사고명</p>
+                       <Input value={newCase.title} onChange={e => setNewCase({...newCase, title: e.target.value})} className="bg-white/5 border-none h-12 rounded-xl" placeholder="예: 낙하 위험 감지" />
+                    </div>
+                    <div className="space-y-2">
+                       <p className="text-[10px] uppercase font-black text-white/40 tracking-widest ml-1">발생 장소</p>
+                       <div className="relative">
+                          <Input value={newCase.location} onChange={e => setNewCase({...newCase, location: e.target.value})} className="bg-white/5 border-none h-12 rounded-xl pl-10" placeholder="위치 정보" />
+                          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                       </div>
+                    </div>
+                    <div className="space-y-2">
+                       <p className="text-[10px] uppercase font-black text-white/40 tracking-widest ml-1">심각도</p>
+                       <div className="grid grid-cols-3 gap-2">
+                          {['LOW', 'MEDIUM', 'HIGH'].map(s => (
+                            <button key={s} onClick={() => setNewCase({...newCase, severity: s as any})} className={cn(
+                              "h-10 rounded-xl text-[10px] font-black transition-all",
+                              newCase.severity === s ? "bg-red-500 text-white" : "bg-white/5 text-muted-foreground"
+                            )}>
+                               {s === 'LOW' ? '아차' : s === 'MEDIUM' ? '경미' : '중대'}
+                            </button>
+                          ))}
+                       </div>
+                    </div>
+                    <div className="space-y-2">
+                       <p className="text-[10px] uppercase font-black text-white/40 tracking-widest ml-1">상세 내용</p>
+                       <Textarea value={newCase.description} onChange={e => setNewCase({...newCase, description: e.target.value})} className="bg-white/5 border-none rounded-xl min-h-[100px]" placeholder="상세 설명을 적어주세요" />
+                    </div>
+                 </div>
+                 <Button className="w-full h-14 bg-red-500 hover:bg-red-600 text-white font-black rounded-2xl" onClick={handleAddCase} disabled={loading}>
+                    {loading ? '등록 중...' : '보고서 제출'}
+                 </Button>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </header>
 

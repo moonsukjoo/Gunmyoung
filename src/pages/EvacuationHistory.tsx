@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Layout } from '../components/Layout';
 import { 
   History, 
   ChevronRight, 
@@ -67,9 +66,8 @@ const EvacuationHistory: React.FC = () => {
   };
 
   return (
-    <Layout>
-      <div className="p-4 space-y-4 pb-20">
-        <div className="flex items-center gap-4 mb-4">
+    <div className="p-4 space-y-4 pb-20">
+      <div className="flex items-center gap-4 mb-4">
           <Button 
             variant="ghost" 
             size="icon" 
@@ -139,7 +137,6 @@ const EvacuationHistory: React.FC = () => {
             <p className="text-white/40 font-bold">이력이 없습니다.</p>
           </div>
         )}
-      </div>
 
       {/* Detail Overlay */}
       <AnimatePresence>
@@ -230,7 +227,7 @@ const EvacuationHistory: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
-    </Layout>
+    </div>
   );
 };
 

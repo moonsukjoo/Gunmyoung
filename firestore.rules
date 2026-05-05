@@ -159,13 +159,13 @@ service cloud.firestore {
     }
 
     match /notices/{noticeId} {
-      allow read: if isAuthenticated() && !isExcludedRole();
+      allow read: if isAuthenticated();
       allow create, update: if isHRManager();
       allow delete: if isHRManager();
     }
 
     match /accidentCases/{caseId} {
-      allow read: if isAuthenticated() && !isExcludedRole();
+      allow read: if isAuthenticated();
       allow create, update: if isSafetyManager();
       allow delete: if isSafetyManager();
     }
