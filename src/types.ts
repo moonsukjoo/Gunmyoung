@@ -1,11 +1,14 @@
 export type Role = 'CEO' | 'DIRECTOR' | 'GENERAL_AFFAIRS' | 'GENERAL_MANAGER' | 'CLERK' | 'SAFETY_MANAGER' | 'TEAM_LEADER' | 'EMPLOYEE' | 'WORKER';
 
+export type UserStatus = 'ACTIVE' | 'ON_LEAVE' | 'RETIRED';
+
 export interface UserProfile {
   uid: string;
   employeeId: string;
   email: string;
   displayName: string;
   role: Role;
+  status: UserStatus;
   departmentId?: string; // Changed from department string to ID
   departmentName?: string;
   position?: string;
@@ -253,6 +256,23 @@ export interface WorkLog {
   createdAt: string;
 }
 
+export interface WorkLogEntry {
+  userName: string;
+  tasks: { content: string; hours: string }[];
+  clockOutTime: string;
+}
+
+export interface TeamWorkLog {
+  id?: string;
+  teamId: string;
+  teamName: string;
+  date: string; // yyyy-MM-dd
+  entries: WorkLogEntry[];
+  createdAt: string;
+  createdByUid: string;
+  createdByUserName: string;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -330,4 +350,50 @@ export interface Payslip {
   netPay: number;
   annualLeaveBaseDate?: string;
   createdAt: string;
+}
+
+export interface IndividualWorkLog {
+  id: string;
+  uid: string;
+  userName: string;
+  departmentId?: string;
+  departmentName?: string;
+  date: string; // yyyy-MM-dd
+  clockOutTime: string; // HH:mm
+  tasks: { content: string; hours: string }[];
+  status: 'PENDING' | 'LEADER_APPROVED' | 'FINAL_APPROVED' | 'REJECTED';
+  approvedByLeaderUid?: string;
+  approvedByLeaderName?: string;
+  approvedByLeaderAt?: string;
+  approvedByClerkUid?: string;
+  approvedByClerkName?: string;
+  approvedByClerkAt?: string;
+  createdAt: string;
+}
+
+export interface LunchRequest {
+  id: string;
+  uid: string;
+  userName: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  createdAt: string;
+  approvedBy?: string;
+  approvedByName?: string;
+  approvedAt?: string;
+}
+
+export interface SnackRequest {
+  id: string;
+  uid: string;
+  userName: string;
+  departmentName: string;
+  quantity: number;
+  deliveryDate: string; // YYYY-MM-DD
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  createdAt: string;
+  approvedBy?: string;
+  approvedByName?: string;
+  approvedAt?: string;
 }

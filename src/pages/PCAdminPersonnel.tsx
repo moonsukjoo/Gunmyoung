@@ -71,6 +71,48 @@ const PCAdminPersonnel: React.FC = () => {
     return <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${r.color}`}>{r.label}</span>;
   };
 
+  const getStatusBadge = (user: UserProfile) => {
+    const status = user.status || (user.isActive ? 'ACTIVE' : 'RETIRED');
+    
+    if (status === 'ACTIVE') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black border border-emerald-100">
+          <UserCheck className="w-3 h-3" />
+          재직 중
+        </span>
+      );
+    } else if (status === 'ON_LEAVE') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-600 rounded-lg text-[10px] font-black border border-amber-100">
+          <Calendar className="w-3 h-3" />
+          휴직 중
+        </span>
+      );
+    } else {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 text-slate-400 rounded-lg text-[10px] font-black border border-slate-200">
+          <Trash2 className="w-3 h-3" />
+          퇴직
+        </span>
+      );
+    }
+  };
+
+  const handleUpdateStatus = async (uid: string, newStatus: string) => {
+    try {
+      const isActive = newStatus === 'ACTIVE' || newStatus === 'ON_LEAVE';
+      await updateDoc(doc(db, 'users', uid), { 
+        status: newStatus,
+        isActive: isActive
+      });
+      toast.success('상태가 변경되었습니다.');
+      fetchUsers();
+    } catch (error) {
+      console.error('Error updating status:', error);
+      toast.error('변경 중 오류가 발생했습니다.');
+    }
+  };
+
   const handleUpdateRole = async (uid: string, newRole: string) => {
     try {
       await updateDoc(doc(db, 'users', uid), { role: newRole });
@@ -202,13 +244,19 @@ const PCAdminPersonnel: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-6 py-5 text-center">
-                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black border border-emerald-100">
-                           <UserCheck className="w-3 h-3" />
-                           재직 중
-                         </span>
+                         {getStatusBadge(user)}
                       </td>
                       <td className="px-8 py-5 text-right">
-                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                           <select 
+                             className="text-[10px] font-black bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 cursor-pointer focus:ring-1 focus:ring-blue-500"
+                             value={user.status || (user.isActive ? 'ACTIVE' : 'RETIRED')}
+                             onChange={(e) => handleUpdateStatus(user.uid, e.target.value)}
+                           >
+                             <option value="ACTIVE">재직 중</option>
+                             <option value="ON_LEAVE">휴직 중</option>
+                             <option value="RETIRED">퇴직</option>
+                           </select>
                            <button className="p-2 hover:bg-white hover:shadow-md rounded-xl transition-all text-slate-600" title="상세 정보">
                               <Edit3 className="w-4 h-4" />
                            </button>

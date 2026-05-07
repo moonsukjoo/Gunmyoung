@@ -27,7 +27,10 @@ import { RedemptionManagement } from './pages/RedemptionManagement';
 import { AttendanceManagement } from './pages/AttendanceManagement';
 import { WorkLog } from './pages/WorkLog';
 import { WorkLogManagement } from './pages/WorkLogManagement';
+import { PersonalWorkLog } from './pages/PersonalWorkLog';
 import { PraiseFeed } from './pages/PraiseFeed';
+import { MealRequest } from './pages/MealRequest';
+import { MealManagement } from './pages/MealManagement';
 import { HighWorkMonitoring } from './pages/HighWorkMonitoring';
 import { Admin } from './pages/Admin';
 import MyPayslip from './pages/MyPayslip';
@@ -166,7 +169,10 @@ export default function App() {
             <Route path="/payslip-mgmt" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="payslip_mgmt"><PayslipManagement /></ProtectedRoute>} />
             <Route path="/praise-feed" element={<ProtectedRoute><PraiseFeed /></ProtectedRoute>} />
             <Route path="/work-log" element={<ProtectedRoute><WorkLog /></ProtectedRoute>} />
-            <Route path="/work-log-mgmt" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER']} permission="work_log_mgmt"><WorkLogManagement /></ProtectedRoute>} />
+            <Route path="/personal-work-log" element={<ProtectedRoute><PersonalWorkLog /></ProtectedRoute>} />
+            <Route path="/meal-request" element={<ProtectedRoute><MealRequest /></ProtectedRoute>} />
+            <Route path="/meal-mgmt" element={<ProtectedRoute roles={['GENERAL_MANAGER', 'CLERK']}><MealManagement /></ProtectedRoute>} />
+            <Route path="/work-log-mgmt" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER', 'CLERK', 'GENERAL_AFFAIRS']} permission="work_log_mgmt"><WorkLogManagement /></ProtectedRoute>} />
             <Route path="/qualification" element={<ProtectedRoute permission="qualification_mgmt"><Qualification /></ProtectedRoute>} />
             <Route path="/training" element={<ProtectedRoute><TrainingList /></ProtectedRoute>} />
             <Route path="/training-mgmt" element={<ProtectedRoute roles={['CEO', 'SAFETY_MANAGER']} permission="training_mgmt"><TrainingManagement /></ProtectedRoute>} />

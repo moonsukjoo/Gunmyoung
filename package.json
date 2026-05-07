@@ -13,6 +13,8 @@
   "dependencies": {
     "@base-ui/react": "^1.4.0",
     "@capacitor/app": "^8.1.0",
+    "@capacitor/device": "^8.0.2",
+    "@capacitor/filesystem": "^8.1.2",
     "@capacitor/local-notifications": "^8.0.2",
     "@capacitor/motion": "^8.0.0",
     "@fontsource-variable/geist": "^5.2.8",

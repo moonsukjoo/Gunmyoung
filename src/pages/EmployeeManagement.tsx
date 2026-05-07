@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { db, handleFirestoreError, OperationType } from '@/src/firebase';
 import { collection, onSnapshot, updateDoc, doc, addDoc, deleteDoc, query, orderBy, increment } from 'firebase/firestore';
-import { UserProfile, Role, Department, PraiseCoupon, JobRole } from '@/src/types';
+import { UserProfile, Role, Department, PraiseCoupon, JobRole, UserStatus } from '@/src/types';
 import { useAuth } from '@/src/components/AuthProvider';
 import { 
   Table, 
@@ -102,7 +102,7 @@ export const EmployeeManagement: React.FC = () => {
   const [newJobRoleName, setNewJobRoleName] = useState('');
   const [newPositionName, setNewPositionName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'RESIGNED'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'ON_LEAVE' | 'RESIGNED'>('ALL');
   const [deptFilter, setDeptFilter] = useState<string>('ALL');
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [isEditUserOpen, setIsEditUserOpen] = useState(false);
@@ -139,6 +139,8 @@ export const EmployeeManagement: React.FC = () => {
     birthDate: '',
     joinedAt: new Date().toISOString().split('T')[0],
     resignedAt: '',
+    status: 'ACTIVE' as 'ACTIVE' | 'ON_LEAVE' | 'RETIRED',
+    isActive: true
   });
 
   useEffect(() => {
@@ -426,12 +428,14 @@ export const EmployeeManagement: React.FC = () => {
         role: 'EMPLOYEE',
         departmentId: '',
         position: '사원',
-        jobRole: '',
+        jobRole: '기타',
         workplace: '',
         phoneNumber: '',
         birthDate: '',
         joinedAt: new Date().toISOString().split('T')[0],
         resignedAt: '',
+        status: 'ACTIVE',
+        isActive: true
       });
       toast.success('새 임직원이 등록되었습니다.');
     } catch (error) {
@@ -660,9 +664,11 @@ export const EmployeeManagement: React.FC = () => {
     const matchesSearch = u.displayName.toLowerCase().includes(searchTerm) || 
                          u.employeeId.toLowerCase().includes(searchTerm);
     
+    const userStatus = u.status || (u.isActive ? 'ACTIVE' : 'RETIRED');
     const matchesStatus = statusFilter === 'ALL' || 
-                         (statusFilter === 'ACTIVE' && u.isActive) ||
-                         (statusFilter === 'RESIGNED' && !u.isActive);
+                         (statusFilter === 'ACTIVE' && userStatus === 'ACTIVE') ||
+                         (statusFilter === 'ON_LEAVE' && userStatus === 'ON_LEAVE') ||
+                         (statusFilter === 'RESIGNED' && userStatus === 'RETIRED');
 
     const matchesDept = deptFilter === 'ALL' || u.departmentId === deptFilter;
 
@@ -724,7 +730,8 @@ export const EmployeeManagement: React.FC = () => {
                     <SelectContent className="bg-[#1c1c1e] border-white/5 rounded-xl text-white text-left">
                       <SelectItem value="ALL">전체 상태</SelectItem>
                       <SelectItem value="ACTIVE">재직중</SelectItem>
-                      <SelectItem value="RESIGNED">퇴사함</SelectItem>
+                      <SelectItem value="ON_LEAVE">휴직중</SelectItem>
+                      <SelectItem value="RESIGNED">퇴직중</SelectItem>
                     </SelectContent>
                   </Select>
 
@@ -993,6 +1000,26 @@ export const EmployeeManagement: React.FC = () => {
                                 </div>
                               </div>
                             </div>
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                               <div className="space-y-2">
+                                 <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">재직 상태 *</label>
+                                 <Select value={newUser.status} onValueChange={(v) => setNewUser({...newUser, status: v as UserStatus, isActive: v === 'ACTIVE' || v === 'ON_LEAVE'})}>
+                                   <SelectTrigger className="h-12 bg-white/5 border-white/10 rounded-xl font-bold text-left text-white">
+                                     <SelectValue />
+                                   </SelectTrigger>
+                                   <SelectContent className="bg-[#1c1c1e] border-white/10 rounded-xl text-white text-left">
+                                     <SelectItem value="ACTIVE" className="font-bold">재직 중</SelectItem>
+                                     <SelectItem value="ON_LEAVE" className="font-bold">휴직 중</SelectItem>
+                                     <SelectItem value="RETIRED" className="font-bold">퇴직 중</SelectItem>
+                                   </SelectContent>
+                                 </Select>
+                               </div>
+                               <div className="space-y-2 opacity-0 pointer-events-none">
+                                 <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">공백</label>
+                                 <div className="h-12" />
+                               </div>
+                            </div>
                           </div>
                           
                           <div className="space-y-2">
@@ -1049,7 +1076,13 @@ export const EmployeeManagement: React.FC = () => {
                           <div className="font-black text-lg text-white tracking-tighter leading-none flex items-center gap-2">
                             {user.displayName}
                             {isSelf && <Badge variant="outline" className="text-[8px] h-4 font-black bg-primary/20 text-primary border-primary/30">나</Badge>}
-                            {!user.isActive && <span className="text-[10px] text-white/30 font-bold">(퇴사)</span>}
+                            {user.status === 'RETIRED' || (!user.status && !user.isActive) ? (
+                              <span className="text-[10px] text-white/30 font-bold px-2 py-0.5 bg-white/5 rounded-md border border-white/5">(퇴사)</span>
+                            ) : user.status === 'ON_LEAVE' ? (
+                              <span className="text-[10px] text-amber-500 font-bold px-2 py-0.5 bg-amber-500/10 rounded-md border border-amber-500/20">(휴직)</span>
+                            ) : (
+                              <span className="text-[10px] text-emerald-500 font-bold px-2 py-0.5 bg-emerald-500/10 rounded-md border border-emerald-500/20">(재직)</span>
+                            )}
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="font-mono text-[10px] font-black text-white/30 uppercase tracking-widest">{user.employeeId}</span>
@@ -1400,6 +1433,30 @@ export const EmployeeManagement: React.FC = () => {
                   className="h-12 bg-white/5 border-white/5 rounded-xl font-bold text-white placeholder:text-white/20"
                 />
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+               <div className="space-y-2">
+                 <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">재직 상태</label>
+                 <Select 
+                   value={editingUser?.status || (editingUser?.isActive ? 'ACTIVE' : 'RETIRED')} 
+                   onValueChange={(v) => setEditingUser(prev => prev ? {...prev, status: v as UserStatus, isActive: v === 'ACTIVE' || v === 'ON_LEAVE'} : null)}
+                   disabled={!isHRAdmin}
+                 >
+                   <SelectTrigger className="h-12 bg-white/5 border-white/5 rounded-xl font-bold text-white">
+                      <SelectValue placeholder="상태 선택" />
+                   </SelectTrigger>
+                   <SelectContent className="bg-[#1c1c1e] rounded-xl border-white/5 text-white">
+                     <SelectItem value="ACTIVE">재직 중</SelectItem>
+                     <SelectItem value="ON_LEAVE">휴직 중</SelectItem>
+                     <SelectItem value="RETIRED">퇴직 중</SelectItem>
+                   </SelectContent>
+                 </Select>
+               </div>
+               <div className="space-y-2 opacity-0 pointer-events-none">
+                 <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">공백</label>
+                 <div className="h-12" />
+               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

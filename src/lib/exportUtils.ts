@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { downloadFile } from './downloadHelper';
 
 /**
  * Exports data to an Excel file
@@ -8,7 +9,7 @@ import html2canvas from 'html2canvas';
  * @param fileName Name of the file (without extension)
  * @param sheetName Name of the sheet
  */
-export const exportToExcel = (data: any[], fileName: string, sheetName: string = 'Sheet1') => {
+export const exportToExcel = async (data: any[], fileName: string, sheetName: string = 'Sheet1') => {
   try {
     const worksheet = XLSX.utils.json_to_sheet(data);
     const workbook = XLSX.utils.book_new();
@@ -18,18 +19,7 @@ export const exportToExcel = (data: any[], fileName: string, sheetName: string =
     const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${fileName}_${new Date().getTime()}.xlsx`;
-    document.body.appendChild(link);
-    link.click();
-    
-    // Cleanup
-    setTimeout(() => {
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    }, 100);
+    await downloadFile(blob, `${fileName}_${new Date().getTime()}.xlsx`);
   } catch (error) {
     console.error('Excel export failed:', error);
     throw error;
@@ -168,18 +158,7 @@ export const exportToPDF = async (title: string, headers: string[], data: any[][
     
     // Use manual blob generation for better compatibility
     const pdfBlob = pdf.output('blob');
-    const url = URL.createObjectURL(pdfBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${fileName}_${new Date().getTime()}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    
-    // Cleanup
-    setTimeout(() => {
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    }, 100);
+    await downloadFile(pdfBlob, `${fileName}_${new Date().getTime()}.pdf`);
   } catch (error) {
     console.error('PDF generation failed:', error);
     throw error;

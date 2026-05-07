@@ -20,6 +20,7 @@ import {
   TrendingUp,
   TrendingDown,
   LayoutDashboard,
+  Building2,
   ListTodo,
   CheckCircle,
   Users,
@@ -28,7 +29,13 @@ import {
   Heart,
   Sparkles,
   User as UserIcon,
-  FileBox
+  FileBox,
+  CheckCircle2,
+  XCircle,
+  MapPin,
+  RefreshCw,
+  FileBarChart,
+  Utensils
 } from 'lucide-react';
 import { db } from '@/src/firebase';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, limit, orderBy, getDocs, Timestamp } from 'firebase/firestore';
@@ -66,7 +73,17 @@ export const Dashboard: React.FC = () => {
   const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
   const [newNotice, setNewNotice] = useState({ title: '', content: '', isImportant: false, shouldNotify: true });
   const [userTrend, setUserTrend] = useState<number>(0);
+  const [isClockInHealthDialogOpen, setIsClockInHealthDialogOpen] = useState(false);
   const [isSOSLoading, setIsSOSLoading] = useState(false);
+  const [isPresenceDialogOpen, setIsPresenceDialogOpen] = useState(false);
+  const [selectedTeamIndex, setSelectedTeamIndex] = useState<number | null>(null);
+  const [teamAttendance, setTeamAttendance] = useState<{
+    teamName: string;
+    total: number;
+    present: number;
+    presentList: { name: string; position: string; clockIn: string }[];
+    absentList: { name: string; position: string }[];
+  }[]>([]);
   const [bannerText, setBannerText] = useState('안전한 하루가 되세요');
 
   const [myTasks, setMyTasks] = useState<Task[]>([]);
@@ -102,6 +119,11 @@ export const Dashboard: React.FC = () => {
     profile.permissions?.some(p => ['notice_mgmt', 'employee_mgmt', 'accident_mgmt', 'work_log_mgmt', 'attendance_mgmt', 'training_mgmt', 'admin'].includes(p))
   );
 
+  const isSupervisor = profile && (
+    ['TEAM_LEADER', 'DIRECTOR', 'GENERAL_MANAGER', 'CEO'].includes(profile.role) ||
+    (profile.position && ['팀장', '직장', '소장', '실장'].some(p => profile.position?.includes(p)))
+  );
+
   const canReportAccident = profile && (
     ['CEO', 'SAFETY_MANAGER'].includes(profile.role) || 
     (profile.permissions?.includes('accident_mgmt') && !isExcludedRole)
@@ -111,6 +133,16 @@ export const Dashboard: React.FC = () => {
     ['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'CLERK', 'SAFETY_MANAGER', 'TEAM_LEADER'].includes(profile.role) ||
     profile.permissions?.includes('health_mgmt') ||
     (profile.position && ['반장', '조장', '팀장'].some(p => profile.position?.includes(p)))
+  );
+
+  const canRequestSnack = profile && (
+    ['TEAM_LEADER', 'DIRECTOR', 'GENERAL_MANAGER', 'CEO'].includes(profile.role) ||
+    (profile.position && ['팀장', '직장', '소장', '총무'].some(p => profile.position?.includes(p)))
+  );
+
+  const canManageMeal = profile && (
+    ['GENERAL_MANAGER', 'CLERK'].includes(profile.role) ||
+    (profile.position && ['실장', '서무'].some(p => profile.position?.includes(p)))
   );
 
   useEffect(() => {
@@ -299,13 +331,15 @@ export const Dashboard: React.FC = () => {
       });
     }
 
+    if (status !== 'BAD') return; // Only notify managers if status is BAD
+
     try {
-      const globalTargetRoles: Role[] = ['GENERAL_AFFAIRS', 'SAFETY_MANAGER'];
+      const globalTargetRoles: Role[] = ['GENERAL_AFFAIRS', 'SAFETY_MANAGER', 'DIRECTOR', 'CLERK', 'GENERAL_MANAGER'];
       const managersQuery = query(collection(db, 'users'), where('role', 'in', globalTargetRoles));
       const teamLeaderQuery = query(
         collection(db, 'users'),
         where('role', '==', 'TEAM_LEADER'),
-        where('departmentId', '==', profile.departmentId || '')
+        where('jobRole', '==', profile.jobRole || '') // Match by jobRole (team)
       );
 
       const [managersSnap, teamLeaderSnap] = await Promise.all([
@@ -362,6 +396,11 @@ export const Dashboard: React.FC = () => {
 
   const handleClockIn = async () => {
     if (!profile) return;
+    setIsClockInHealthDialogOpen(true);
+  };
+
+  const confirmClockIn = async (selectedHealth: 'GOOD' | 'NORMAL' | 'BAD') => {
+    if (!profile) return;
     const now = new Date();
     const today = format(now, 'yyyy-MM-dd');
     const status = now.getHours() >= 9 && now.getMinutes() > 0 ? 'LATE' : 'PRESENT';
@@ -382,14 +421,16 @@ export const Dashboard: React.FC = () => {
         date: today,
         clockIn: now.toISOString(),
         status: leave?.type === 'ANNUAL' ? 'LEAVE' : status,
-        healthStatus,
+        healthStatus: selectedHealth,
         displayName: profile.displayName,
         departmentId: profile.departmentId || '',
         departmentName: profile.departmentName || '미지정',
         leaveType: leave?.type
       });
 
-      await sendHealthNotification(healthStatus);
+      setHealthStatus(selectedHealth);
+      await sendHealthNotification(selectedHealth);
+      setIsClockInHealthDialogOpen(false);
       toast.success('출근 처리 완료', {
         description: `${format(now, 'HH:mm')}에 정상적으로 출근 처리되었습니다.`
       });
@@ -413,6 +454,57 @@ export const Dashboard: React.FC = () => {
       });
     } catch (error) {
       toast.error('퇴근 처리 중 오류가 발생했습니다.');
+    }
+  };
+
+  const fetchTeamAttendance = async () => {
+    try {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const usersSnap = await getDocs(collection(db, 'users'));
+      const attendanceSnap = await getDocs(query(collection(db, 'attendance'), where('date', '==', today)));
+      
+      const allUsers = usersSnap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
+      const todayAttendance = attendanceSnap.docs.map(doc => doc.data() as Attendance);
+      
+      // Filter out users who are NOT active
+      const activeUsers = allUsers.filter(u => u.status === 'ACTIVE' || (u.status === undefined && u.isActive !== false));
+
+      const teams: Record<string, typeof teamAttendance[0]> = {};
+      
+      activeUsers.forEach(u => {
+        const teamName = u.departmentName || '기타';
+        if (!teams[teamName]) {
+          teams[teamName] = {
+            teamName,
+            total: 0,
+            present: 0,
+            presentList: [],
+            absentList: []
+          };
+        }
+        
+        teams[teamName].total++;
+        const att = todayAttendance.find(a => a.uid === u.uid);
+        if (att) {
+          teams[teamName].present++;
+          teams[teamName].presentList.push({
+            name: u.displayName,
+            position: u.position || '사원',
+            clockIn: att.clockIn
+          });
+        } else {
+          teams[teamName].absentList.push({
+            name: u.displayName,
+            position: u.position || '사원'
+          });
+        }
+      });
+      
+      setTeamAttendance(Object.values(teams).sort((a, b) => a.teamName.localeCompare(b.teamName)));
+      setSelectedTeamIndex(null);
+      setIsPresenceDialogOpen(true);
+    } catch (error) {
+      toast.error('출근 현황을 불러오는 중 오류가 발생했습니다.');
     }
   };
 
@@ -499,18 +591,13 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="w-full space-y-6 pb-24 px-2 overflow-x-hidden">
-      {/* Toss-style Greeting Header */}
-      <div className="py-8 space-y-2">
-        <p className="text-muted-foreground font-black text-lg">
-          {profile?.displayName}님,
+      {/* Greeting Header */}
+      <div className="py-6 space-y-1">
+        <p className="text-muted-foreground font-black text-sm uppercase tracking-widest">
+          {profile?.displayName}님, 반가워요!
         </p>
-        <h1 className="text-3xl font-black text-white tracking-tight leading-tight whitespace-pre-wrap">
+        <h1 className="text-2xl font-black text-white tracking-tight leading-tight">
           {bannerText}
-          {workingDays !== null && (
-            <span className="ml-3 inline-flex items-center px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-sm font-black text-emerald-400 align-middle">
-              건명기업 입사 {workingDays}일째
-            </span>
-          )}
         </h1>
       </div>
 
@@ -535,277 +622,378 @@ export const Dashboard: React.FC = () => {
         </Card>
       )}
 
-      {/* Daily Work Log Quick Action */}
-      <Card 
-        className="bg-card border-white/5 rounded-3xl p-5 overflow-hidden relative cursor-pointer active:scale-[0.98] transition-all group border-primary/10 hover:border-primary/40"
-        onClick={() => navigate('/work-log')}
-      >
-        <div className="absolute top-0 right-0 p-5 opacity-5 group-hover:opacity-10 transition-opacity">
-          <ClipboardList className="w-16 h-16 text-white" />
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center text-white shadow-lg shadow-primary/20">
-            <ClipboardList className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-0.5">업무 일지</p>
-            <h3 className="text-lg font-black text-white">일일 작업일지 작성하기</h3>
-          </div>
-        </div>
-      </Card>
-
-      {/* Admin Dashboard Statistics */}
-      {isManager && (
+      {/* Core Services Section */}
+      <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
-          <Card className="bg-card border-white/5 rounded-2xl p-4 overflow-hidden relative">
-            <div className="absolute top-0 right-0 p-3 opacity-10">
-              <Users className="w-10 h-10 text-primary" />
-            </div>
-            <p className="text-[10px] font-black text-muted-foreground mb-1 uppercase tracking-widest">출근 현황</p>
-            <p className="text-2xl font-black text-white">
-              {adminStats.presentToday} <span className="text-xs font-bold text-muted-foreground">/ {adminStats.totalEmployees}</span>
-            </p>
-          </Card>
-          <Card className="bg-card border-white/5 rounded-2xl p-4 overflow-hidden relative" onClick={() => navigate('/leave-mgmt')} style={{ cursor: 'pointer' }}>
-            <div className="absolute top-0 right-0 p-3 opacity-10">
-              <CalendarDays className="w-10 h-10 text-amber-500" />
-            </div>
-            <p className="text-[10px] font-black text-muted-foreground mb-1 uppercase tracking-widest">연차 승인 대기</p>
-            <p className="text-2xl font-black text-amber-500">{adminStats.pendingLeaves}</p>
-          </Card>
-        </div>
-      )}
-
-      {/* Employee Task List */}
-      {!isManager && (
-        <Card className="bg-card border-white/5 rounded-2xl overflow-hidden">
-          <div className="p-5 flex items-center justify-between border-b border-white/5">
-             <div className="flex items-center gap-2">
-                <ListTodo className="w-4 h-4 text-primary" />
-                <h4 className="text-sm font-black text-white">오늘의 할 일</h4>
-             </div>
-             {myTasks.length > 0 && <span className="text-[10px] font-black bg-primary/20 text-primary px-2 py-0.5 rounded-full">{myTasks.length}건</span>}
-          </div>
-          <CardContent className="p-0">
-            {myTasks.length > 0 ? (
-              <div className="divide-y divide-white/5">
-                {myTasks.map(task => (
-                  <div key={task.id} className="p-4 flex items-center justify-between group hover:bg-white/5 transition-colors">
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-sm font-bold text-white leading-tight">{task.title}</span>
-                      <span className="text-[10px] text-muted-foreground font-medium">{task.description}</span>
-                    </div>
-                    <button 
-                      onClick={() => handleUpdateTaskStatus(task.id, 'DONE')}
-                      className="w-10 h-10 rounded-xl bg-white/5 border border-white/5 flex items-center justify-center text-muted-foreground hover:bg-primary/20 hover:text-primary transition-all active:scale-90"
-                    >
-                      <CheckCircle className="w-5 h-5" />
-                    </button>
+          {/* Quick Attendance */}
+          {!todayAttendance ? (
+            <Card 
+              className="bg-blue-600 border-none rounded-3xl p-4 cursor-pointer active:scale-95 transition-all shadow-lg shadow-blue-900/40"
+              onClick={handleClockIn}
+            >
+              <div className="flex flex-col gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center text-white">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-white/50 uppercase tracking-tighter">실시간 체크</p>
+                  <h3 className="text-base font-black text-white">출근하기</h3>
+                </div>
+              </div>
+            </Card>
+          ) : !todayAttendance.clockOut ? (
+            <Card 
+              className="bg-rose-600 border-none rounded-3xl p-4 cursor-pointer active:scale-95 transition-all shadow-lg shadow-rose-900/40"
+              onClick={handleClockOut}
+            >
+              <div className="flex flex-col gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center text-white">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-white/50 uppercase tracking-tighter">근무 진행 중</p>
+                  <h3 className="text-base font-black text-white">퇴근하기</h3>
+                </div>
+              </div>
+            </Card>
+          ) : (
+            <Card className="bg-[#222] border border-white/5 rounded-3xl p-4 opacity-50">
+               <div className="flex flex-col gap-3">
+                  <div className="w-10 h-10 bg-white/5 rounded-2xl flex items-center justify-center text-white/10">
+                    <CheckCircle className="w-5 h-5" />
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="p-8 text-center bg-white/5 flex flex-col items-center gap-2">
-                <CheckCircle className="w-8 h-8 text-muted-foreground opacity-20" />
-                <p className="text-xs font-bold text-muted-foreground">현재 예정된 작업이 없습니다.</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+                  <h3 className="text-sm font-black text-white/30 leading-tight">오늘 근무<br/>종료됨</h3>
+               </div>
+            </Card>
+          )}
 
-      {/* Main Features Grid Panel */}
-      <div className="bg-card rounded-2xl overflow-hidden border border-white/5">
-        <div className="p-6 pb-2">
-          <h4 className="text-xs font-black text-muted-foreground uppercase tracking-widest">통합 관리 서비스</h4>
+          {/* Personal Work Log */}
+          <Card 
+            className="bg-emerald-600/10 border-emerald-600/20 rounded-3xl p-4 cursor-pointer hover:bg-emerald-600/20 transition-all group"
+            onClick={() => navigate('/personal-work-log')}
+          >
+            <div className="flex flex-col gap-3">
+              <div className="w-10 h-10 bg-emerald-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-900/20">
+                <ClipboardList className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-emerald-500 uppercase tracking-tighter">업무 보고서</p>
+                <h3 className="text-base font-black text-white">작업일지</h3>
+              </div>
+            </div>
+          </Card>
         </div>
-        
-        <div className="divide-y divide-white/5">
-          <div 
-            className="p-6 py-5 flex items-center justify-between group active:bg-white/5 transition-colors cursor-pointer"
-            onClick={() => navigate('/praise-feed')}
-          >
-            <div className="flex items-center gap-4 overflow-hidden">
-              <div className="w-10 h-10 bg-pink-500/20 rounded-xl flex items-center justify-center text-pink-500 shrink-0">
-                <Heart className="w-5 h-5 fill-pink-500" />
-              </div>
-              <div className="flex flex-col overflow-hidden">
-                <span className="text-base font-black text-white tracking-tight truncate">칭찬 릴레이</span>
-                <span className="text-xs text-pink-500 font-bold">동료에게 마음을 전하세요</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-               <span className="text-sm font-black text-pink-500">{profile?.kudosCount || 0}개</span>
-               <ChevronRight className="w-5 h-5 text-muted-foreground opacity-30" />
-            </div>
-          </div>
 
-          <div 
-            className="p-6 py-5 flex items-center justify-between group active:bg-white/5 transition-colors cursor-pointer"
-            onClick={() => navigate('/ship-assembly')}
+        {/* Second Row */}
+        <div className="grid grid-cols-2 gap-3">
+          {/* Meal Request */}
+          <Card 
+            className="bg-amber-600/10 border-amber-600/20 rounded-3xl p-4 cursor-pointer hover:bg-amber-600/20 transition-all group"
+            onClick={() => navigate('/meal-request')}
           >
-            <div className="flex items-center gap-4 overflow-hidden">
-              <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-500 shrink-0">
-                <Ship className="w-5 h-5" />
+            <div className="flex flex-col gap-3">
+              <div className="w-10 h-10 bg-amber-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-amber-900/20">
+                <FileBox className="w-5 h-5" />
               </div>
-              <span className="text-base font-black text-white tracking-tight truncate">선박 조립 게임</span>
+              <div>
+                <p className="text-[10px] font-black text-amber-500 uppercase tracking-tighter">오늘의 식단</p>
+                <h3 className="text-base font-black text-white">식사신청</h3>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-               <span className="text-sm font-black text-blue-500">{profile?.shipParts?.length || 0}개</span>
-               <ChevronRight className="w-5 h-5 text-muted-foreground opacity-30" />
-            </div>
-          </div>
+          </Card>
 
-          <div 
-            className="p-6 py-5 flex items-center justify-between group active:bg-white/5 transition-colors cursor-pointer"
+          {/* Training */}
+          <Card 
+            className="bg-purple-600/10 border-purple-600/20 rounded-3xl p-4 cursor-pointer hover:bg-purple-600/20 transition-all group"
             onClick={() => navigate('/training')}
           >
-            <div className="flex items-center gap-4 overflow-hidden">
-              <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center text-emerald-500 shrink-0">
+            <div className="flex flex-col gap-3">
+              <div className="w-10 h-10 bg-purple-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-purple-900/20">
                 <BookOpen className="w-5 h-5" />
               </div>
-              <div className="flex flex-col overflow-hidden">
-                <span className="text-base font-black text-white tracking-tight truncate">직무 교육</span>
-                <span className="text-xs text-emerald-500 font-bold">{profile?.jobRole || '안전 교육'}</span>
+              <div>
+                <p className="text-[10px] font-black text-purple-500 uppercase tracking-tighter">교육 및 훈련</p>
+                <h3 className="text-base font-black text-white">교육센터</h3>
               </div>
             </div>
-            <ChevronRight className="w-5 h-5 text-muted-foreground opacity-30" />
-          </div>
-
-          {!isExcludedRole && (
-            <div 
-              className="p-6 py-5 flex items-center justify-between group active:bg-white/5 transition-colors cursor-pointer"
-              onClick={() => navigate('/safety-score')}
-            >
-              <div className="flex items-center gap-4 overflow-hidden">
-                <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center text-amber-500 shrink-0">
-                  <ShieldCheck className="w-5 h-5" />
-                </div>
-                <div className="flex flex-col overflow-hidden">
-                  <span className="text-base font-black text-white tracking-tight">나의 안전 지수</span>
-                  <span className="text-xs text-muted-foreground font-bold truncate">점수 랭킹 확인</span>
-                </div>
-              </div>
-              <div className="text-right flex flex-col items-end shrink-0">
-                <span className="text-lg font-black text-amber-500">{profile?.safetyScore ?? 100}점</span>
-                {userTrend !== 0 && (
-                  <span className={cn("text-[10px] font-black", userTrend > 0 ? "text-emerald-500" : "text-red-500")}>
-                    {userTrend > 0 ? <TrendingUp className="w-3 h-3 inline" /> : <TrendingDown className="w-3 h-3 inline" />} {Math.abs(userTrend)}
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center p-2 bg-white/5">
-          <button 
-            onClick={() => navigate('/notices')}
-            className="flex-1 py-3 text-sm font-black text-muted-foreground hover:text-white transition-colors"
-          >
-            공지사항
-          </button>
-          <div className="w-px h-4 bg-white/10" />
-          <button 
-            onClick={() => navigate('/leave')}
-            className="flex-1 py-3 text-sm font-black text-muted-foreground hover:text-white transition-colors"
-          >
-            연차신청
-          </button>
-          <div className="w-px h-4 bg-white/10" />
-          <button 
-            onClick={() => navigate('/accidents')}
-            className="flex-1 py-3 text-sm font-black text-muted-foreground hover:text-white transition-colors"
-          >
-            사고사례
-          </button>
+          </Card>
         </div>
       </div>
 
-      {/* Health Check & Clock Control */}
-      <Card className="border-none shadow-none bg-card rounded-2xl overflow-hidden border border-white/5">
-        <CardContent className="p-6 space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-              <h4 className="text-sm font-black text-white opacity-60">오늘의 컨디션</h4>
+      {/* Management & Admin Hub */}
+      {(isSupervisor || isManager || canManageMeal) && (
+        <div className="space-y-4 pt-4 border-t border-white/5">
+          <div className="flex items-center justify-between px-2">
+            <h4 className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">관리자 센터</h4>
+            <div className="flex items-center gap-2 bg-white/5 px-3 py-1 rounded-full border border-white/5">
+              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+              <span className="text-[9px] font-black text-white/60 uppercase">시스템 활성</span>
             </div>
-            <Badge className="bg-primary/20 text-primary border-none px-3 py-1 font-black text-[10px] tracking-widest shrink-0">
-              {todayAttendance ? (todayAttendance.clockOut ? '업무 종료' : '근무 중') : '출근 전'}
-            </Badge>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            {(['GOOD', 'NORMAL', 'BAD'] as const).map((status) => (
-              <button
-                key={status}
-                className={cn(
-                  "h-20 rounded-2xl font-black text-xs transition-all flex flex-col items-center justify-center gap-1 border border-white/5",
-                  (todayAttendance?.healthStatus || healthStatus) === status 
-                    ? "bg-primary/20 text-primary border-primary/30" 
-                    : "bg-white/5 text-muted-foreground hover:bg-white/10"
-                )}
-                onClick={() => handleUpdateHealth(status)}
+          {/* High Priority Management Cards */}
+          <div className="grid grid-cols-1 gap-2">
+            {isSupervisor && (
+              <Card 
+                className="bg-emerald-600/10 border border-emerald-500/20 rounded-3xl p-4 flex items-center gap-4 group cursor-pointer hover:bg-emerald-600/15 transition-all shadow-lg shadow-black/20" 
+                onClick={() => navigate('/work-log-mgmt')}
               >
-                <span className="text-2xl">{status === 'GOOD' ? '😊' : status === 'NORMAL' ? '😐' : '☹️'}</span>
-                <span className="tracking-tight text-[10px] font-black">{status === 'GOOD' ? '좋음' : status === 'NORMAL' ? '보통' : '나쁨'}</span>
-              </button>
-            ))}
+                <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-white shadow-lg shrink-0">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-black text-white text-left leading-tight">팀원 작업일지 승인</h3>
+                  <p className="text-[9px] font-bold text-emerald-400/50 text-left uppercase tracking-tighter">현장 보고서 승인 현황</p>
+                </div>
+                <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                  <ChevronRight className="w-4 h-4" />
+                </div>
+              </Card>
+            )}
+
+            {canManageMeal && (
+              <Card 
+                className="bg-blue-600/10 border border-blue-500/20 rounded-3xl p-4 flex items-center gap-4 group cursor-pointer hover:bg-blue-600/15 transition-all shadow-lg shadow-black/20" 
+                onClick={() => navigate('/meal-mgmt')}
+              >
+                <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shrink-0">
+                  <Utensils className="w-6 h-6" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-black text-white text-left leading-tight">급식·간식 신청 관리</h3>
+                  <p className="text-[9px] font-bold text-blue-400/50 text-left uppercase tracking-tighter">전체 식단 신청 현황</p>
+                </div>
+                <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500">
+                  <ChevronRight className="w-4 h-4" />
+                </div>
+              </Card>
+            )}
           </div>
 
-          {!todayAttendance ? (
-            <Button 
-              className="w-full h-14 bg-primary text-white hover:bg-primary/90 font-black text-lg rounded-2xl transition-all shadow-lg shadow-primary/20"
-              onClick={handleClockIn}
-            >
-              출근하기
-            </Button>
-          ) : !todayAttendance.clockOut ? (
-            <Button 
-              className="w-full h-14 bg-card text-white hover:bg-white/5 border border-white/10 font-black text-lg rounded-2xl transition-all"
-              onClick={handleClockOut}
-            >
-              퇴근하기
-            </Button>
-          ) : (
-            <div className="w-full h-14 flex items-center justify-center bg-white/5 rounded-2xl font-black text-base text-muted-foreground">
-              평안한 저녁 되세요!
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          {/* Swipeable Fast Actions */}
+          <div className="relative">
+             <div className="flex gap-2 overflow-x-auto no-scrollbar px-1 pb-2 -mx-2 pl-2">
+                {isManager && (
+                  <>
+                    <button 
+                      onClick={() => setIsNoticeDialogOpen(true)}
+                      className="shrink-0 flex flex-col items-center justify-center gap-3 w-28 h-28 bg-white/5 border border-white/5 rounded-[2rem] hover:bg-white/10 active:scale-95 transition-all group"
+                    >
+                      <div className="w-10 h-10 bg-indigo-600/20 rounded-xl flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
+                        <Megaphone className="w-5 h-5" />
+                      </div>
+                      <span className="text-[11px] font-black text-white/70">공지 등록</span>
+                    </button>
 
-      {/* Admin Quick Actions */}
-      {isManager && !isExcludedRole && (
-        <div className="flex flex-col gap-3 pt-6">
-          <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest text-center">관리자 바로가기</p>
-          <div className="flex gap-2">
-             <Button 
-                variant="ghost" 
-                className="flex-1 bg-white/5 border border-white/5 rounded-2xl h-12 text-[10px] font-black text-white px-2"
-                onClick={() => setIsNoticeDialogOpen(true)}
-             >
-               공지등록
-             </Button>
-             <Button 
-                variant="ghost" 
-                className="flex-1 bg-white/5 border border-white/5 rounded-2xl h-12 text-[10px] font-black text-white px-2"
-                onClick={() => navigate('/accidents')}
-             >
-               사고보고
-             </Button>
-             <Button 
-                variant="ghost" 
-                className="flex-1 bg-primary/10 border border-primary/20 rounded-2xl h-12 text-[10px] font-black text-primary px-2"
-                onClick={() => navigate('/admin/reports')}
-             >
-               <FileBox className="w-3 h-3 mr-1" /> 보고서 추출
-             </Button>
+                    <button 
+                      onClick={() => navigate('/accidents')}
+                      className="shrink-0 flex flex-col items-center justify-center gap-3 w-28 h-28 bg-white/5 border border-white/5 rounded-[2rem] hover:bg-white/10 active:scale-95 transition-all group"
+                    >
+                      <div className="w-10 h-10 bg-rose-600/20 rounded-xl flex items-center justify-center text-rose-400 group-hover:scale-110 transition-transform">
+                        <ShieldAlert className="w-5 h-5" />
+                      </div>
+                      <span className="text-[11px] font-black text-white/70">사고 사례</span>
+                    </button>
+
+                    <button 
+                      onClick={fetchTeamAttendance}
+                      className="shrink-0 flex flex-col items-center justify-center gap-3 w-28 h-28 bg-white/5 border border-white/5 rounded-[2rem] hover:bg-white/10 active:scale-95 transition-all group"
+                    >
+                      <div className="w-10 h-10 bg-amber-600/20 rounded-xl flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform">
+                        <Users className="w-5 h-5" />
+                      </div>
+                      <span className="text-[11px] font-black text-white/70">출근 현황</span>
+                    </button>
+                    
+                    <button 
+                      onClick={() => navigate('/admin/reports')}
+                      className="shrink-0 flex flex-col items-center justify-center gap-3 w-28 h-28 bg-blue-600/10 border border-blue-500/20 rounded-[2rem] hover:bg-blue-600/20 active:scale-95 transition-all group"
+                    >
+                      <div className="w-10 h-10 bg-blue-600/20 rounded-xl flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
+                        <FileBarChart className="w-5 h-5" />
+                      </div>
+                      <span className="text-[11px] font-black text-blue-400">통계 보고</span>
+                    </button>
+                  </>
+                )}
+             </div>
           </div>
         </div>
       )}
 
+
+      {/* Quick Links Panel (Consolidated Secondary Features) */}
+      <div className="grid grid-cols-4 sm:grid-cols-4 gap-2">
+        <Card 
+          className="bg-card border-none rounded-2xl p-3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-white/5 transition-all text-center"
+          onClick={() => navigate('/praise-feed')}
+        >
+          <div className="w-8 h-8 bg-pink-500/10 rounded-xl flex items-center justify-center text-pink-500">
+            <Heart className="w-4 h-4 fill-pink-500" />
+          </div>
+          <span className="text-[10px] font-black text-white/60">칭찬합시다</span>
+        </Card>
+
+        <Card 
+          className="bg-card border-none rounded-2xl p-3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-white/5 transition-all text-center"
+          onClick={() => navigate('/safety-score')}
+        >
+          <div className="w-8 h-8 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-500">
+            <ShieldCheck className="w-4 h-4" />
+          </div>
+          <span className="text-[10px] font-black text-white/60">안전점수</span>
+        </Card>
+
+        <Card 
+          className="bg-card border-none rounded-2xl p-3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-white/5 transition-all text-center"
+          onClick={() => navigate('/ship-assembly')}
+        >
+          <div className="w-8 h-8 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-500">
+            <Ship className="w-4 h-4" />
+          </div>
+          <span className="text-[10px] font-black text-white/60">선박게임</span>
+        </Card>
+
+        <Card 
+          className="bg-card border-none rounded-2xl p-3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-white/5 transition-all text-center"
+          onClick={() => navigate('/accidents')}
+        >
+          <div className="w-8 h-8 bg-rose-500/10 rounded-xl flex items-center justify-center text-rose-500">
+            <AlertTriangle className="w-4 h-4" />
+          </div>
+          <span className="text-[10px] font-black text-white/60">사고사례</span>
+        </Card>
+      </div>
+
+      {/* Footer Navigation Tabs */}
+      <div className="bg-white/5 p-2 rounded-[2rem] flex justify-between gap-1 mt-4">
+        <Button variant="ghost" className="flex-1 rounded-2xl text-[10px] font-black text-white/40 hover:text-white" onClick={() => navigate('/notices')}>공지사항</Button>
+        <div className="w-px h-4 bg-white/10 self-center" />
+        <Button variant="ghost" className="flex-1 rounded-2xl text-[10px] font-black text-white/40 hover:text-white" onClick={() => navigate('/accidents')}>사고사례</Button>
+        <div className="w-px h-4 bg-white/10 self-center" />
+        <Button variant="ghost" className="flex-1 rounded-2xl text-[10px] font-black text-white/40 hover:text-white" onClick={() => navigate('/leave')}>연차신청</Button>
+      </div>
+
       {/* Dialogs */}
+      <Dialog open={isPresenceDialogOpen} onOpenChange={setIsPresenceDialogOpen}>
+        <DialogContent className="bg-[#1c1c1e] border-white/10 rounded-[2.5rem] shadow-2xl max-w-lg w-[95%] p-0 overflow-hidden flex flex-col max-h-[90dvh] text-white">
+          <DialogHeader className="p-8 pb-6 bg-white/5 border-b border-white/10 shrink-0">
+            <div className="flex items-center gap-4">
+              {selectedTeamIndex !== null && (
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="w-10 h-10 rounded-xl bg-white/5 text-white/40"
+                  onClick={() => setSelectedTeamIndex(null)}
+                >
+                  <ChevronRight className="w-5 h-5 rotate-180" />
+                </Button>
+              )}
+              <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center">
+                <Users className="w-6 h-6 text-primary" />
+              </div>
+              <div>
+                <DialogTitle className="text-2xl font-black tracking-tighter text-white">
+                  {selectedTeamIndex !== null ? teamAttendance[selectedTeamIndex].teamName : '실시간 출근 현황'}
+                </DialogTitle>
+                <DialogDescription className="text-white/40 font-bold">
+                  {selectedTeamIndex !== null ? '상세 인원 및 현황을 확인합니다.' : '팀별 현황을 선택하여 상세 내용을 확인합니다.'}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="p-8 space-y-4 overflow-y-auto flex-grow no-scrollbar">
+            {selectedTeamIndex === null ? (
+              <div className="grid gap-3">
+                {teamAttendance.map((team, idx) => (
+                  <button 
+                    key={idx} 
+                    className="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all active:scale-[0.98] text-left"
+                    onClick={() => setSelectedTeamIndex(idx)}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
+                        <Building2 className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-black text-white">{team.teamName}</h3>
+                        <p className="text-xs font-bold text-white/30">총 {team.total}명</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg font-black text-primary">{team.present} / {team.total}</span>
+                      <ChevronRight className="w-5 h-5 text-white/20" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <h4 className="text-xs font-black text-emerald-500 uppercase tracking-widest pl-1">출근 완료 ({teamAttendance[selectedTeamIndex].present}명)</h4>
+                  <div className="grid gap-2">
+                    {teamAttendance[selectedTeamIndex].presentList.map((person, pIdx) => (
+                      <div key={`p-${pIdx}`} className="flex items-center justify-between p-4 bg-emerald-500/5 rounded-xl border border-emerald-500/10">
+                        <div className="flex items-center gap-3">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                          <div>
+                            <span className="text-sm font-black text-white">{person.name}</span>
+                            <span className="ml-2 text-[10px] font-bold text-white/30">{person.position}</span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-black text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-md">
+                          {format(new Date(person.clockIn), 'HH:mm')} 출근
+                        </span>
+                      </div>
+                    ))}
+                    {teamAttendance[selectedTeamIndex].presentList.length === 0 && (
+                      <p className="py-4 text-center text-white/20 font-bold text-xs">출근 인원이 없습니다.</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="text-xs font-black text-red-500 uppercase tracking-widest pl-1">미출근 ({teamAttendance[selectedTeamIndex].absentList.length}명)</h4>
+                  <div className="grid gap-2">
+                    {teamAttendance[selectedTeamIndex].absentList.map((person, aIdx) => (
+                      <div key={`a-${aIdx}`} className="flex items-center justify-between p-4 bg-red-500/5 rounded-xl border border-red-500/10">
+                        <div className="flex items-center gap-3 opacity-50">
+                          <XCircle className="w-4 h-4 text-red-500" />
+                          <div>
+                            <span className="text-sm font-black text-white">{person.name}</span>
+                            <span className="ml-2 text-[10px] font-bold text-white/30">{person.position}</span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-black text-red-500 bg-red-500/10 px-2 py-0.5 rounded-md">
+                          미출근
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {teamAttendance.length === 0 && (
+              <div className="py-20 text-center space-y-4">
+                <Users className="w-16 h-16 mx-auto text-white/5" />
+                <p className="text-white/20 font-black">데이터를 불러오는 중이거나 인원이 없습니다.</p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="p-8 pt-4 bg-white/5 border-t border-white/10 shrink-0">
+            <Button 
+              className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl font-black text-white hover:bg-white/10"
+              onClick={() => setIsPresenceDialogOpen(false)}
+            >
+              닫기
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isNoticeDialogOpen} onOpenChange={setIsNoticeDialogOpen}>
         <DialogContent className="bg-card border-white/10 rounded-3xl text-white">
           <DialogHeader>
@@ -838,6 +1026,45 @@ export const Dashboard: React.FC = () => {
           </div>
           <DialogFooter>
             <Button onClick={handleAddNotice} className="w-full bg-primary text-white font-black h-12 rounded-xl">등록하기</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Clock-In Health Dialog */}
+      <Dialog open={isClockInHealthDialogOpen} onOpenChange={setIsClockInHealthDialogOpen}>
+        <DialogContent className="bg-[#1a1a1a] border-white/10 text-white max-w-sm rounded-[2.5rem]">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black text-center pt-4">오늘의 몸 상태는 어떠신가요?</DialogTitle>
+            <DialogDescription className="text-center text-white/40 font-bold">
+              안전한 업무를 위해 현재 컨디션을 체크해주세요.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-3 gap-3 py-6">
+            <button
+               onClick={() => confirmClockIn('GOOD')}
+               className="flex flex-col items-center gap-3 p-4 bg-white/5 hover:bg-emerald-500/20 rounded-3xl border border-white/5 transition-all group"
+            >
+               <span className="text-3xl">😊</span>
+               <span className="text-xs font-black text-white/60 group-hover:text-emerald-500">좋음</span>
+            </button>
+            <button
+               onClick={() => confirmClockIn('NORMAL')}
+               className="flex flex-col items-center gap-3 p-4 bg-white/5 hover:bg-amber-500/20 rounded-3xl border border-white/5 transition-all group"
+            >
+               <span className="text-3xl">😐</span>
+               <span className="text-xs font-black text-white/60 group-hover:text-amber-500">보통</span>
+            </button>
+            <button
+               onClick={() => confirmClockIn('BAD')}
+               className="flex flex-col items-center gap-3 p-4 bg-white/5 hover:bg-rose-500/20 rounded-3xl border border-white/5 transition-all group"
+            >
+               <span className="text-3xl">☹️</span>
+               <span className="text-xs font-black text-white/60 group-hover:text-rose-500">나쁨</span>
+            </button>
+          </div>
+          <DialogFooter className="sm:justify-center">
+            <Button variant="ghost" className="text-white/20 hover:text-white" onClick={() => setIsClockInHealthDialogOpen(false)}>
+              나중에 하기
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

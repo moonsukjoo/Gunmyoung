@@ -124,6 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               role: isBootstrapCEO ? 'CEO' : 'EMPLOYEE',
               position: isX66626Email ? '사원' : (isBootstrapCEO ? '사장' : '사원'),
               isActive: true,
+              status: 'ACTIVE',
               joinedAt: new Date().toISOString(),
               kudosCount: 0,
             };

@@ -28,6 +28,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { format, subDays, startOfMonth, endOfMonth } from 'date-fns';
 import { exportToExcel, exportToPDF } from '../lib/exportUtils';
+import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
 
 type ReportType = 'EMPLOYEES' | 'ATTENDANCE' | 'TRAINING' | 'LEAVE' | 'ACCIDENTS' | 'HEALTH' | 'EVACUATION' | 'REDEMPTION';
@@ -93,9 +94,13 @@ const UnifiedReportCenter: React.FC = () => {
           break;
       }
 
+    try {
       const q = query(collection(db, collectionName), limit(500));
       const snap = await getDocs(q);
       data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, collectionName);
+    }
 
       // Apply Filters
       if (reportType !== 'EMPLOYEES') {
@@ -222,12 +227,16 @@ const UnifiedReportCenter: React.FC = () => {
   return (
     <div className="p-2 space-y-6 pb-24">
       {/* Header */}
-        <header className="flex flex-col gap-1 px-2">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-primary/10 rounded-xl">
-              <FileBox className="w-5 h-5 text-primary" />
+        <header className="flex flex-col gap-1 px-4 py-6 relative overflow-hidden bg-white/[0.02] rounded-[2.5rem] border border-white/5 shadow-2xl">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-3xl -mr-10 -mt-10" />
+          <div className="flex items-center gap-3 relative z-10">
+            <div className="w-12 h-12 bg-primary/20 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20">
+              <FileBox className="w-6 h-6 text-primary" />
             </div>
-            <h2 className="text-xl font-black text-white">통합 보고서 관리</h2>
+            <div>
+              <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-0.5">Corporate Intelligence</p>
+              <h2 className="text-2xl font-black text-white tracking-tight">통합 보고서 시스템</h2>
+            </div>
           </div>
         </header>
 
@@ -237,16 +246,24 @@ const UnifiedReportCenter: React.FC = () => {
             <button
               key={item.id}
               onClick={() => setReportType(item.id as ReportType)}
-              className={`p-4 rounded-[1.5rem] border transition-all flex flex-col items-center gap-2 ${
+              className={cn(
+                "p-4 rounded-[2rem] border transition-all flex flex-col items-center gap-3 group active:scale-95",
                 reportType === item.id 
-                  ? 'bg-white/10 border-primary/50 shadow-lg' 
-                  : 'bg-white/5 border-white/5 hover:bg-white/10'
-              }`}
+                  ? "bg-white/10 border-white/20 shadow-xl shadow-black/40 scale-[1.02]" 
+                  : "bg-white/[0.02] border-white/5 hover:bg-white/[0.05]"
+              )}
             >
-              <div className={`p-2 ${item.bg} rounded-xl`}>
-                <item.icon className={`w-4 h-4 ${item.color}`} />
+              <div className={cn(
+                "w-12 h-12 flex items-center justify-center rounded-2xl transition-transform group-hover:scale-110",
+                item.bg,
+                reportType === item.id ? "shadow-lg shadow-black/20" : ""
+              )}>
+                <item.icon className={cn("w-6 h-6", item.color)} />
               </div>
-              <span className={`text-[11px] font-black ${reportType === item.id ? 'text-white' : 'text-white/40'}`}>
+              <span className={cn(
+                "text-xs font-black transition-colors leading-tight text-center",
+                reportType === item.id ? "text-white" : "text-white/30 group-hover:text-white/60"
+              )}>
                 {item.label}
               </span>
             </button>

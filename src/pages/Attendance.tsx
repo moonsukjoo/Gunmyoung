@@ -235,10 +235,11 @@ export const Attendance: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 pb-24 px-2">
-      <header className="py-6">
+    <div className="space-y-4 pb-24 px-2">
+      <header className="py-6 space-y-1">
+          <p className="text-[10px] sm:text-xs font-black text-white/30 uppercase tracking-[0.2em]">근태 모니터링</p>
           <h2 className="text-3xl font-black tracking-tight text-white leading-tight">근태 관리</h2>
-          <p className="text-muted-foreground font-bold">{format(now, 'yyyy.MM.dd EEEE', { locale: ko })}</p>
+          <p className="text-sm font-bold text-muted-foreground">{format(now, 'yyyy.MM.dd EEEE', { locale: ko })}</p>
           <style>{`
             .rdp { --rdp-cell-size: 100%; margin: 0; width: 100%; }
             .rdp-table { width: 100%; border-collapse: separate; border-spacing: 4px; }
@@ -248,22 +249,22 @@ export const Attendance: React.FC = () => {
         </header>
 
       {/* Clocking Unit */}
-      <Card className="border-none shadow-none bg-card rounded-2xl overflow-hidden border border-white/5">
-        <CardContent className="p-8 space-y-6">
-           <div className="flex flex-col items-center gap-2">
-              <span className="text-sm font-black text-white/40 uppercase tracking-widest">현재 시간</span>
-              <span className="text-4xl font-black text-white tabular-nums tracking-tighter">{format(now, 'HH:mm:ss')}</span>
+      <Card className="border-none shadow-none bg-white/[0.03] rounded-3xl overflow-hidden border border-white/5">
+        <CardContent className="p-6 space-y-6">
+           <div className="flex flex-col items-center gap-1">
+              <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">현재 시간</span>
+              <span className="text-5xl font-black text-white tabular-nums tracking-tighter drop-shadow-2xl">{format(now, 'HH:mm:ss')}</span>
            </div>
-           <div className="grid grid-cols-2 gap-3 pt-4">
+           <div className="grid grid-cols-2 gap-3 pt-2">
               <Button 
-                className={cn("h-16 rounded-3xl font-black text-lg shadow-none", todayAttendance?.clockIn ? "bg-white/5 text-muted-foreground" : "bg-primary text-white")}
+                className={cn("h-16 rounded-[2rem] font-black text-lg transition-all active:scale-95 shadow-none", todayAttendance?.clockIn ? "bg-white/5 text-muted-foreground cursor-not-allowed" : "bg-blue-600 text-white shadow-lg shadow-blue-500/20")}
                 onClick={handleClockIn}
                 disabled={!!todayAttendance?.clockIn}
               >
                 출근하기
               </Button>
               <Button 
-                className={cn("h-16 rounded-3xl font-black text-lg shadow-none", (!todayAttendance?.clockIn || !!todayAttendance?.clockOut) ? "bg-white/5 text-muted-foreground" : "bg-orange-500 text-white")}
+                className={cn("h-16 rounded-[2rem] font-black text-lg transition-all active:scale-95 shadow-none", (!todayAttendance?.clockIn || !!todayAttendance?.clockOut) ? "bg-white/5 text-muted-foreground cursor-not-allowed" : "bg-rose-600 text-white shadow-lg shadow-rose-500/20")}
                 onClick={handleClockOut}
                 disabled={!todayAttendance?.clockIn || !!todayAttendance?.clockOut}
               >
@@ -271,13 +272,13 @@ export const Attendance: React.FC = () => {
               </Button>
            </div>
            {todayAttendance?.clockIn && (
-             <div className="flex justify-between items-center px-2 text-[10px] font-bold text-muted-foreground pt-4 border-t border-white/5">
-                <div className="flex gap-2">
-                   <span>출근: {format(parseISO(todayAttendance.clockIn), 'HH:mm')}</span>
-                   {todayAttendance.clockOut && <span>퇴근: {format(parseISO(todayAttendance.clockOut), 'HH:mm')}</span>}
+             <div className="flex justify-between items-center px-2 text-[10px] font-black text-muted-foreground pt-4 border-t border-white/5">
+                <div className="flex gap-4">
+                   <span className="flex items-center gap-1 text-emerald-500/80"><LogIn className="w-3 h-3" /> {format(parseISO(todayAttendance.clockIn), 'HH:mm')}</span>
+                   {todayAttendance.clockOut && <span className="flex items-center gap-1 text-rose-500/80"><LogOut className="w-3 h-3" /> {format(parseISO(todayAttendance.clockOut), 'HH:mm')}</span>}
                 </div>
                 {todayAttendance.clockIn && !todayAttendance.clockOut && (
-                  <Badge variant="outline" className="text-emerald-500 border-emerald-500/30">근무중</Badge>
+                  <Badge className="bg-emerald-500 text-white border-none animate-pulse">근무중</Badge>
                 )}
              </div>
            )}
@@ -285,13 +286,13 @@ export const Attendance: React.FC = () => {
       </Card>
 
       <div className="grid grid-cols-2 gap-3">
-         <div className="bg-card p-6 rounded-2xl border border-white/5 flex flex-col gap-1 items-center">
-            <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">이달의 근무</span>
-            <span className="text-2xl font-black text-white">{stats.total} <span className="text-xs">시간</span></span>
+         <div className="bg-white/[0.03] p-5 rounded-2xl border border-white/5 flex flex-col gap-1 items-start">
+            <span className="text-[10px] font-black text-muted-foreground uppercase tracking-wider">이달의 근무</span>
+            <span className="text-2xl font-black text-white">{stats.total.toFixed(0)} <span className="text-xs font-bold text-white/40">시간</span></span>
          </div>
-         <div className="bg-card p-6 rounded-2xl border border-white/5 flex flex-col gap-1 items-center">
-            <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">잔업 시간</span>
-            <span className="text-2xl font-black text-primary">{stats.ot} <span className="text-xs">시간</span></span>
+         <div className="bg-white/[0.03] p-5 rounded-2xl border border-white/5 flex flex-col gap-1 items-start">
+            <span className="text-[10px] font-black text-muted-foreground uppercase tracking-wider">잔업 시간</span>
+            <span className="text-2xl font-black text-blue-500">{stats.ot.toFixed(0)} <span className="text-xs font-bold text-blue-500/40">시간</span></span>
          </div>
       </div>
 

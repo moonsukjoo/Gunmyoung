@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/src/components/AuthProvider';
 import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import { Payslip } from '../types';
 import { Loader2, ChevronLeft, ChevronRight, Download, Printer, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -40,7 +40,7 @@ const MyPayslip: React.FC = () => {
       setPayslips(data);
     } catch (error) {
       console.error('Error fetching payslips:', error);
-      toast.error('급여 명세서를 불러오는데 실패했습니다.');
+      handleFirestoreError(error, OperationType.LIST, 'payslips');
     } finally {
       setLoading(false);
     }

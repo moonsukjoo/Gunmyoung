@@ -90,6 +90,7 @@ export const Admin: React.FC = () => {
   const [isPermissionSettingsOpen, setIsPermissionSettingsOpen] = useState(false);
   const [isEmergencyOpen, setIsEmergencyOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [activeCategory, setActiveCategory] = useState<'hr' | 'safety' | 'system'>('hr');
 
   const isExcludedRole = profile && (
     ['EMPLOYEE', 'TEAM_LEADER', 'WORKER'].includes(profile.role?.toUpperCase() || '') || 
@@ -220,33 +221,32 @@ export const Admin: React.FC = () => {
 
   const categorizedLinks = {
     hr: [
-      { to: '/personnel', label: '인사등록', icon: UserPlus, permission: 'employee_mgmt' },
-      { to: '/attendance-mgmt', label: '근태 관리', icon: Clock, permission: 'attendance_mgmt' },
-      { to: '/leave-mgmt', label: '연차/휴가 관리', icon: CalendarDays, permission: 'leave_mgmt' },
-      { to: '/payslip-mgmt', label: '급여명세서 관리', icon: CircleDollarSign, permission: 'payslip_mgmt' },
-      { to: '/work-log-mgmt', label: '작업일지 관리', icon: ClipboardList, permission: 'work_log_mgmt' },
-      { to: '/qualification', label: '자격/교육이력 관리', icon: ClipboardList, permission: 'qualification_mgmt' },
-      { to: '/redemption-mgmt', label: '현물 신청 관리', icon: CircleDollarSign, permission: 'redemption_mgmt' },
-      { to: '/admin/reports', label: '통합 보고서 관리', icon: FileBarChart, permission: 'admin' },
+      { to: '/personnel', label: '인사등록', icon: UserPlus, permission: 'employee_mgmt', color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
+      { to: '/attendance-mgmt', label: '근태 관리', icon: Clock, permission: 'attendance_mgmt', color: 'text-indigo-400', bgColor: 'bg-indigo-500/20' },
+      { to: '/leave-mgmt', label: '연차/휴가 관리', icon: CalendarDays, permission: 'leave_mgmt', color: 'text-sky-400', bgColor: 'bg-sky-500/20' },
+      { to: '/payslip-mgmt', label: '급여명세서 관리', icon: CircleDollarSign, permission: 'payslip_mgmt', color: 'text-cyan-400', bgColor: 'bg-cyan-500/20' },
+      { to: '/work-log-mgmt', label: '작업일지 관리', icon: ClipboardList, permission: 'work_log_mgmt', color: 'text-emerald-400', bgColor: 'bg-emerald-500/20' },
+      { to: '/qualification', label: '자격/교육이력 관리', icon: ClipboardList, permission: 'qualification_mgmt', color: 'text-teal-400', bgColor: 'bg-teal-500/20' },
+      { to: '/redemption-mgmt', label: '현물 신청 관리', icon: CircleDollarSign, permission: 'redemption_mgmt', color: 'text-green-400', bgColor: 'bg-green-500/20' },
+      { to: '/admin/reports', label: '통합 보고서 관리', icon: FileBarChart, permission: 'admin', color: 'text-blue-300', bgColor: 'bg-blue-500/20' },
     ],
     safety: [
-      { onClick: () => navigate('/high-work-monitor'), label: '고소작업 총괄 현황', icon: BarChart3, permission: 'high_work_monitor' },
-      { onClick: () => setIsEmergencyOpen(true), label: '비상 대피 롤콜', icon: AlertTriangle, permission: 'emergency_rollcall' },
-      { to: '/accidents', label: '사고즉보 관리', icon: ShieldAlert, permission: 'accident_mgmt' },
-      { to: '/health-mgmt', label: '보건관리(이상무) 보고', icon: Activity, permission: 'health_mgmt' },
-      { to: '/enclosed-monitoring', label: '밀폐공간 위치관제', icon: Radio, permission: 'admin' },
-      { to: '/training-mgmt', label: '교육/평가 관리', icon: HardHat, permission: 'training_mgmt' },
-      { to: '/safety-score', label: '나의 안전지수/랭킹 조회', icon: BarChart3, permission: 'safety_ranking' },
-      { to: '/safety-score', label: '안전지수 설정', icon: ShieldCheck, permission: 'safety_score_admin' },
+      { onClick: () => navigate('/high-work-monitor'), label: '고소작업 현황', icon: BarChart3, permission: 'high_work_monitor', color: 'text-rose-400', bgColor: 'bg-rose-500/20' },
+      { onClick: () => setIsEmergencyOpen(true), label: '비상 대피 (롤콜)', icon: AlertTriangle, permission: 'emergency_rollcall', color: 'text-red-400', bgColor: 'bg-red-500/20' },
+      { to: '/accidents', label: '사고즉보 관리', icon: ShieldAlert, permission: 'accident_mgmt', color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
+      { to: '/health-mgmt', label: '보건관리 보고', icon: Activity, permission: 'health_mgmt', color: 'text-pink-400', bgColor: 'bg-pink-500/20' },
+      { to: '/enclosed-monitoring', label: '밀폐공간 관제', icon: Radio, permission: 'admin', color: 'text-rose-300', bgColor: 'bg-rose-500/20' },
+      { to: '/training-mgmt', label: '교육/평가 관리', icon: HardHat, permission: 'training_mgmt', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
+      { to: '/safety-score', label: '안전지수 설정', icon: ShieldCheck, permission: 'safety_score_admin', color: 'text-emerald-400', bgColor: 'bg-emerald-500/20' },
     ],
     system: [
-      { to: '/admin/pc-dashboard', label: 'PC 통합 대시보드', icon: LayoutDashboard, permission: 'admin', newTab: true },
-      { to: '/notifications', label: '공지사항 관리', icon: Megaphone, permission: 'notice_mgmt' },
-      { onClick: () => setIsBannerSettingsOpen(true), label: '메인 배너 문구', icon:Megaphone, permission: 'admin' },
-      { to: '/coupons', label: '포상/룰렛 관리', icon: Trophy, permission: 'praise_coupon' },
-      { onClick: () => setIsShipSettingsOpen(true), label: '함선 파츠 확률', icon: Ship, permission: 'admin' },
-      { onClick: () => setIsSnailSettingsOpen(true), label: '달팽이 경주 설정', icon: Zap, permission: 'admin' },
-      { onClick: () => setIsPermissionSettingsOpen(true), label: '사용자 권한 명단', icon: ShieldCheck, permission: 'admin' },
+      { to: '/admin/pc-dashboard', label: 'PC 대시보드', icon: LayoutDashboard, permission: 'admin', newTab: true, color: 'text-slate-300', bgColor: 'bg-slate-500/30' },
+      { to: '/notifications', label: '공지사항 관리', icon: Megaphone, permission: 'notice_mgmt', color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
+      { onClick: () => setIsBannerSettingsOpen(true), label: '배너 문구 설정', icon: Megaphone, permission: 'admin', color: 'text-violet-400', bgColor: 'bg-violet-500/20' },
+      { to: '/coupons', label: '포상/룰렛 관리', icon: Trophy, permission: 'praise_coupon', color: 'text-amber-400', bgColor: 'bg-amber-500/20' },
+      { onClick: () => setIsShipSettingsOpen(true), label: '함선 파츠 확률', icon: Ship, permission: 'admin', color: 'text-blue-300', bgColor: 'bg-blue-500/20' },
+      { onClick: () => setIsSnailSettingsOpen(true), label: '달팽이 경주 설정', icon: Zap, permission: 'admin', color: 'text-amber-300', bgColor: 'bg-amber-500/20' },
+      { onClick: () => setIsPermissionSettingsOpen(true), label: '사용자 권한 관리', icon: ShieldCheck, permission: 'admin', color: 'text-slate-300', bgColor: 'bg-slate-500/20' },
     ]
   };
 
@@ -265,11 +265,16 @@ export const Admin: React.FC = () => {
     if (!isAllowed) return null;
 
     const Content = (
-      <div className="bg-card p-4 rounded-2xl border border-white/5 flex items-center gap-4 active:scale-95 transition-all w-full text-left">
-        <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary shrink-0">
-          <link.icon className="w-5 h-5" />
+      <div className="bg-white/[0.03] p-4 rounded-3xl border border-white/5 flex items-center gap-4 active:scale-95 transition-all w-full text-left hover:bg-white/[0.06] hover:border-white/10 group shadow-lg shadow-black/20">
+        <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110", link.bgColor || "bg-primary/10")}>
+          <link.icon className={cn("w-6 h-6", link.color || "text-primary")} />
         </div>
-        <span className="text-xs font-black text-white leading-tight">{link.label}</span>
+        <div className="flex flex-col min-w-0">
+          <span className="text-sm font-black text-white leading-tight truncate">{link.label}</span>
+        </div>
+        <div className="ml-auto w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/20 group-hover:text-white/60 transition-colors">
+          <ChevronRight className="w-4 h-4" />
+        </div>
       </div>
     );
 
@@ -288,7 +293,7 @@ export const Admin: React.FC = () => {
     );
   };
 
-  if (loading) return <GlowLoading message="ADMIN" subMessage="Scanning Authority..." />;
+  if (loading) return <GlowLoading message="관리자 시스템" subMessage="접속 권한 확인 중..." />;
 
   const isAdminMode = profile && !isExcludedRole && (
     profile.role === 'CEO' || 
@@ -303,38 +308,54 @@ export const Admin: React.FC = () => {
         <p className="text-muted-foreground font-bold">건명기업 시스템의 코어 설정을 제어합니다</p>
       </header>
 
-      {/* HR & Personnel Section */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2 px-1">
-          <Users className="w-4 h-4 text-muted-foreground" />
-          <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">인사 및 현장 행정</h3>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {categorizedLinks.hr.map((link, idx) => renderLink(link, idx))}
-        </div>
-      </section>
+      {/* Category Tabs */}
+      <div className="flex gap-1 bg-white/5 p-1 rounded-2xl border border-white/5">
+        {[
+          { id: 'hr', label: '인사/행정', icon: Users },
+          { id: 'safety', label: '안전/관제', icon: HardHat },
+          { id: 'system', label: '시스템/보상', icon: Settings }
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveCategory(tab.id as any)}
+            className={cn(
+              "flex-1 flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl transition-all duration-300",
+              activeCategory === tab.id 
+                ? "bg-primary text-white shadow-lg shadow-primary/20 scale-[1.02]" 
+                : "text-white/40 hover:text-white/60 hover:bg-white/5"
+            )}
+          >
+            <tab.icon className={cn("w-4 h-4", activeCategory === tab.id ? "text-white" : "text-white/20")} />
+            <span className="text-[10px] font-black uppercase tracking-widest">{tab.label}</span>
+          </button>
+        ))}
+      </div>
 
-      {/* Smart Safety Section */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2 px-1">
-          <HardHat className="w-4 h-4 text-emerald-500" />
-          <h3 className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">스마트 안전 관제</h3>
+      {/* Menus Content */}
+      <motion.div 
+        key={activeCategory}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="space-y-4"
+      >
+        <div className="flex items-center justify-between px-1">
+           <div className="flex items-center gap-2">
+              {activeCategory === 'hr' && <Users className="w-4 h-4 text-blue-400" />}
+              {activeCategory === 'safety' && <HardHat className="w-4 h-4 text-rose-400" />}
+              {activeCategory === 'system' && <Settings className="w-4 h-4 text-amber-400" />}
+              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] opacity-50">
+                {activeCategory === 'hr' ? '인사 및 행정 관리' : activeCategory === 'safety' ? '스마트 안전 관제' : '시스템 및 환경 설정'}
+              </h3>
+           </div>
+           <Badge variant="outline" className="text-[9px] font-black border-white/10 text-white/40 rounded-full py-0.5">
+             {categorizedLinks[activeCategory].length}개 항목
+           </Badge>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {categorizedLinks.safety.map((link, idx) => renderLink(link, idx))}
-        </div>
-      </section>
 
-      {/* System & Rewards Section */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2 px-1">
-          <Settings className="w-4 h-4 text-primary" />
-          <h3 className="text-[10px] font-black text-primary uppercase tracking-widest">시스템 및 보상 설정</h3>
-        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {categorizedLinks.system.map((link, idx) => renderLink(link, idx))}
+          {categorizedLinks[activeCategory].map((link, idx) => renderLink(link, idx))}
         </div>
-      </section>
+      </motion.div>
 
       <Dialog open={isShipSettingsOpen} onOpenChange={setIsShipSettingsOpen}>
         <DialogContent className="bg-card border-none rounded-3xl text-white max-w-md overflow-y-auto max-h-[85vh] p-6 focus:outline-none">

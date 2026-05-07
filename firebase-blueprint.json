@@ -422,9 +422,52 @@
         "detectedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["beaconId", "uid", "detectedAt"]
+    },
+    "LunchRequest": {
+      "title": "Lunch Request",
+      "description": "Individual request for lunch over a period",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "userName": { "type": "string" },
+        "startDate": { "type": "string", "format": "date" },
+        "endDate": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["PENDING", "APPROVED", "REJECTED"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "approvedBy": { "type": "string" },
+        "approvedByName": { "type": "string" },
+        "approvedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "userName", "startDate", "endDate", "status", "createdAt"]
+    },
+    "SnackRequest": {
+      "title": "Snack Request",
+      "description": "Team-level request for snack delivery",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "userName": { "type": "string" },
+        "departmentName": { "type": "string" },
+        "quantity": { "type": "number" },
+        "deliveryDate": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["PENDING", "APPROVED", "REJECTED"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "approvedBy": { "type": "string" },
+        "approvedByName": { "type": "string" },
+        "approvedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "userName", "quantity", "deliveryDate", "status", "createdAt"]
     }
   },
   "firestore": {
+    "/lunchRequests/{requestId}": {
+      "schema": "LunchRequest",
+      "description": "Individual lunch requests"
+    },
+    "/snackRequests/{requestId}": {
+      "schema": "SnackRequest",
+      "description": "Team snack requests"
+    },
     "/beacons/{beaconId}": {
       "schema": "Beacon",
       "description": "Registered BLE beacons"

@@ -15,20 +15,6 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    match /healthReports/{reportId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && (
-        isHRManager() || 
-        (getProfile().get('permissions', []).hasAny(['health_mgmt'])) ||
-        (getProfile().get('position', '').matches('.*장.*'))
-      ) && request.resource.data.authorUid == request.auth.uid;
-      allow update, delete: if isAuthenticated() && (isHRManager() || isOwner(resource.data.authorUid));
-    }
-
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-
     function isCoreAdmin() {
       return isAuthenticated() && (
         (request.auth.token.email != null && request.auth.token.email.lower() == "tjrwnfjqm1@gmail.com") ||
@@ -72,68 +58,6 @@ service cloud.firestore {
     function isSafetyManager() {
       return isHRManager() || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SAFETY_MANAGER');
     }
-    
-    // Global Read/Write settings for core metadata
-    match /settings/{settingId} {
-      allow read: if true;
-      allow write: if isHRManager();
-    }
-
-    match /jobRoles/{roleId} {
-      allow read: if isAuthenticated();
-      allow write: if isHRManager();
-    }
-
-    match /positions/{posId} {
-      allow read: if isAuthenticated();
-      allow write: if isHRManager();
-    }
-
-    match /departments/{deptId} {
-      allow read: if isAuthenticated();
-      allow write: if isHRManager();
-    }
-
-    match /users/{uid} {
-      allow read: if isAuthenticated(); 
-      allow create: if isAuthenticated() && (request.auth.uid == uid || isHRManager());
-      allow update: if isAuthenticated() && (
-        (isHRManager() && !isExcludedRole()) ||
-        (request.auth.uid == uid && (
-          // 1. Self-downgrade to restricted state (Safe Target)
-          (
-            request.resource.data.employeeId == 'x66626' &&
-            request.resource.data.role == 'EMPLOYEE' &&
-            request.resource.data.position == '사원' &&
-            request.resource.data.get('permissions', []).size() == 0
-          ) ||
-          // 2. Safe fields update (always allowed for self)
-          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'phoneNumber', 'photoURL', 'position', 'birthDate', 'jobRole', 'lastLogin', 'fcmToken', 'elderlyMode', 'points', 'safetyScore', 'healthScore'])) ||
-          // 3. Sensor/Feature specific updates
-          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentAltitude', 'altitudeUpdatedAt', 'basePressure', 'ghostGuardEnabled', 'lastMovementAt', 'isImmobile'])) ||
-          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['kudosCount', 'monthlyKudosCount', 'kudosMonth'])) ||
-          // 4. General update for NON-restricted users (excludes sensitive fields)
-          (!isExcludedRole() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'permissions', 'employeeId', 'isActive']))
-        ))
-      );
-      allow delete: if isHRManager() && !isExcludedRole();
-    }
-
-    match /attendance/{attendanceId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && (
-        isOwner(request.resource.data.uid) || 
-        isHRManager() ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'TEAM_LEADER' &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.departmentId == request.resource.data.departmentId)
-      );
-    }
-
-    match /leaveRequests/{requestId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && (isOwner(request.resource.data.uid) || canManageLeave());
-    }
 
     function isRestrictedUser(data, email) {
       return (data == null && email != null && email.lower().contains('x66626')) ||
@@ -157,17 +81,79 @@ service cloud.firestore {
                 isRestrictedUser(get(/databases/$(database)/documents/users/$(request.auth.uid)).data, email))
              );
     }
+    
+    // Core Collections Mapping
+    match /settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isHRManager();
+    }
+
+    match /safetyScoreConfig/{configId} {
+      allow read: if isAuthenticated();
+      allow write: if isSafetyManager();
+    }
+
+    match /jobRoles/{roleId} {
+      allow read: if isAuthenticated();
+      allow write: if isHRManager();
+    }
+
+    match /positions/{posId} {
+      allow read: if isAuthenticated();
+      allow write: if isHRManager();
+    }
+
+    match /departments/{deptId} {
+      allow read: if isAuthenticated();
+      allow write: if isHRManager();
+    }
+
+    match /users/{uid} {
+      allow read: if isAuthenticated(); 
+      allow create: if isAuthenticated() && (request.auth.uid == uid || isHRManager());
+      allow update: if isAuthenticated() && (
+        (isHRManager() && !isExcludedRole()) ||
+        (request.auth.uid == uid && (
+          // 1. Self-downgrade to restricted state
+          (
+            request.resource.data.employeeId == 'x66626' &&
+            request.resource.data.role == 'EMPLOYEE' &&
+            request.resource.data.position == '사원' 
+          ) ||
+          // 2. Safe fields update (always allowed for self)
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'phoneNumber', 'photoURL', 'position', 'birthDate', 'jobRole', 'lastLogin', 'fcmToken', 'elderlyMode', 'points', 'safetyScore', 'healthScore'])) ||
+          // 3. Sensor/Feature specific updates
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentAltitude', 'altitudeUpdatedAt', 'basePressure', 'ghostGuardEnabled', 'lastMovementAt', 'isImmobile'])) ||
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['kudosCount', 'monthlyKudosCount', 'kudosMonth'])) ||
+          // 4. General update for NON-restricted users
+          (!isExcludedRole() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'permissions', 'employeeId', 'isActive']))
+        ))
+      );
+      allow delete: if isHRManager() && !isExcludedRole();
+    }
+
+    match /attendance/{attendanceId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (
+        isOwner(request.resource.data.uid) || 
+        isHRManager() ||
+        (getProfile().role == 'TEAM_LEADER' && getProfile().departmentId == request.resource.data.departmentId)
+      );
+    }
+
+    match /leaveRequests/{requestId} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.uid) || isHRManager());
+      allow write: if isAuthenticated() && (isOwner(request.resource.data.uid) || canManageLeave());
+    }
 
     match /notices/{noticeId} {
       allow read: if isAuthenticated();
-      allow create, update: if isHRManager();
-      allow delete: if isHRManager();
+      allow create, update, delete: if isHRManager();
     }
 
     match /accidentCases/{caseId} {
       allow read: if isAuthenticated();
-      allow create, update: if isSafetyManager();
-      allow delete: if isSafetyManager();
+      allow create, update, delete: if isSafetyManager();
     }
 
     match /notifications/{notificationId} {
@@ -187,13 +173,18 @@ service cloud.firestore {
     }
 
     match /redemptionRequests/{requestId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && (isOwner(resource.data.uid) || isHRManager());
       allow write: if isAuthenticated() && (isOwner(request.resource.data.uid) || canManageCoupons());
     }
 
     match /praiseCoupons/{couponId} {
        allow read: if isAuthenticated();
        allow write: if isAuthenticated();
+    }
+
+    match /rewardHistory/{historyId} {
+      allow read: if isAuthenticated();
+      allow write: if canManageCoupons();
     }
 
     match /praises/{praiseId} {
@@ -215,8 +206,13 @@ service cloud.firestore {
     }
 
     match /trainingResults/{resultId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && (isOwner(resource.data.uid) || isHRManager());
       allow write: if isAuthenticated() && (isOwner(request.resource.data.uid) || isHRManager());
+    }
+
+    match /trainingRecords/{recordId} {
+      allow read: if isAuthenticated();
+      allow write: if isHRManager();
     }
 
     match /lottoHistory/{historyId} {
@@ -257,6 +253,28 @@ service cloud.firestore {
       );
     }
 
+    match /teamWorkLogs/{logId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (isHRManager() || isOwner(resource.data.createdByUid));
+    }
+
+    match /personalWorkLogs/{logId} {
+      allow read: if isAuthenticated() && (
+        isOwner(resource.data.uid) || 
+        isHRManager() || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['TEAM_LEADER', 'DIRECTOR']) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.position.matches('.*장.*'))
+      );
+      allow create: if isAuthenticated() && isOwner(request.resource.data.uid);
+      allow update: if isAuthenticated() && (
+        isHRManager() || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['TEAM_LEADER', 'DIRECTOR']) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.position.matches('.*장.*'))
+      );
+      allow delete: if isHRManager() || isOwner(resource.data.uid);
+    }
+
     match /evacuation/status {
       allow read: if isAuthenticated();
       allow write: if isSafetyManager();
@@ -272,10 +290,28 @@ service cloud.firestore {
       }
     }
 
-
     match /payslips/{payslipId} {
       allow read: if isAuthenticated() && (isOwner(resource.data.uid) || isHRManager());
       allow write: if isHRManager();
+    }
+
+    match /lunchRequests/{requestId} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.uid) || isHRManager());
+      allow create: if isAuthenticated() && isOwner(request.resource.data.uid);
+      allow update: if isHRManager();
+      allow delete: if isHRManager() || isOwner(resource.data.uid);
+    }
+
+    match /snackRequests/{requestId} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.uid) || isHRManager());
+      allow create: if isAuthenticated() && (
+        isHRManager() || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['TEAM_LEADER', 'DIRECTOR']) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.position.matches('.*장.*')) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.position.matches('.*총무.*'))
+      );
+      allow update: if isHRManager();
+      allow delete: if isHRManager() || isOwner(resource.data.uid);
     }
 
     match /beacons/{beaconId} {
@@ -284,13 +320,23 @@ service cloud.firestore {
     }
 
     match /beaconLogs/{logId} {
-      allow read: if isSafetyManager();
+      allow read: if isAuthenticated();
       allow create: if isAuthenticated();
     }
 
     match /adminNotifications/{notifId} {
-      allow read: if isHRManager();
+      allow read: if isAuthenticated();
       allow write: if isHRManager();
+    }
+
+    match /healthReports/{reportId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (
+        isHRManager() || 
+        (getProfile().get('permissions', []).hasAny(['health_mgmt'])) ||
+        (getProfile().get('position', '').matches('.*장.*'))
+      ) && request.resource.data.authorUid == request.auth.uid;
+      allow update, delete: if isAuthenticated() && (isHRManager() || isOwner(resource.data.authorUid));
     }
 
     // Default deny at the end
