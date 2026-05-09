@@ -58,7 +58,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
-const ROLES: Role[] = ['CEO', 'DIRECTOR', 'GENERAL_AFFAIRS', 'GENERAL_MANAGER', 'CLERK', 'SAFETY_MANAGER', 'TEAM_LEADER', 'EMPLOYEE', 'WORKER'];
+const ROLES: Role[] = ['CEO', 'DIRECTOR', 'GENERAL_AFFAIRS', 'GENERAL_MANAGER', 'CLERK', 'SAFETY_MANAGER', 'TEAM_LEADER', 'GROUP_LEADER', 'EMPLOYEE', 'WORKER'];
 
 const ROLE_LABELS: Record<Role, string> = {
   CEO: '사장',
@@ -68,6 +68,7 @@ const ROLE_LABELS: Record<Role, string> = {
   CLERK: '서무',
   SAFETY_MANAGER: '안전관리자',
   TEAM_LEADER: '팀장',
+  GROUP_LEADER: '조장',
   EMPLOYEE: '일반사원',
   WORKER: '작업자'
 };
@@ -661,8 +662,8 @@ export const EmployeeManagement: React.FC = () => {
   };
 
   const filteredUsers = users.filter(u => {
-    const matchesSearch = u.displayName.toLowerCase().includes(searchTerm) || 
-                         u.employeeId.toLowerCase().includes(searchTerm);
+    const matchesSearch = (u.displayName?.toLowerCase() || '').includes(searchTerm) || 
+                         (u.employeeId?.toLowerCase() || '').includes(searchTerm);
     
     const userStatus = u.status || (u.isActive ? 'ACTIVE' : 'RETIRED');
     const matchesStatus = statusFilter === 'ALL' || 
@@ -793,7 +794,7 @@ export const EmployeeManagement: React.FC = () => {
                               <textarea
                                 value={bulkImportText}
                                 onChange={(e) => setBulkImportText(e.target.value)}
-                                placeholder="| 1 | 취부 | 사원 | X12345 | 홍길동 | 1990-01 | 01012345678 | 2024.01.01 |"
+                                placeholder="| 1 | 취부 | 사원 | X12345 | 홍길동 | 1990-01 | 01012345678 | 2025.01.01 |"
                                 className="w-full flex-grow bg-white/5 border border-white/10 rounded-2xl p-4 font-mono text-sm focus:outline-none focus:border-primary/50 text-white placeholder:text-white/10 resize-none min-h-[300px]"
                               />
                             </div>

@@ -249,36 +249,65 @@ export const Attendance: React.FC = () => {
         </header>
 
       {/* Clocking Unit */}
-      <Card className="border-none shadow-none bg-white/[0.03] rounded-3xl overflow-hidden border border-white/5">
-        <CardContent className="p-6 space-y-6">
-           <div className="flex flex-col items-center gap-1">
-              <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">현재 시간</span>
-              <span className="text-5xl font-black text-white tabular-nums tracking-tighter drop-shadow-2xl">{format(now, 'HH:mm:ss')}</span>
+      <Card className="border-none shadow-2xl bg-gradient-to-br from-[#1c1c1e] to-[#2c2c2e] rounded-[3rem] overflow-hidden border border-white/5 relative">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-[60px] -mr-16 -mt-16" />
+        <CardContent className="p-8 space-y-8 relative z-10">
+           <div className="flex flex-col items-center gap-2">
+              <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-white/5">
+                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
+                <span className="text-[10px] font-black text-white/60 uppercase tracking-widest">실시간 근무 모니터링</span>
+              </div>
+              <span className="text-6xl font-black text-white tabular-nums tracking-tighter drop-shadow-2xl">{format(now, 'HH:mm:ss')}</span>
            </div>
-           <div className="grid grid-cols-2 gap-3 pt-2">
-              <Button 
-                className={cn("h-16 rounded-[2rem] font-black text-lg transition-all active:scale-95 shadow-none", todayAttendance?.clockIn ? "bg-white/5 text-muted-foreground cursor-not-allowed" : "bg-blue-600 text-white shadow-lg shadow-blue-500/20")}
-                onClick={handleClockIn}
+           
+           <div className="grid grid-cols-2 gap-4">
+              <button 
                 disabled={!!todayAttendance?.clockIn}
+                onClick={handleClockIn}
+                className={cn(
+                  "h-24 rounded-[2.5rem] flex flex-col items-center justify-center gap-2 transition-all active:scale-95 shadow-xl border-b-[6px]",
+                  todayAttendance?.clockIn 
+                    ? "bg-white/5 text-white/20 border-white/5" 
+                    : "bg-gradient-to-b from-blue-500 to-blue-700 text-white border-blue-900 shadow-blue-500/20"
+                )}
               >
-                출근하기
-              </Button>
-              <Button 
-                className={cn("h-16 rounded-[2rem] font-black text-lg transition-all active:scale-95 shadow-none", (!todayAttendance?.clockIn || !!todayAttendance?.clockOut) ? "bg-white/5 text-muted-foreground cursor-not-allowed" : "bg-rose-600 text-white shadow-lg shadow-rose-500/20")}
-                onClick={handleClockOut}
+                <LogIn className="w-6 h-6" />
+                <span className="font-black text-base">출근 완료</span>
+              </button>
+
+              <button 
                 disabled={!todayAttendance?.clockIn || !!todayAttendance?.clockOut}
+                onClick={handleClockOut}
+                className={cn(
+                  "h-24 rounded-[2.5rem] flex flex-col items-center justify-center gap-2 transition-all active:scale-95 shadow-xl border-b-[6px]",
+                  (!todayAttendance?.clockIn || !!todayAttendance?.clockOut)
+                    ? "bg-white/5 text-white/20 border-white/5"
+                    : "bg-gradient-to-b from-rose-500 to-rose-700 text-white border-rose-900 shadow-rose-500/20"
+                )}
               >
-                퇴근하기
-              </Button>
+                <LogOut className="w-6 h-6" />
+                <span className="font-black text-base">퇴근 완료</span>
+              </button>
            </div>
+
            {todayAttendance?.clockIn && (
-             <div className="flex justify-between items-center px-2 text-[10px] font-black text-muted-foreground pt-4 border-t border-white/5">
-                <div className="flex gap-4">
-                   <span className="flex items-center gap-1 text-emerald-500/80"><LogIn className="w-3 h-3" /> {format(parseISO(todayAttendance.clockIn), 'HH:mm')}</span>
-                   {todayAttendance.clockOut && <span className="flex items-center gap-1 text-rose-500/80"><LogOut className="w-3 h-3" /> {format(parseISO(todayAttendance.clockOut), 'HH:mm')}</span>}
+             <div className="bg-white/5 rounded-3xl p-4 flex justify-between items-center border border-white/5">
+                <div className="flex gap-6">
+                   <div className="flex flex-col">
+                      <span className="text-[9px] font-black text-white/30 uppercase">출근 시각</span>
+                      <span className="text-xs font-black text-blue-400">{format(parseISO(todayAttendance.clockIn), 'HH:mm')}</span>
+                   </div>
+                   {todayAttendance.clockOut && (
+                     <div className="flex flex-col">
+                        <span className="text-[9px] font-black text-white/30 uppercase">퇴근 시각</span>
+                        <span className="text-xs font-black text-rose-400">{format(parseISO(todayAttendance.clockOut), 'HH:mm')}</span>
+                     </div>
+                   )}
                 </div>
                 {todayAttendance.clockIn && !todayAttendance.clockOut && (
-                  <Badge className="bg-emerald-500 text-white border-none animate-pulse">근무중</Badge>
+                  <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/20 px-3 py-1 font-black animate-pulse rounded-xl">
+                    현재 근무 중
+                  </Badge>
                 )}
              </div>
            )}
@@ -286,13 +315,19 @@ export const Attendance: React.FC = () => {
       </Card>
 
       <div className="grid grid-cols-2 gap-3">
-         <div className="bg-white/[0.03] p-5 rounded-2xl border border-white/5 flex flex-col gap-1 items-start">
-            <span className="text-[10px] font-black text-muted-foreground uppercase tracking-wider">이달의 근무</span>
-            <span className="text-2xl font-black text-white">{stats.total.toFixed(0)} <span className="text-xs font-bold text-white/40">시간</span></span>
+         <div className="bg-gradient-to-br from-blue-600/20 to-transparent p-6 rounded-[2rem] border border-blue-500/10 flex flex-col gap-1 items-start shadow-xl">
+            <div className="w-8 h-8 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 mb-2">
+              <Clock className="w-4 h-4" />
+            </div>
+            <span className="text-[10px] font-black text-blue-400/60 uppercase tracking-[0.1em]">이달의 누적 근무</span>
+            <span className="text-3xl font-black text-white">{stats.total.toFixed(0)}<span className="text-sm font-bold text-white/20 ml-1">H</span></span>
          </div>
-         <div className="bg-white/[0.03] p-5 rounded-2xl border border-white/5 flex flex-col gap-1 items-start">
-            <span className="text-[10px] font-black text-muted-foreground uppercase tracking-wider">잔업 시간</span>
-            <span className="text-2xl font-black text-blue-500">{stats.ot.toFixed(0)} <span className="text-xs font-bold text-blue-500/40">시간</span></span>
+         <div className="bg-gradient-to-br from-amber-600/20 to-transparent p-6 rounded-[2rem] border border-amber-500/10 flex flex-col gap-1 items-start shadow-xl">
+            <div className="w-8 h-8 bg-amber-500/20 rounded-xl flex items-center justify-center text-amber-400 mb-2">
+              <Activity className="w-4 h-4" />
+            </div>
+            <span className="text-[10px] font-black text-amber-400/60 uppercase tracking-[0.1em]">초과 근무 시간</span>
+            <span className="text-3xl font-black text-amber-500">{stats.ot.toFixed(0)}<span className="text-sm font-bold text-amber-500/20 ml-1">H</span></span>
          </div>
       </div>
 

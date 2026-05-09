@@ -5,7 +5,7 @@ import { db } from '../firebase';
 import { doc, updateDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { ShieldAlert, AlertTriangle, X, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 
 interface SafetySensorContextType {
@@ -23,6 +23,11 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [lastAcceleration, setLastAcceleration] = useState<{ x: number; y: number; z: number } | null>(null);
   const [alertType, setAlertType] = useState<'FALL' | 'IMPACT' | null>(null);
   const [countdown, setCountdown] = useState(15);
+  const [thresholds, setThresholds] = useState({
+    impact: 45.0,
+    fall: 3.0,
+    duration: 150
+  });
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -41,6 +46,23 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
         audioRef.current = null;
       }
     };
+  }, []);
+
+  // Listen for dynamic thresholds from admin settings
+  useEffect(() => {
+    import('firebase/firestore').then(({ doc, onSnapshot }) => {
+      const unsub = onSnapshot(doc(db, 'settings', 'safety_sensors'), (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setThresholds({
+            impact: data.impactThreshold || 45.0,
+            fall: data.fallThreshold || 3.0,
+            duration: data.fallDuration || 150
+          });
+        }
+      });
+      return () => unsub();
+    });
   }, []);
 
   const triggerAlert = (type: 'FALL' | 'IMPACT') => {
@@ -130,34 +152,54 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }
       }
 
-      await Motion.addListener('accel', (event) => {
-        const { x, y, z } = event.accelerationIncludingGravity;
+      // Logic to process motion data
+      const processMotion = (x: number, y: number, z: number) => {
         setLastAcceleration({ x, y, z });
 
-        // Fall detection logic
         // Total magnitude of acceleration including gravity
-        // When in free fall, magnitude drops close to 0 (since gravity isn't felt by the device)
         const magnitude = Math.sqrt(x * x + y * y + z * z);
         
-        // 1. Free fall detection (< 3.0 m/s^2 for > 150ms)
-        if (magnitude < 3.0) {
+        // 1. Free fall detection using dynamic thresholds
+        if (magnitude < thresholds.fall) {
           if (!fallStartTimeRef.current) {
             fallStartTimeRef.current = Date.now();
-          } else if (Date.now() - fallStartTimeRef.current > 150) {
+          } else if (Date.now() - fallStartTimeRef.current > thresholds.duration) {
             triggerAlert('FALL');
           }
         } else {
           fallStartTimeRef.current = null;
         }
 
-        // 2. Impact detection (> 35.0 m/s^2)
-        if (magnitude > 35.0) {
+        // 2. Impact detection using dynamic thresholds
+        if (magnitude > thresholds.impact) {
           triggerAlert('IMPACT');
         }
-      });
+      };
+
+      // Primary: Capacitor Motion (for native)
+      try {
+        await Motion.addListener('accel', (event) => {
+          const { x, y, z } = event.accelerationIncludingGravity;
+          processMotion(x, y, z);
+        });
+      } catch (e) {
+        console.warn("Capacitor Motion failed, falling back to web devicemotion");
+      }
+
+      // Secondary: Web DeviceMotion (for preview/browser)
+      const handleWebMotion = (event: DeviceMotionEvent) => {
+        const acc = event.accelerationIncludingGravity;
+        if (!acc) return;
+        processMotion(acc.x || 0, acc.y || 0, acc.z || 0);
+      };
+
+      window.addEventListener('devicemotion', handleWebMotion);
+      (window as any)._safetySensorCleanup = () => {
+        window.removeEventListener('devicemotion', handleWebMotion);
+      };
 
       setIsMonitoring(true);
-      toast.success('실시간 안전 센서 모니터링 시작');
+      toast.success(`안전 모니터링 시작 (감도: ${thresholds.impact.toFixed(0)}m/s²)`);
     } catch (err) {
       console.error("Monitoring failed", err);
       toast.error('센서 모니터링을 시작할 수 없습니다.');
@@ -166,6 +208,10 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const stopMonitoring = () => {
     Motion.removeAllListeners();
+    if ((window as any)._safetySensorCleanup) {
+      (window as any)._safetySensorCleanup();
+      delete (window as any)._safetySensorCleanup;
+    }
     setIsMonitoring(false);
   };
 

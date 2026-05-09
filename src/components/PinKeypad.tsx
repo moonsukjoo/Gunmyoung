@@ -1,7 +1,7 @@
 import React from 'react';
 import { Delete, ChevronLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 
 interface PinKeypadProps {
   onInput: (value: string) => void;

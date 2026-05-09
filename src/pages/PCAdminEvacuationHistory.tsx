@@ -116,8 +116,8 @@ const PCAdminEvacuationHistory: React.FC = () => {
                       <h4 className="font-black text-slate-900 truncate tracking-tight">{ev.reason}</h4>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="text-sm font-black text-blue-600">{ev.confirmedCount || 0} / {ev.totalWorkers || 0}</div>
-                      <div className="text-[10px] font-bold text-slate-400 capitalize whitespace-nowrap">Confirmed / Total</div>
+                      <div className="text-sm font-black text-blue-600">{ev.confirmedCount || 0} / {ev.totalClockedIn || ev.totalWorkers || 0}</div>
+                      <div className="text-[10px] font-bold text-slate-400 capitalize whitespace-nowrap">Confirmed / Target</div>
                     </div>
                   </div>
 
@@ -165,19 +165,23 @@ const PCAdminEvacuationHistory: React.FC = () => {
               </div>
 
               {/* Progress Summary Card */}
-              <div className="grid grid-cols-3 gap-6">
-                <div className="bg-blue-50 border border-blue-100 p-5 rounded-3xl text-center">
-                  <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">총원</p>
-                  <p className="text-2xl font-black text-blue-900">{selectedEvacuation.totalWorkers || 0}명</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div className="bg-slate-50 border border-slate-100 p-5 rounded-3xl text-center">
+                  <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest mb-1">전체 임직원</p>
+                  <p className="text-2xl font-black text-slate-900">{selectedEvacuation.totalWorkers || 0}명</p>
+                </div>
+                <div className="bg-blue-50 border border-blue-100 p-5 rounded-3xl text-center font-bold">
+                  <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">출근 인원 (발동시)</p>
+                  <p className="text-2xl font-black text-blue-900">{selectedEvacuation.totalClockedIn || selectedEvacuation.totalWorkers || 0}명</p>
                 </div>
                 <div className="bg-emerald-50 border border-emerald-100 p-5 rounded-3xl text-center">
-                  <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">확인됨</p>
+                  <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">안전 확인</p>
                   <p className="text-2xl font-black text-emerald-900">{checkins.length}명</p>
                 </div>
                 <div className="bg-rose-50 border border-rose-100 p-5 rounded-3xl text-center">
                   <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-1">미확인</p>
                   <p className="text-2xl font-black text-rose-900">
-                    {Math.max(0, (selectedEvacuation.totalWorkers || 0) - checkins.length)}명
+                    {Math.max(0, (selectedEvacuation.totalClockedIn || selectedEvacuation.totalWorkers || 0) - checkins.length)}명
                   </p>
                 </div>
               </div>

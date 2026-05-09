@@ -294,9 +294,9 @@ export const MyPage: React.FC = () => {
 
   return (
     <div className="space-y-4 pb-24 px-2">
-      <header className="py-4 flex items-center justify-between">
+      <header className="py-4 flex items-center justify-between font-sans">
         <div>
-           <p className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em] mb-0.5">계정 및 프로필</p>
+           <p className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em] mb-0.5">내 계정 정보</p>
            <h2 className="text-2xl font-black tracking-tight text-white leading-tight">마이 페이지</h2>
         </div>
         <button 
@@ -350,17 +350,25 @@ export const MyPage: React.FC = () => {
                 <Check className="w-3 h-3 text-white" />
               </div>
             </div>
-            <div className="min-w-0 w-full px-2">
-              <h3 className="text-lg font-black text-white truncate">{profile?.displayName}</h3>
-              <div className="flex items-center justify-center gap-1.5 mt-0.5">
-                <Badge variant="outline" className="bg-white/5 border-white/10 text-[9px] font-black px-1.5 py-0 h-5 rounded-md">
-                  {profile?.position || '사원'}
-                </Badge>
+              <div className="min-w-0 w-full px-2">
+                <h3 className="text-lg font-black text-white truncate">{profile?.displayName}</h3>
+                <div className="flex flex-col items-center gap-1 mt-1.5">
+                  <Badge variant="outline" className="bg-white/5 border-white/10 text-[9px] font-black px-1.5 py-0 h-5 rounded-md">
+                    {profile?.role === 'CEO' ? '대표이사' : 
+                     profile?.role === 'DIRECTOR' ? '직장' :
+                     profile?.role === 'GENERAL_MANAGER' ? '부장' :
+                     profile?.role === 'SAFETY_MANAGER' ? '안전관리자' :
+                     profile?.role === 'TEAM_LEADER' ? '팀장' :
+                     profile?.role === 'GROUP_LEADER' ? '조장' :
+                     profile?.role === 'EMPLOYEE' ? '사원' : profile?.role || '사원'}
+                  </Badge>
+                  {profile?.position && (
+                    <span className="text-[10px] font-bold text-white/40 uppercase tracking-tighter">
+                      {profile.position.replace('대표이사 사무실', '').trim()}
+                    </span>
+                  )}
+                </div>
               </div>
-              <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest mt-1 truncate">
-                {profile?.departmentName || '부서 관리자'}
-              </p>
-            </div>
           </CardContent>
         </Card>
 
@@ -382,87 +390,87 @@ export const MyPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Compact Quick Menu Grid */}
-      <div className="grid grid-cols-2 gap-2">
-        {menuItems.map((item, idx) => (
-          <button 
-            key={idx} 
-            onClick={() => item.onClick ? item.onClick() : navigate(item.to!)}
-            className="flex items-center gap-3 p-3 bg-white/[0.02] border border-white/5 rounded-2xl text-left hover:bg-white/[0.05] transition-all group active:scale-95 shadow-sm"
-          >
-            <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform shrink-0", item.bgColor)}>
-              <item.icon className={cn("w-5 h-5", item.color)} />
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-[11px] font-black text-white truncate">{item.label}</span>
-              <span className="text-[8px] font-bold text-white/20 uppercase">이동하기</span>
-            </div>
-          </button>
-        ))}
-      </div>
+          {/* Compact Quick Menu Grid */}
+          <div className="grid grid-cols-2 gap-2">
+            {menuItems.map((item, idx) => (
+              <button 
+                key={idx} 
+                onClick={() => item.onClick ? item.onClick() : navigate(item.to!)}
+                className="flex items-center gap-3 p-3 bg-white/[0.02] border border-white/5 rounded-2xl text-left hover:bg-white/[0.05] transition-all group active:scale-95 shadow-sm"
+              >
+                <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform shrink-0", item.bgColor)}>
+                  <item.icon className={cn("w-5 h-5", item.color)} />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[11px] font-black text-white truncate">{item.label}</span>
+                  <span className="text-[8px] font-bold text-white/20">바로가기</span>
+                </div>
+              </button>
+            ))}
+          </div>
 
       {/* System Settings - 2x2 Grid Layout */}
-      <div className="pt-2 space-y-2">
-        <h4 className="text-[9px] font-black text-white/20 uppercase tracking-[0.2em] px-1">기기 및 시스템 설정</h4>
-        <div className="grid grid-cols-2 gap-2">
+      <div className="pt-2 space-y-4">
+        <h4 className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] px-1">기기 및 시스템 제어</h4>
+        <div className="grid grid-cols-2 gap-3">
           <button 
             onClick={toggleElderlyMode}
             className={cn(
-              "p-4 rounded-3xl border transition-all flex flex-col gap-3",
-              profile?.elderlyMode ? "bg-blue-600/20 border-blue-500/30" : "bg-white/[0.02] border-white/5"
+              "p-5 rounded-[2.5rem] border transition-all flex flex-col items-center gap-2 group",
+              profile?.elderlyMode ? "bg-blue-600/20 border-blue-500/30 shadow-lg shadow-blue-500/10" : "bg-white/[0.02] border-white/5 shadow-inner shadow-white/5"
             )}
           >
-            <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", profile?.elderlyMode ? "bg-blue-500 text-white" : "bg-white/5 text-white/40")}>
-              <Eye className="w-4 h-4" />
+            <div className={cn("w-10 h-10 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110", profile?.elderlyMode ? "bg-blue-500 text-white" : "bg-white/5 text-white/40")}>
+              <Eye className="w-5 h-5" />
             </div>
-            <div className="text-left">
-              <p className="text-[10px] font-black text-white">어르신 모드</p>
-              <p className="text-[8px] font-bold text-white/40">{profile?.elderlyMode ? '켜짐' : '꺼짐'}</p>
+            <div className="text-center">
+              <p className="text-[11px] font-black text-white">어르신 모드</p>
+              <p className={cn("text-[8px] font-black uppercase tracking-widest", profile?.elderlyMode ? "text-blue-400" : "text-white/20")}>{profile?.elderlyMode ? '운영 중' : '중지됨'}</p>
             </div>
           </button>
 
           <button 
             onClick={handleRequestPermission}
             className={cn(
-              "p-4 rounded-3xl border transition-all flex flex-col gap-3",
-              notificationPermission === 'granted' ? "bg-emerald-600/20 border-emerald-500/30" : "bg-white/[0.02] border-white/5"
+              "p-5 rounded-[2.5rem] border transition-all flex flex-col items-center gap-2 group",
+              notificationPermission === 'granted' ? "bg-emerald-600/20 border-emerald-500/30 shadow-lg shadow-emerald-500/10" : "bg-white/[0.02] border-white/5 shadow-inner shadow-white/5"
             )}
           >
-            <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", notificationPermission === 'granted' ? "bg-emerald-500 text-white" : "bg-white/5 text-white/40")}>
-              <Bell className="w-4 h-4" />
+            <div className={cn("w-10 h-10 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110", notificationPermission === 'granted' ? "bg-emerald-500 text-white" : "bg-white/5 text-white/40")}>
+              <Bell className="w-5 h-5" />
             </div>
-            <div className="text-left">
-              <p className="text-[10px] font-black text-white">기기 알림</p>
-              <p className="text-[8px] font-bold text-white/40 truncate">{notificationPermission === 'granted' ? '허용됨' : '차단됨'}</p>
+            <div className="text-center">
+              <p className="text-[11px] font-black text-white">기기 알림</p>
+              <p className={cn("text-[8px] font-black uppercase tracking-widest", notificationPermission === 'granted' ? "text-emerald-400" : "text-white/20")}>{notificationPermission === 'granted' ? '허용됨' : '차단됨'}</p>
             </div>
           </button>
 
           <button 
             onClick={handleToggleGhostGuard}
             className={cn(
-              "p-4 rounded-3xl border transition-all flex flex-col gap-3",
-              profile?.ghostGuardEnabled ? "bg-rose-600/20 border-rose-500/30" : "bg-white/[0.02] border-white/5"
+              "p-5 rounded-[2.5rem] border transition-all flex flex-col items-center gap-2 group",
+              profile?.ghostGuardEnabled ? "bg-rose-600/20 border-rose-500/30 shadow-lg shadow-rose-500/10" : "bg-white/[0.02] border-white/5 shadow-inner shadow-white/5"
             )}
           >
-            <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", profile?.ghostGuardEnabled ? "bg-rose-500 text-white" : "bg-white/5 text-white/40")}>
-              <Activity className="w-4 h-4" />
+            <div className={cn("w-10 h-10 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110", profile?.ghostGuardEnabled ? "bg-rose-500 text-white" : "bg-white/5 text-white/40")}>
+              <Activity className="w-5 h-5" />
             </div>
-            <div className="text-left">
-              <p className="text-[10px] font-black text-white">유령 가드</p>
-              <p className="text-[8px] font-bold text-white/40">{profile?.ghostGuardEnabled ? '작동 중' : '중지됨'}</p>
+            <div className="text-center">
+              <p className="text-[11px] font-black text-white">유령 가드</p>
+              <p className={cn("text-[8px] font-black uppercase tracking-widest", profile?.ghostGuardEnabled ? "text-rose-400" : "text-white/20")}>{profile?.ghostGuardEnabled ? '작동 중' : '비활성'}</p>
             </div>
           </button>
 
           <button 
             onClick={handleCalibrateAltitude}
-            className="p-4 rounded-3xl border bg-white/[0.02] border-white/5 transition-all flex flex-col gap-3"
+            className="p-5 rounded-[2.5rem] border bg-white/[0.02] border-white/5 transition-all flex flex-col items-center gap-2 group shadow-inner shadow-white/5"
           >
-            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/40">
-              <Navigation className="w-4 h-4" />
+            <div className="w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center text-white/40 transition-transform group-hover:scale-110">
+              <Navigation className="w-5 h-5" />
             </div>
-            <div className="text-left">
-              <p className="text-[10px] font-black text-white">고도 영점</p>
-              <p className="text-[8px] font-bold text-white/40">{(profile?.currentAltitude || 0).toFixed(1)}m</p>
+            <div className="text-center">
+              <p className="text-[11px] font-black text-white">고도 영점</p>
+              <p className="text-[8px] font-black text-white/20 uppercase tracking-widest">{(profile?.currentAltitude || 0).toFixed(1)}M 기준</p>
             </div>
           </button>
         </div>

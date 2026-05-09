@@ -112,7 +112,7 @@ export const AttendanceManagement: React.FC = () => {
   }, [selectedUser, month]);
 
   const filteredUsers = users.filter(u => 
-    u.displayName.toLowerCase().includes(search.toLowerCase()) || 
+    (u.displayName?.toLowerCase() || '').includes(search.toLowerCase()) || 
     u.departmentName?.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -210,9 +210,9 @@ export const AttendanceManagement: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background pb-24 selection:bg-blue-500/30">
-      <header className="p-6 sticky top-0 bg-background/80 backdrop-blur-md z-10 space-y-4 border-b border-white/5 relative overflow-hidden">
+      <header className="p-6 sticky top-0 bg-background/80 backdrop-blur-md z-[60] space-y-4 border-b border-white/5 relative">
         {/* Colorful Glow Accent */}
-        <div className="absolute -top-24 -left-20 w-64 h-64 bg-blue-600/10 rounded-full blur-[80px]" />
+        <div className="absolute -top-24 -left-20 w-64 h-64 bg-blue-600/10 rounded-full blur-[80px] pointer-events-none" />
         
         <div className="flex items-center gap-4 relative">
           <Button 
@@ -246,24 +246,39 @@ export const AttendanceManagement: React.FC = () => {
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
-                      className="absolute top-full left-0 right-0 mt-2 bg-[#1c1c1e] border border-white/10 rounded-3xl shadow-2xl z-20 overflow-hidden max-h-60 overflow-y-auto"
+                      className="absolute top-full left-0 right-0 mt-3 bg-[#1c1c1e] border-2 border-blue-500/30 rounded-3xl shadow-[0_30px_60px_rgba(0,0,0,0.8)] z-[999] overflow-hidden max-h-96 overflow-y-auto backdrop-blur-xl w-[calc(100vw-3rem)] sm:w-full"
                     >
-                      {filteredUsers.map(user => (
-                        <button
-                          key={user.uid}
-                          onClick={() => {
-                            setSelectedUser(user);
-                            setSearch('');
-                          }}
-                          className="w-full px-6 py-4 flex items-center justify-between hover:bg-white/5 transition-colors border-b border-white/5 last:border-none"
-                        >
-                          <div className="text-left">
-                            <p className="text-sm font-black text-white">{user.displayName}</p>
-                            <p className="text-[10px] font-bold text-white/30 uppercase">{user.position} | {user.departmentName}</p>
-                          </div>
-                          <ChevronRight className="w-4 h-4 text-white/10" />
-                        </button>
-                      ))}
+                      <div className="p-4 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
+                        <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest pl-2">검사 결과 ({filteredUsers.length}명)</p>
+                        <Button variant="ghost" size="sm" onClick={() => setSearch('')} className="h-6 w-6 p-0 rounded-full hover:bg-white/10">
+                          <X className="w-3 h-3 text-white/40" />
+                        </Button>
+                      </div>
+                      <div className="py-2">
+                        {filteredUsers.map(user => (
+                          <button
+                            key={user.uid}
+                            onClick={() => {
+                              setSelectedUser(user);
+                              setSearch('');
+                            }}
+                            className="w-full px-6 py-4 flex items-center justify-between hover:bg-blue-500/10 transition-colors border-b border-white/5 last:border-none group text-left"
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center font-black text-blue-500 group-hover:bg-blue-500 group-hover:text-white transition-all">
+                                {user.displayName?.[0] || '?'}
+                              </div>
+                              <div>
+                                <p className="text-base font-black text-white group-hover:text-blue-400 transition-colors">{user.displayName}</p>
+                                <p className="text-[10px] font-bold text-white/30 uppercase tracking-tighter">{user.position} | {user.departmentName}</p>
+                              </div>
+                            </div>
+                            <div className="bg-white/5 p-2 rounded-lg group-hover:bg-blue-500/20 group-hover:translate-x-1 transition-all">
+                              <ChevronRight className="w-4 h-4 text-white/20 group-hover:text-blue-500" />
+                            </div>
+                          </button>
+                        ))}
+                      </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -466,7 +481,7 @@ export const AttendanceManagement: React.FC = () => {
               )}
             </div>
           </>
-        ) : (
+        ) : search.length === 0 && (
           <div className="py-24 flex flex-col items-center justify-center gap-4 bg-white/[0.02] rounded-[3rem] border border-dashed border-white/5">
             <div className="w-16 h-16 bg-white/5 rounded-[2rem] flex items-center justify-center text-white/10">
               <Users className="w-8 h-8" />

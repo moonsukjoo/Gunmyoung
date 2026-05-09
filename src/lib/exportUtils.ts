@@ -56,9 +56,8 @@ export const exportToPDF = async (title: string, headers: string[], data: any[][
       <!-- Header -->
       <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #111827; padding-bottom: 30px; margin-bottom: 40px;">
         <div style="display: flex; align-items: center; gap: 15px;">
-          <div style="width: 48px; height: 48px; background: #3b82f6; border-radius: 12px; display: flex; items-center; justify-center; color: white; font-weight: 900; font-size: 20px;">KM</div>
           <div>
-            <h2 style="font-size: 24px; font-weight: 900; color: #111827; margin: 0; letter-spacing: -0.01em;">건명기업</h2>
+            <h2 style="font-size: 28px; font-weight: 900; color: #111827; margin: 0; letter-spacing: -0.01em;">건명기업</h2>
             <p style="font-size: 12px; color: #6b7280; font-weight: 500; margin: 0;">스마트 안전 및 인사 관리 솔루션</p>
           </div>
         </div>

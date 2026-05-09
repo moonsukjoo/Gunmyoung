@@ -134,8 +134,7 @@ const PCAdminLayout: React.FC<PCAdminLayoutProps> = ({ children, title }) => {
               <ShieldCheck className="text-white w-6 h-6" />
             </div>
             <div>
-              <span className="font-black text-xl tracking-tighter text-white block leading-none">KM ADMIN</span>
-              <span className="text-[10px] font-bold text-slate-500 tracking-[0.2em] uppercase mt-1 block">관리자 콘솔</span>
+              <span className="font-black text-xl tracking-tighter text-white block leading-none">건명 관리자</span>
             </div>
           </div>
           <button 
@@ -149,11 +148,6 @@ const PCAdminLayout: React.FC<PCAdminLayoutProps> = ({ children, title }) => {
         <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-8 custom-scrollbar">
           {navGroups.map((group, idx) => (
             <div key={idx} className="space-y-1">
-              {isSidebarOpen && (
-                <p className="px-4 text-[11px] font-black text-slate-500 uppercase tracking-[0.15em] mb-3">
-                  {group.group}
-                </p>
-              )}
               {group.items.map((item) => {
                 const isActive = location.pathname === item.to;
                 return (
@@ -203,16 +197,22 @@ const PCAdminLayout: React.FC<PCAdminLayoutProps> = ({ children, title }) => {
               <span className="text-lg font-black text-slate-800 tracking-tight">{new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
             </div>
 
-            <div className="flex items-center gap-4">
               <div className="flex flex-col items-end">
                 <p className="text-sm font-black text-slate-900 leading-none">{profile?.displayName || '관리자'}</p>
-                <p className="text-[10px] font-black text-blue-600 mt-1.5 px-2 py-0.5 bg-blue-50 rounded-full uppercase tracking-tight">{profile?.role}</p>
+                <p className="text-[10px] font-black text-blue-600 mt-1.5 px-2 py-0.5 bg-blue-50 rounded-full uppercase tracking-tight">
+                  {profile?.role === 'CEO' ? '대표이사' : 
+                   profile?.role === 'DIRECTOR' ? '이사/직장' :
+                   profile?.role === 'GENERAL_MANAGER' ? '부장' :
+                   profile?.role === 'SAFETY_MANAGER' ? '안전관리자' :
+                   profile?.role === 'TEAM_LEADER' ? '팀장' :
+                   profile?.role === 'GROUP_LEADER' ? '조장' :
+                   profile?.role === 'EMPLOYEE' ? '사원' : profile?.role || '관리자'}
+                </p>
               </div>
               <div className="w-12 h-12 bg-slate-100 rounded-2xl overflow-hidden ring-4 ring-slate-50 shadow-sm border border-slate-200">
                  <img src={user?.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.uid}`} alt="profile" className="w-full h-full object-cover" />
               </div>
             </div>
-          </div>
         </header>
 
         {/* Content Body */}

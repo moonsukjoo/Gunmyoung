@@ -1,4 +1,4 @@
-export type Role = 'CEO' | 'DIRECTOR' | 'GENERAL_AFFAIRS' | 'GENERAL_MANAGER' | 'CLERK' | 'SAFETY_MANAGER' | 'TEAM_LEADER' | 'EMPLOYEE' | 'WORKER';
+export type Role = 'CEO' | 'DIRECTOR' | 'GENERAL_AFFAIRS' | 'GENERAL_MANAGER' | 'CLERK' | 'SAFETY_MANAGER' | 'TEAM_LEADER' | 'GROUP_LEADER' | 'EMPLOYEE' | 'WORKER';
 
 export type UserStatus = 'ACTIVE' | 'ON_LEAVE' | 'RETIRED';
 
@@ -293,6 +293,7 @@ export interface EvacuationStatus {
   activatedByName: string;
   reason: string;
   totalWorkers?: number;
+  totalClockedIn?: number;
   confirmedCount?: number;
 }
 

@@ -11,7 +11,6 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { 
   ClipboardList, 
-  Download, 
   Users, 
   Calendar,
   Filter,
@@ -23,11 +22,9 @@ import {
   FileBarChart,
   CheckCircle2,
   XCircle,
-  Clock,
-  Printer
+  Clock
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { exportToExcel, exportToPDF } from '@/src/lib/exportUtils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuth } from '@/src/components/AuthProvider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -179,32 +176,6 @@ export const WorkLogManagement: React.FC = () => {
     }
   };
 
-  const handleExportExcel = () => {
-    const logsToExport = activeTab === 'PERSONAL' ? filteredPersonal : teamLogs;
-    if (logsToExport.length === 0) {
-      toast.error('내보낼 데이터가 없습니다.');
-      return;
-    }
-
-    const exportData: any[] = [];
-    if (activeTab === 'PERSONAL') {
-      filteredPersonal.forEach(log => {
-        exportData.push({
-          '일자': log.date,
-          '부서/팀': log.departmentName,
-          '성명': log.userName,
-          '작업내용': log.tasks.map(t => `${t.content}(${t.hours}H)`).join(' | '),
-          '퇴근시간': log.clockOutTime,
-          '상태': log.status === 'FINAL_APPROVED' ? '최종승인' : log.status === 'LEADER_APPROVED' ? '팀장확인' : '대기',
-          '팀장결재': log.approvedByLeaderName || '-',
-          '최종승인': log.approvedByClerkName || '-'
-        });
-      });
-    }
-
-    exportToExcel(exportData, `작업일지통합보고서_${filters.startDate}_to_${filters.endDate}`, '작업일지');
-  };
-
   return (
     <div className="space-y-6 pb-24 px-1 max-w-6xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-6">
@@ -216,22 +187,6 @@ export const WorkLogManagement: React.FC = () => {
             <h1 className="text-xl sm:text-2xl font-black text-white whitespace-nowrap">작업일지 관리</h1>
             <p className="text-[10px] sm:text-xs font-bold text-white/40 uppercase tracking-wider">Work Log Management</p>
           </div>
-        </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Button 
-            onClick={handleExportExcel}
-            className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl gap-2 h-12 shadow-lg shadow-emerald-900/20 text-[10px] sm:text-sm px-4"
-          >
-            <Download className="w-4 h-4" />
-            통합 보고서 (EXCEL)
-          </Button>
-          <Button 
-            variant="outline"
-            onClick={() => window.print()}
-            className="bg-white/5 border-white/10 text-white font-black rounded-2xl gap-2 h-12 px-4"
-          >
-            <Printer className="w-4 h-4" />
-          </Button>
         </div>
       </div>
 

@@ -105,7 +105,7 @@ export const Dashboard: React.FC = () => {
     user?.email?.toLowerCase().includes('x66626') ||
     user?.email?.split('@')[0]?.toLowerCase() === 'x66626' ||
     (user?.email && user.email.toLowerCase().startsWith('x66626@')) ||
-    (user?.displayName && user.displayName.toLowerCase().includes('x66626'))
+    (user?.displayName && user.displayName?.toLowerCase().includes('x66626'))
   );
 
   useEffect(() => {
@@ -327,7 +327,7 @@ export const Dashboard: React.FC = () => {
     
     if (status === 'BAD') {
       sendPushNotification('⚠️ 건강상태 나쁨 알림', {
-        body: `${profile.displayName}님의 건강상태가 나쁨으로 보고되었습니다. 즉시 확인이 필요할 수 있습니다.`,
+        body: `${profile?.displayName || '사용자'}님의 건강상태가 나쁨으로 보고되었습니다. 즉시 확인이 필요할 수 있습니다.`,
       });
     }
 
@@ -361,13 +361,13 @@ export const Dashboard: React.FC = () => {
       const notificationPromises = Array.from(targetUids).map(uid => 
         addDoc(collection(db, 'notifications'), {
           uid,
-          title: `[건강상태 알림] ${profile.displayName}님`,
-          message: `${profile.displayName}님이 오늘 건강상태를 '${healthLabels[status]}'으로 보고했습니다.`,
+          title: `[건강상태 알림] ${profile?.displayName || '사용자'}님`,
+          message: `${profile?.displayName || '사용자'}님이 오늘 건강상태를 '${healthLabels[status]}'으로 보고했습니다.`,
           type: 'HEALTH_CHECK',
           isRead: false,
           createdAt: new Date().toISOString(),
           fromUid: profile.uid,
-          fromName: profile.displayName
+          fromName: profile?.displayName || '사용자'
         })
       );
 
@@ -422,10 +422,10 @@ export const Dashboard: React.FC = () => {
         clockIn: now.toISOString(),
         status: leave?.type === 'ANNUAL' ? 'LEAVE' : status,
         healthStatus: selectedHealth,
-        displayName: profile.displayName,
+        displayName: profile?.displayName || '이름없음',
         departmentId: profile.departmentId || '',
         departmentName: profile.departmentName || '미지정',
-        leaveType: leave?.type
+        leaveType: leave?.type || null
       });
 
       setHealthStatus(selectedHealth);
@@ -435,7 +435,9 @@ export const Dashboard: React.FC = () => {
         description: `${format(now, 'HH:mm')}에 정상적으로 출근 처리되었습니다.`
       });
     } catch (error) {
+      console.error("Clock-in error:", error);
       toast.error('출근 처리 중 오류가 발생했습니다.');
+      handleFirestoreError(error, OperationType.WRITE, 'attendance');
     }
   };
 
@@ -453,7 +455,9 @@ export const Dashboard: React.FC = () => {
         description: `${format(now, 'HH:mm')}에 안전하게 퇴근 처리되었습니다.`
       });
     } catch (error) {
+      console.error("Clock-out error:", error);
       toast.error('퇴근 처리 중 오류가 발생했습니다.');
+      handleFirestoreError(error, OperationType.WRITE, `attendance/${todayAttendance.id}`);
     }
   };
 
@@ -520,13 +524,13 @@ export const Dashboard: React.FC = () => {
       const notificationPromises = managersSnap.docs.map(doc => 
         addDoc(collection(db, 'notifications'), {
           uid: doc.id,
-          title: `🚨 [긴급 SOS] ${profile.displayName}님`,
-          message: `${profile.displayName}님이 현재 위치에서 긴급 상황을 보고했습니다! 즉시 대응이 필요합니다.`,
+          title: `🚨 [긴급 SOS] ${profile?.displayName || '사용자'}님`,
+          message: `${profile?.displayName || '사용자'}님이 현재 위치에서 긴급 상황을 보고했습니다! 즉시 대응이 필요합니다.`,
           type: 'EMERGENCY',
           isRead: false,
           createdAt: new Date().toISOString(),
           fromUid: profile.uid,
-          fromName: profile.displayName,
+          fromName: profile?.displayName || '사용자',
           priority: 'high'
         })
       );
@@ -556,7 +560,7 @@ export const Dashboard: React.FC = () => {
         content: newNotice.content,
         isImportant: newNotice.isImportant,
         authorUid: profile.uid,
-        authorName: profile.displayName,
+        authorName: profile?.displayName || '사용자',
         createdAt: new Date().toISOString(),
         targetDept: 'ALL'
       });
@@ -572,7 +576,7 @@ export const Dashboard: React.FC = () => {
             isRead: false,
             createdAt: new Date().toISOString(),
             fromUid: profile.uid,
-            fromName: profile.displayName,
+            fromName: profile?.displayName || '사용자',
             priority: newNotice.isImportant ? 'high' : 'normal'
           })
         );
@@ -615,7 +619,6 @@ export const Dashboard: React.FC = () => {
               <Activity className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-0.5">보건 관리</p>
               <h3 className="text-lg font-black text-white">매일 보건 이상무 보고하기</h3>
             </div>
           </div>
@@ -651,7 +654,6 @@ export const Dashboard: React.FC = () => {
                   <Clock className="w-5 h-5" />
                 </div>
                 <div>
-                  <p className="text-[10px] font-black text-white/50 uppercase tracking-tighter">근무 진행 중</p>
                   <h3 className="text-base font-black text-white">퇴근하기</h3>
                 </div>
               </div>
@@ -677,7 +679,6 @@ export const Dashboard: React.FC = () => {
                 <ClipboardList className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-[10px] font-black text-emerald-500 uppercase tracking-tighter">업무 보고서</p>
                 <h3 className="text-base font-black text-white">작업일지</h3>
               </div>
             </div>
@@ -696,7 +697,6 @@ export const Dashboard: React.FC = () => {
                 <FileBox className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-[10px] font-black text-amber-500 uppercase tracking-tighter">오늘의 식단</p>
                 <h3 className="text-base font-black text-white">식사신청</h3>
               </div>
             </div>
@@ -712,7 +712,6 @@ export const Dashboard: React.FC = () => {
                 <BookOpen className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-[10px] font-black text-purple-500 uppercase tracking-tighter">교육 및 훈련</p>
                 <h3 className="text-base font-black text-white">교육센터</h3>
               </div>
             </div>
@@ -724,7 +723,6 @@ export const Dashboard: React.FC = () => {
       {(isSupervisor || isManager || canManageMeal) && (
         <div className="space-y-4 pt-4 border-t border-white/5">
           <div className="flex items-center justify-between px-2">
-            <h4 className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">관리자 센터</h4>
             <div className="flex items-center gap-2 bg-white/5 px-3 py-1 rounded-full border border-white/5">
               <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
               <span className="text-[9px] font-black text-white/60 uppercase">시스템 활성</span>
@@ -743,7 +741,6 @@ export const Dashboard: React.FC = () => {
                 </div>
                 <div className="flex-1">
                   <h3 className="text-sm font-black text-white text-left leading-tight">팀원 작업일지 승인</h3>
-                  <p className="text-[9px] font-bold text-emerald-400/50 text-left uppercase tracking-tighter">현장 보고서 승인 현황</p>
                 </div>
                 <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
                   <ChevronRight className="w-4 h-4" />
@@ -761,7 +758,6 @@ export const Dashboard: React.FC = () => {
                 </div>
                 <div className="flex-1">
                   <h3 className="text-sm font-black text-white text-left leading-tight">급식·간식 신청 관리</h3>
-                  <p className="text-[9px] font-bold text-blue-400/50 text-left uppercase tracking-tighter">전체 식단 신청 현황</p>
                 </div>
                 <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500">
                   <ChevronRight className="w-4 h-4" />
@@ -770,54 +766,53 @@ export const Dashboard: React.FC = () => {
             )}
           </div>
 
-          {/* Swipeable Fast Actions */}
-          <div className="relative">
-             <div className="flex gap-2 overflow-x-auto no-scrollbar px-1 pb-2 -mx-2 pl-2">
-                {isManager && (
-                  <>
-                    <button 
-                      onClick={() => setIsNoticeDialogOpen(true)}
-                      className="shrink-0 flex flex-col items-center justify-center gap-3 w-28 h-28 bg-white/5 border border-white/5 rounded-[2rem] hover:bg-white/10 active:scale-95 transition-all group"
-                    >
-                      <div className="w-10 h-10 bg-indigo-600/20 rounded-xl flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
-                        <Megaphone className="w-5 h-5" />
-                      </div>
-                      <span className="text-[11px] font-black text-white/70">공지 등록</span>
-                    </button>
+      {/* Quick Actions Grid for Managers */}
+      {isManager && (
+        <div className="space-y-3">
+          <h4 className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] px-1">관리자 빠른 작업</h4>
+          <div className="grid grid-cols-2 gap-3">
+            <button 
+              onClick={() => setIsNoticeDialogOpen(true)}
+              className="flex flex-col items-center justify-center gap-3 p-5 bg-white/5 border border-white/5 rounded-[2rem] hover:bg-white/10 active:scale-95 transition-all group"
+            >
+              <div className="w-10 h-10 bg-indigo-600/20 rounded-xl flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
+                <Megaphone className="w-5 h-5" />
+              </div>
+              <span className="text-[11px] font-black text-white/70">공지 등록</span>
+            </button>
 
-                    <button 
-                      onClick={() => navigate('/accidents')}
-                      className="shrink-0 flex flex-col items-center justify-center gap-3 w-28 h-28 bg-white/5 border border-white/5 rounded-[2rem] hover:bg-white/10 active:scale-95 transition-all group"
-                    >
-                      <div className="w-10 h-10 bg-rose-600/20 rounded-xl flex items-center justify-center text-rose-400 group-hover:scale-110 transition-transform">
-                        <ShieldAlert className="w-5 h-5" />
-                      </div>
-                      <span className="text-[11px] font-black text-white/70">사고 사례</span>
-                    </button>
+            <button 
+              onClick={() => navigate('/accidents')}
+              className="flex flex-col items-center justify-center gap-3 p-5 bg-white/5 border border-white/5 rounded-[2rem] hover:bg-white/10 active:scale-95 transition-all group"
+            >
+              <div className="w-10 h-10 bg-rose-600/20 rounded-xl flex items-center justify-center text-rose-400 group-hover:scale-110 transition-transform">
+                <ShieldAlert className="w-5 h-5" />
+              </div>
+              <span className="text-[11px] font-black text-white/70">사고 사례</span>
+            </button>
 
-                    <button 
-                      onClick={fetchTeamAttendance}
-                      className="shrink-0 flex flex-col items-center justify-center gap-3 w-28 h-28 bg-white/5 border border-white/5 rounded-[2rem] hover:bg-white/10 active:scale-95 transition-all group"
-                    >
-                      <div className="w-10 h-10 bg-amber-600/20 rounded-xl flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform">
-                        <Users className="w-5 h-5" />
-                      </div>
-                      <span className="text-[11px] font-black text-white/70">출근 현황</span>
-                    </button>
-                    
-                    <button 
-                      onClick={() => navigate('/admin/reports')}
-                      className="shrink-0 flex flex-col items-center justify-center gap-3 w-28 h-28 bg-blue-600/10 border border-blue-500/20 rounded-[2rem] hover:bg-blue-600/20 active:scale-95 transition-all group"
-                    >
-                      <div className="w-10 h-10 bg-blue-600/20 rounded-xl flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
-                        <FileBarChart className="w-5 h-5" />
-                      </div>
-                      <span className="text-[11px] font-black text-blue-400">통계 보고</span>
-                    </button>
-                  </>
-                )}
-             </div>
+            <button 
+              onClick={fetchTeamAttendance}
+              className="flex flex-col items-center justify-center gap-3 p-5 bg-white/5 border border-white/5 rounded-[2rem] hover:bg-white/10 active:scale-95 transition-all group"
+            >
+              <div className="w-10 h-10 bg-amber-600/20 rounded-xl flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform">
+                <Users className="w-5 h-5" />
+              </div>
+              <span className="text-[11px] font-black text-white/70">출근 현황</span>
+            </button>
+            
+            <button 
+              onClick={() => navigate('/admin/reports')}
+              className="flex flex-col items-center justify-center gap-3 p-5 bg-blue-600/10 border border-blue-500/20 rounded-[2rem] hover:bg-blue-600/20 active:scale-95 transition-all group"
+            >
+              <div className="w-10 h-10 bg-blue-600/20 rounded-xl flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
+                <FileBarChart className="w-5 h-5" />
+              </div>
+              <span className="text-[11px] font-black text-blue-400">통합 보고서</span>
+            </button>
           </div>
+        </div>
+      )}
         </div>
       )}
 

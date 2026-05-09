@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/src/components/AuthProvider';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -41,10 +41,12 @@ import {
   ClipboardList,
   Radio,
   FileBarChart,
-  Activity
+  Activity,
+  Target,
+  Anchor
 } from 'lucide-react';
 import { db } from '@/src/firebase';
-import { collection, query, onSnapshot, updateDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, updateDoc, doc, setDoc, getDocs, where } from 'firebase/firestore';
 import { UserProfile } from '@/src/types';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -84,13 +86,26 @@ export const Admin: React.FC = () => {
   const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
-  const [isSnailSettingsOpen, setIsSnailSettingsOpen] = useState(false);
   const [isShipSettingsOpen, setIsShipSettingsOpen] = useState(false);
   const [isBannerSettingsOpen, setIsBannerSettingsOpen] = useState(false);
+  const [isSnailSettingsOpen, setIsSnailSettingsOpen] = useState(false);
+  const [isFishingSettingsOpen, setIsFishingSettingsOpen] = useState(false);
+  const [isRouletteSettingsOpen, setIsRouletteSettingsOpen] = useState(false);
   const [isPermissionSettingsOpen, setIsPermissionSettingsOpen] = useState(false);
+  const [isSafetySensorSettingsOpen, setIsSafetySensorSettingsOpen] = useState(false);
   const [isEmergencyOpen, setIsEmergencyOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<'hr' | 'safety' | 'system'>('hr');
+
+  const [snailProbs, setSnailProbs] = useState<number[]>([1, 1, 1]);
+  const [fishingSettings, setFishingSettings] = useState([
+    { id: 'small', name: '작은 물고기', multiplier: 2, probability: 0.5, icon: '🐟' },
+    { id: 'medium', name: '큰 물고기', multiplier: 5, probability: 0.3, icon: '🐠' },
+    { id: 'rare', name: '희귀 고기', multiplier: 20, probability: 0.15, icon: '🐡' },
+    { id: 'boss', name: '보스 상어', multiplier: 100, probability: 0.04, icon: '🦈' },
+    { id: 'legend', name: '황금 전설 고기', multiplier: 500, probability: 0.01, icon: '👑' }
+  ]);
+  const [rouletteProbs, setRouletteProbs] = useState<number[]>([0.35, 0.3, 0.2, 0.1, 0.03, 0.02]);
 
   const isExcludedRole = profile && (
     ['EMPLOYEE', 'TEAM_LEADER', 'WORKER'].includes(profile.role?.toUpperCase() || '') || 
@@ -104,10 +119,15 @@ export const Admin: React.FC = () => {
     (user?.displayName && user.displayName.toLowerCase().includes('x66626'))
   );
 
-  const [snailProbs, setSnailProbs] = useState<number[]>([1, 1, 1, 1, 1]);
   const [shipSettings, setShipSettings] = useState({
     probability: 0.3,
     disabledParts: [] as string[]
+  });
+  const [safetySensorSettings, setSafetySensorSettings] = useState({
+    sensitivityLevel: 3, // Default moved to 3 for better robustness
+    impactThreshold: 90.0,
+    fallThreshold: 2.5,
+    fallDuration: 250
   });
   const [bannerText, setBannerText] = useState('안전한 하루가 되세요');
   const [evacuationStatus, setEvacuationStatus] = useState<any>(null);
@@ -164,27 +184,6 @@ export const Admin: React.FC = () => {
   useEffect(() => {
     if (!profile) return;
 
-    const unsubEntertainment = onSnapshot(doc(db, 'settings', 'entertainment'), (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        if (data.snailProbabilities) setSnailProbs(data.snailProbabilities);
-      }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'settings/entertainment');
-    });
-
-    const unsubShip = onSnapshot(doc(db, 'settings', 'shipParts'), (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        setShipSettings({
-          probability: data.probability ?? 0.3,
-          disabledParts: data.disabledParts ?? []
-        });
-      }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'settings/shipParts');
-    });
-
     const unsubBanner = onSnapshot(doc(db, 'settings', 'banner'), (snapshot) => {
       if (snapshot.exists()) {
         setBannerText(snapshot.data().text || '안전한 하루가 되세요');
@@ -193,16 +192,50 @@ export const Admin: React.FC = () => {
       handleFirestoreError(error, OperationType.GET, 'settings/banner');
     });
 
+    const unsubSnail = onSnapshot(doc(db, 'settings', 'entertainment'), (snap) => {
+       if (snap.exists()) {
+          const data = snap.data();
+          setSnailProbs(data.snailProbabilities || [1, 1, 1]);
+          if (data.fishingSettings) {
+            setFishingSettings(data.fishingSettings);
+          } else if (data.fishingProbabilities) {
+            // Migration: convert old array to new structure
+            const migrated = [...fishingSettings];
+            data.fishingProbabilities.forEach((p: number, i: number) => {
+              if (migrated[i]) migrated[i].probability = p;
+            });
+            setFishingSettings(migrated);
+          }
+          setRouletteProbs(data.rouletteProbabilities || [0.35, 0.3, 0.2, 0.1, 0.03, 0.02]);
+       }
+    }, (error) => {
+       handleFirestoreError(error, OperationType.GET, 'settings/entertainment');
+    });
+
+    const unsubSafetySensors = onSnapshot(doc(db, 'settings', 'safety_sensors'), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setSafetySensorSettings({
+          sensitivityLevel: data.sensitivityLevel || 2,
+          impactThreshold: data.impactThreshold || 40.0,
+          fallThreshold: data.fallThreshold || 3.0,
+          fallDuration: data.fallDuration || 150
+        });
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/safety_sensors');
+    });
+
     return () => {
-      unsubEntertainment();
-      unsubShip();
       unsubBanner();
+      unsubSnail();
+      unsubSafetySensors();
     };
   }, [profile]);
 
   useEffect(() => {
     const filtered = users.filter(user => 
-      user.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.employeeId?.toLowerCase().includes(searchTerm.toLowerCase())
     );
     setFilteredUsers(filtered);
@@ -244,8 +277,11 @@ export const Admin: React.FC = () => {
       { to: '/notifications', label: '공지사항 관리', icon: Megaphone, permission: 'notice_mgmt', color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
       { onClick: () => setIsBannerSettingsOpen(true), label: '배너 문구 설정', icon: Megaphone, permission: 'admin', color: 'text-violet-400', bgColor: 'bg-violet-500/20' },
       { to: '/coupons', label: '포상/룰렛 관리', icon: Trophy, permission: 'praise_coupon', color: 'text-amber-400', bgColor: 'bg-amber-500/20' },
+      { onClick: () => setIsSnailSettingsOpen(true), label: '건명 달팽이 확률 설정', icon: Radio, permission: 'admin', color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
+      { onClick: () => setIsFishingSettingsOpen(true), label: '건명 낚시 확률 설정', icon: Anchor, permission: 'admin', color: 'text-cyan-400', bgColor: 'bg-cyan-500/20' },
+      { onClick: () => setIsRouletteSettingsOpen(true), label: '건명 룰렛 확률 설정', icon: Target, permission: 'admin', color: 'text-rose-400', bgColor: 'bg-rose-500/20' },
+      { onClick: () => setIsSafetySensorSettingsOpen(true), label: '충격 감지 감도 설정', icon: ShieldAlert, permission: 'admin', color: 'text-red-400', bgColor: 'bg-red-500/20' },
       { onClick: () => setIsShipSettingsOpen(true), label: '함선 파츠 확률', icon: Ship, permission: 'admin', color: 'text-blue-300', bgColor: 'bg-blue-500/20' },
-      { onClick: () => setIsSnailSettingsOpen(true), label: '달팽이 경주 설정', icon: Zap, permission: 'admin', color: 'text-amber-300', bgColor: 'bg-amber-500/20' },
       { onClick: () => setIsPermissionSettingsOpen(true), label: '사용자 권한 관리', icon: ShieldCheck, permission: 'admin', color: 'text-slate-300', bgColor: 'bg-slate-500/20' },
     ]
   };
@@ -308,25 +344,25 @@ export const Admin: React.FC = () => {
         <p className="text-muted-foreground font-bold">건명기업 시스템의 코어 설정을 제어합니다</p>
       </header>
 
-      {/* Category Tabs */}
-      <div className="flex gap-1 bg-white/5 p-1 rounded-2xl border border-white/5">
+      {/* Category Tabs - Grid for fixed size */}
+      <div className="grid grid-cols-3 gap-1 bg-white/5 p-1.5 rounded-3xl border border-white/5 mx-1">
         {[
-          { id: 'hr', label: '인사/행정', icon: Users },
-          { id: 'safety', label: '안전/관제', icon: HardHat },
-          { id: 'system', label: '시스템/보상', icon: Settings }
+          { id: 'hr', label: '인사/기획', icon: Users, color: 'text-blue-500' },
+          { id: 'safety', label: '안전/관제', icon: HardHat, color: 'text-rose-500' },
+          { id: 'system', label: '시스템/보상', icon: Settings, color: 'text-amber-500' }
         ].map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveCategory(tab.id as any)}
             className={cn(
-              "flex-1 flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl transition-all duration-300",
+              "flex-1 min-w-[100px] flex items-center justify-center gap-2 py-3.5 rounded-2xl transition-all duration-500",
               activeCategory === tab.id 
-                ? "bg-primary text-white shadow-lg shadow-primary/20 scale-[1.02]" 
-                : "text-white/40 hover:text-white/60 hover:bg-white/5"
+                ? "bg-white/10 text-white shadow-2xl shadow-black/40 scale-[1.02] border border-white/10" 
+                : "text-white/30 hover:text-white/60"
             )}
           >
-            <tab.icon className={cn("w-4 h-4", activeCategory === tab.id ? "text-white" : "text-white/20")} />
-            <span className="text-[10px] font-black uppercase tracking-widest">{tab.label}</span>
+            <tab.icon className={cn("w-4 h-4", activeCategory === tab.id ? tab.color : "text-white/20")} />
+            <span className="text-[11px] font-black uppercase tracking-widest">{tab.label}</span>
           </button>
         ))}
       </div>
@@ -334,28 +370,121 @@ export const Admin: React.FC = () => {
       {/* Menus Content */}
       <motion.div 
         key={activeCategory}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="space-y-4"
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ type: "spring", damping: 25, stiffness: 200 }}
+        className="space-y-4 px-1"
       >
-        <div className="flex items-center justify-between px-1">
-           <div className="flex items-center gap-2">
-              {activeCategory === 'hr' && <Users className="w-4 h-4 text-blue-400" />}
-              {activeCategory === 'safety' && <HardHat className="w-4 h-4 text-rose-400" />}
-              {activeCategory === 'system' && <Settings className="w-4 h-4 text-amber-400" />}
-              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] opacity-50">
-                {activeCategory === 'hr' ? '인사 및 행정 관리' : activeCategory === 'safety' ? '스마트 안전 관제' : '시스템 및 환경 설정'}
-              </h3>
-           </div>
-           <Badge variant="outline" className="text-[9px] font-black border-white/10 text-white/40 rounded-full py-0.5">
-             {categorizedLinks[activeCategory].length}개 항목
-           </Badge>
-        </div>
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {categorizedLinks[activeCategory].map((link, idx) => renderLink(link, idx))}
         </div>
       </motion.div>
+
+      <Dialog open={isSafetySensorSettingsOpen} onOpenChange={setIsSafetySensorSettingsOpen}>
+        <DialogContent className="bg-card border-none rounded-3xl text-white max-w-sm p-6 overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="font-black text-xl">긴급 충격 감지 감도 설정</DialogTitle>
+            <DialogDescription className="text-xs font-bold text-muted-foreground">
+              추락 및 강한 충격 감지 기준을 설정합니다. (1단계: 매우 예민, 5단계: 매우 둔감)
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-6 border-y border-white/5 my-4">
+            <div className="space-y-4">
+              <div className="flex justify-between items-end">
+                <Label className="text-[10px] font-black text-primary uppercase tracking-widest">감도 단계</Label>
+                <span className="text-xl font-black text-white">{safetySensorSettings.sensitivityLevel}단계</span>
+              </div>
+              
+              <div className="grid grid-cols-5 gap-1.5">
+                {[1, 2, 3, 4, 5].map((level) => (
+                  <button
+                    key={level}
+                    onClick={() => {
+                      // Define thresholds for each level
+                      // User requested specific logic:
+                      // Level 1: 1m fall / impact (Sensitive)
+                      // Level 2: 2.5m fall / impact
+                      const thresholds = [
+                        { impact: 35.0, fall: 3.5, duration: 120 }, // 1단계: 1m 추락 및 일상 충격 (매우 예민)
+                        { impact: 65.0, fall: 3.0, duration: 180 }, // 2단계: 2.5m 추락 및 강한 충격 (민감)
+                        { impact: 90.0, fall: 2.5, duration: 250 }, // 3단계: 고소 추락 및 심각한 충격 (보통)
+                        { impact: 130.0, fall: 2.0, duration: 350 }, // 4단계: 기계적 충격 (둔감)
+                        { impact: 180.0, fall: 1.5, duration: 500 }  // 5단계: 측정 한계 수준 (매우 둔감)
+                      ];
+                      const selected = thresholds[level - 1];
+                      setSafetySensorSettings({
+                        sensitivityLevel: level,
+                        impactThreshold: selected.impact,
+                        fallThreshold: selected.fall,
+                        fallDuration: selected.duration
+                      });
+                    }}
+                    className={cn(
+                      "h-12 rounded-xl text-sm font-black transition-all",
+                      safetySensorSettings.sensitivityLevel === level
+                        ? "bg-primary text-white shadow-lg shadow-primary/20"
+                        : "bg-white/5 text-white/40 hover:bg-white/10"
+                    )}
+                  >
+                    {level}
+                  </button>
+                ))}
+              </div>
+
+              <div className="p-4 bg-white/5 rounded-2xl space-y-3">
+                <div className="flex justify-between items-center text-[10px]">
+                  <span className="font-black text-muted-foreground uppercase">관리 기준 (시뮬레이션)</span>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs font-black text-white">
+                    {safetySensorSettings.sensitivityLevel === 1 && "1단계: 약 1미터 높이에서의 추락이나 일상적인 부딪힘"}
+                    {safetySensorSettings.sensitivityLevel === 2 && "2단계: 약 2.5미터 높이에서의 추락이나 상당히 강한 충격"}
+                    {safetySensorSettings.sensitivityLevel === 3 && "3단계: 고소 작업 중 추락이나 장비 충돌 수준의 충격"}
+                    {safetySensorSettings.sensitivityLevel === 4 && "4단계: 매우 강한 기계적 충격 또는 사고 상황"}
+                    {safetySensorSettings.sensitivityLevel === 5 && "5단계: 차량 전복이나 극심한 파손 상황 전용 (가장 낮음)"}
+                  </p>
+                  <p className="text-[10px] font-bold text-muted-foreground leading-relaxed italic">
+                    * 설정값: 충격 가속도 {safetySensorSettings.impactThreshold.toFixed(1)}m/s², 추락 판정 {safetySensorSettings.fallDuration}ms
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-[10px] font-bold text-red-400 text-center italic">
+              * 설정 시 모든 사용자의 충격 감지 기준이 실시간으로 변경됩니다.
+            </p>
+          </div>
+
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              className="flex-1 h-12 rounded-2xl border-white/10 text-white font-black"
+              onClick={() => setIsSafetySensorSettingsOpen(false)}
+            >
+              취소
+            </Button>
+            <Button 
+              className="flex-1 h-12 bg-primary text-white font-black rounded-2xl shadow-lg shadow-primary/20"
+              onClick={async () => {
+                try {
+                  await setDoc(doc(db, 'settings', 'safety_sensors'), {
+                    ...safetySensorSettings,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: profile?.uid
+                  }, { merge: true });
+                  toast.success('충격 감지 감도 설정이 저장되었습니다.');
+                  setIsSafetySensorSettingsOpen(false);
+                } catch (e) {
+                  toast.error('설정 저장 중 오류가 발생했습니다.');
+                }
+              }}
+            >
+              설정 저장
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isShipSettingsOpen} onOpenChange={setIsShipSettingsOpen}>
         <DialogContent className="bg-card border-none rounded-3xl text-white max-w-md overflow-y-auto max-h-[85vh] p-6 focus:outline-none">
@@ -457,26 +586,223 @@ export const Admin: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isSnailSettingsOpen} onOpenChange={setIsSnailSettingsOpen}>
+      <Dialog open={isFishingSettingsOpen} onOpenChange={setIsFishingSettingsOpen}>
+        <DialogContent className="bg-card border-none rounded-3xl text-white max-w-sm p-6 overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="font-black text-xl">건명 낚시 (OVERHAUL) 설정</DialogTitle>
+            <DialogDescription className="text-xs font-bold text-muted-foreground">
+              물고기 종류별 이름, 배당률(Multiplier), 출현 확률을 관리합니다.
+            </DialogDescription>
+          </DialogHeader>
 
+          <div className="space-y-4 py-4 border-y border-white/5 my-4 overflow-y-auto max-h-[60vh]">
+            {fishingSettings.map((fish, index) => (
+              <div key={fish.id} className="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-3">
+                 <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                       <span className="text-xl">{fish.icon}</span>
+                       <Input 
+                         value={fish.name} 
+                         onChange={(e) => {
+                           const updated = [...fishingSettings];
+                           updated[index].name = e.target.value;
+                           setFishingSettings(updated);
+                         }}
+                         className="h-8 bg-transparent border-none font-black text-sm p-0 w-32 focus-visible:ring-0"
+                       />
+                    </div>
+                    <div className="flex items-center gap-1">
+                       <span className="text-[10px] font-black text-muted-foreground">배당</span>
+                       <Input 
+                         type="number" 
+                         value={fish.multiplier}
+                         onChange={(e) => {
+                           const updated = [...fishingSettings];
+                           updated[index].multiplier = parseFloat(e.target.value) || 0;
+                           setFishingSettings(updated);
+                         }}
+                         className="h-8 w-16 bg-white/5 border-none font-black text-right text-emerald-400"
+                       />
+                       <span className="text-[10px] font-black">x</span>
+                    </div>
+                 </div>
+
+                 <div className="space-y-1">
+                    <div className="flex justify-between text-[10px] font-black uppercase">
+                       <span className="text-primary">확률</span>
+                       <span>{(fish.probability * 100).toFixed(1)}%</span>
+                    </div>
+                    <input 
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      value={fish.probability}
+                      onChange={(e) => {
+                        const updated = [...fishingSettings];
+                        updated[index].probability = parseFloat(e.target.value);
+                        setFishingSettings(updated);
+                      }}
+                      className="w-full h-1.5 bg-white/10 rounded-full appearance-none accent-primary"
+                    />
+                 </div>
+              </div>
+            ))}
+
+            <div className="p-4 bg-primary/10 border border-primary/20 rounded-2xl">
+               <p className="text-[10px] font-black text-primary text-center uppercase">
+                  확률 합계: {fishingSettings.reduce((a, b) => a + b.probability, 0).toFixed(2)} (1.0 권장)
+               </p>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              className="flex-1 h-12 rounded-2xl border-white/10 text-white font-black"
+              onClick={() => setIsFishingSettingsOpen(false)}
+            >
+              취소
+            </Button>
+            <Button 
+              className="flex-1 h-12 bg-primary text-white font-black rounded-2xl shadow-lg shadow-primary/20"
+              onClick={async () => {
+                try {
+                  await setDoc(doc(db, 'settings', 'entertainment'), { 
+                    fishingSettings: fishingSettings,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: profile?.uid
+                  }, { merge: true });
+                  toast.success('낚시 설정이 전역 저장되었습니다.');
+                  setIsFishingSettingsOpen(false);
+                } catch (e) {
+                  toast.error('설정 저장 중 오류가 발생했습니다.');
+                }
+              }}
+            >
+              전역 적용
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isRouletteSettingsOpen} onOpenChange={setIsRouletteSettingsOpen}>
+        <DialogContent className="bg-card border-none rounded-3xl text-white max-w-sm p-6 overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="font-black text-xl">건명 룰렛 확률 설정</DialogTitle>
+            <DialogDescription className="text-xs font-bold text-muted-foreground">
+              룰렛 각 칸의 당첨 확률을 실시간으로 조절합니다.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4 border-y border-white/5 my-4 overflow-y-auto max-h-[60vh]">
+            {[
+              { label: '꽝 (0배)', index: 0 },
+              { label: '1배 당첨', index: 1 },
+              { label: '2배 당첨', index: 2 },
+              { label: '꽝 (0배) [2]', index: 3 },
+              { label: '5배 당첨', index: 4 },
+              { label: '10배 당첨', index: 5 }
+            ].map((item) => (
+              <div key={item.index} className="space-y-2">
+                <div className="flex justify-between items-center text-[10px] font-black text-rose-400 uppercase">
+                   <span>{item.label}</span>
+                   <span>{(rouletteProbs[item.index] * 100).toFixed(1)}%</span>
+                </div>
+                <input 
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={rouletteProbs[item.index]}
+                  onChange={(e) => {
+                    const updated = [...rouletteProbs];
+                    updated[item.index] = parseFloat(e.target.value);
+                    setRouletteProbs(updated);
+                  }}
+                  className="w-full accent-rose-500 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+            ))}
+
+            <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
+               <p className="text-[10px] font-black text-emerald-400 text-center uppercase">
+                  확률 합계: {rouletteProbs.reduce((a, b) => a + b, 0).toFixed(2)} (1.0 권장)
+               </p>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              className="flex-1 h-12 rounded-2xl border-white/10 text-white font-black"
+              onClick={() => setIsRouletteSettingsOpen(false)}
+            >
+              취소
+            </Button>
+            <Button 
+              className="flex-1 h-12 bg-rose-500 text-white font-black rounded-2xl shadow-lg shadow-rose-500/20"
+              onClick={async () => {
+                try {
+                  await setDoc(doc(db, 'settings', 'entertainment'), { 
+                    rouletteProbabilities: rouletteProbs,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: profile?.uid
+                  }, { merge: true });
+                  toast.success('룰렛 확률 설정이 저장되었습니다.');
+                  setIsRouletteSettingsOpen(false);
+                } catch (e) {
+                  toast.error('설정 저장 중 오류가 발생했습니다.');
+                }
+              }}
+            >
+              설정 저장
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      
+      <Dialog open={isSnailSettingsOpen} onOpenChange={setIsSnailSettingsOpen}>
         <DialogContent className="bg-card border-none rounded-3xl text-white max-w-sm">
-           <DialogHeader><DialogTitle className="font-black">달팽이 확률 설정</DialogTitle></DialogHeader>
+           <DialogHeader><DialogTitle className="font-black text-xl">달팽이 레이스 확률</DialogTitle></DialogHeader>
            <div className="space-y-4 py-4">
               {snailProbs.map((p, i) => (
-                <div key={i} className="flex flex-col gap-2 p-4 bg-white/5 rounded-2xl">
+                <div key={i} className="flex flex-col gap-2 p-4 bg-white/5 rounded-2xl border border-white/5">
                    <div className="flex justify-between items-center text-[10px] font-black uppercase text-muted-foreground">
-                      <span>{i+1}번 달팽이</span>
-                      <span>{p.toFixed(1)}x</span>
+                      <span>{i+1}번 달팽이 (스피드 계수)</span>
+                      <span className="text-primary">{p.toFixed(1)}x</span>
                    </div>
-                   <input type="range" min="0.5" max="3" step="0.1" value={p} onChange={e => {
-                      const updated = [...snailProbs]; updated[i] = parseFloat(e.target.value); setSnailProbs(updated);
-                   }} className="w-full h-2 bg-white/10 rounded-full appearance-none accent-primary" />
+                   <input 
+                     type="range" 
+                     min="0.5" 
+                     max="3" 
+                     step="0.1" 
+                     value={p} 
+                     onChange={e => {
+                        const updated = [...snailProbs]; 
+                        updated[i] = parseFloat(e.target.value); 
+                        setSnailProbs(updated);
+                     }} 
+                     className="w-full h-2 bg-white/10 rounded-full appearance-none accent-primary" 
+                   />
                 </div>
               ))}
+              <p className="text-[10px] font-bold text-muted-foreground text-center italic">
+                * 계수가 높을수록 해당 달팽이가 승리할 확률이 높아집니다.
+              </p>
            </div>
-           <Button className="w-full h-14 bg-primary text-white font-black rounded-2xl" onClick={async () => {
-             await setDoc(doc(db, 'settings', 'entertainment'), { snailProbabilities: snailProbs }, { merge: true });
-             toast.success('저장 완료'); setIsSnailSettingsOpen(false);
+           <Button className="w-full h-14 bg-primary text-white font-black rounded-2xl shadow-lg shadow-primary/20" onClick={async () => {
+             try {
+               await setDoc(doc(db, 'settings', 'entertainment'), { 
+                 snailProbabilities: snailProbs,
+                 updatedAt: new Date().toISOString(),
+                 updatedBy: profile?.uid
+               }, { merge: true });
+               toast.success('달팽이 확률 설정이 저장되었습니다.'); 
+               setIsSnailSettingsOpen(false);
+             } catch (e) {
+               toast.error('저장 중 오류가 발생했습니다.');
+             }
            }}>설정 저장</Button>
         </DialogContent>
       </Dialog>
@@ -612,25 +938,36 @@ export const Admin: React.FC = () => {
               <div className="space-y-6">
                 {/* Real-time Stats */}
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-white/5 p-6 rounded-2xl border border-white/5 text-center">
-                    <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">확인 인원</p>
-                    <p className="text-4xl font-black text-primary">{evacuationCheckins.length}</p>
+                  <div className="bg-white/5 p-6 rounded-2xl border border-white/5 text-center flex flex-col items-center justify-center">
+                    <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-2">출근 인원 대비</p>
+                    <div className="relative">
+                      <p className="text-4xl font-black text-blue-500">{evacuationCheckins.length}</p>
+                      <p className="text-[10px] font-bold text-blue-500/40 absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                        / {evacuationStatus.totalClockedIn || '-'} 명
+                      </p>
+                    </div>
                   </div>
-                  <div className="bg-red-600/10 p-6 rounded-2xl border border-red-600/20 text-center">
-                    <p className="text-[10px] font-black text-red-600/60 uppercase tracking-widest mb-1">미확인 인원</p>
-                    <p className="text-4xl font-black text-red-600">
-                      {Math.max(0, (evacuationStatus.totalWorkers || users.length) - evacuationCheckins.length)}
-                    </p>
+                  <div className="bg-white/5 p-6 rounded-2xl border border-white/5 text-center flex flex-col items-center justify-center">
+                    <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-2">전체 인원 대비</p>
+                    <div className="relative">
+                      <p className="text-4xl font-black text-emerald-500">{evacuationCheckins.length}</p>
+                      <p className="text-[10px] font-bold text-emerald-500/40 absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                        / {evacuationStatus.totalWorkers || users.length} 명
+                      </p>
+                    </div>
                   </div>
                 </div>
 
-                {/* Progress Bar */}
-                <div className="bg-white/5 h-4 rounded-full overflow-hidden">
-                  <motion.div 
-                    initial={{ width: 0 }}
-                    animate={{ width: `${(evacuationCheckins.length / (evacuationStatus.totalWorkers || users.length)) * 100}%` }}
-                    className="h-full bg-primary"
-                  />
+                <div className="pt-4 space-y-2">
+                  <p className="text-[10px] font-black text-red-600/60 uppercase tracking-widest px-1">미확인 인원: {Math.max(0, (evacuationStatus.totalWorkers || users.length) - evacuationCheckins.length)}명</p>
+                  {/* Progress Bar */}
+                  <div className="bg-white/5 h-4 rounded-full overflow-hidden">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${(evacuationCheckins.length / (evacuationStatus.totalWorkers || users.length)) * 100}%` }}
+                      className="h-full bg-primary"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-3">
@@ -668,13 +1005,23 @@ export const Admin: React.FC = () => {
                     onClick={async () => {
                       if (window.confirm('대피 상황을 종료하시겠습니까?')) {
                         const now = new Date().toISOString();
-                        await updateDoc(doc(db, 'evacuation', 'status'), { isActive: false });
+                        const endedBy = profile?.displayName || user?.displayName || user?.email || 'Admin';
+                        
+                        await setDoc(doc(db, 'evacuation', 'status'), { 
+                          isActive: false,
+                          endedAt: now,
+                          endedBy: endedBy
+                        }, { merge: true });
+
                         if (evacuationStatus?.id) {
-                          await updateDoc(doc(db, 'evacuations', evacuationStatus.id), {
+                          await setDoc(doc(db, 'evacuations', evacuationStatus.id), {
+                            isActive: false,
                             status: 'FINISHED',
                             finishedAt: now,
+                            endedAt: now,
+                            endedBy: endedBy,
                             confirmedCount: evacuationCheckins.length
-                          });
+                          }, { merge: true });
                         }
                         toast.success('대피 상황이 종료되었습니다.');
                       }
@@ -718,6 +1065,11 @@ export const Admin: React.FC = () => {
                     const id = new Date().getTime().toString();
                     const now = new Date().toISOString();
                     
+                    // Count clocked in workers
+                    const today = new Date().toISOString().split('T')[0];
+                    const attSnap = await getDocs(query(collection(db, 'attendance'), where('date', '==', today)));
+                    const clockedInCount = attSnap.docs.filter(doc => !doc.data().clockOut).length;
+
                     const evData = {
                       id,
                       isActive: true,
@@ -726,6 +1078,7 @@ export const Admin: React.FC = () => {
                       activatedByName: profile?.displayName,
                       reason,
                       totalWorkers: users.length,
+                      totalClockedIn: clockedInCount || users.length, // Fallback to total if 0
                       confirmedCount: 0
                     };
 

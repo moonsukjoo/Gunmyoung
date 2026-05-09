@@ -87,7 +87,7 @@ export const SafetyRanking: React.FC = () => {
   const filteredUsers = useMemo(() => {
     return users
       .filter(user => {
-        const matchesSearch = user.displayName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        const matchesSearch = (user.displayName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || 
                              user.employeeId?.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesDept = selectedDeptId === 'all' || user.departmentId === selectedDeptId;
         return matchesSearch && matchesDept;

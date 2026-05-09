@@ -143,8 +143,8 @@ export const LeaveManagement: React.FC = () => {
   const pendingRequests = requests.filter(r => r.status === 'PENDING');
   const historyRequests = requests.filter(r => r.status !== 'PENDING').slice(0, 50);
   const filteredUsers = users.filter(u => 
-    u.displayName.includes(searchTerm) || u.employeeId?.includes(searchTerm)
-  ).sort((a, b) => a.displayName.localeCompare(b.displayName));
+    (u.displayName || '').includes(searchTerm) || u.employeeId?.includes(searchTerm)
+  ).sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));
 
   const handleExportExcel = () => {
     if (requests.length === 0) {

@@ -156,8 +156,8 @@ const CommentSection: React.FC<{ praiseId: string; userProfile: UserProfile | nu
         createdAt: new Date().toISOString()
       });
       // Just for UX, in real app we'd check permissions
-      await addDoc(collection(db, 'praises', praiseId, 'comments'), { id: commentId } as any); 
-      // wait, deleteDoc is needed
+      await deleteDoc(doc(db, 'praises', praiseId, 'comments', commentId));
+      toast.success('댓글이 삭제되었습니다.');
     } catch (err) {}
   };
 
@@ -300,8 +300,8 @@ export const PraiseFeed: React.FC = () => {
 
     const filtered = allUsers.filter(u => 
       u.uid !== profile?.uid && 
-      (u.displayName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-       u.employeeId.toLowerCase().includes(searchTerm.toLowerCase()))
+      ((u.displayName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || 
+       (u.employeeId?.toLowerCase() || '').includes(searchTerm.toLowerCase()))
     ).slice(0, 5);
     
     setSearchResults(filtered);

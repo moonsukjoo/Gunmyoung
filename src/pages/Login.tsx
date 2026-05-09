@@ -321,7 +321,7 @@ export const Login: React.FC = () => {
         </div>
 
         <div className="pt-6 text-center">
-          <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest opacity-20">© 2024 건명기업 HRM</p>
+          <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest opacity-20">© 2025 건명기업 HRM</p>
         </div>
       </div>
     </div>

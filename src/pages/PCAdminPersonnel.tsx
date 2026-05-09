@@ -50,7 +50,7 @@ const PCAdminPersonnel: React.FC = () => {
 
   const filteredUsers = users.filter(user => {
     const matchesSearch = 
-      user.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (user.displayName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
       user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.phoneNumber?.includes(searchTerm);
     

@@ -26,16 +26,13 @@ import {
   Search,
   ChevronRight,
   Trash2,
-  X,
-  Download,
-  FileText
+  X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
 import { GlowLoading } from '@/src/components/GlowLoading';
-import { exportToExcel, exportToPDF } from '@/src/lib/exportUtils';
 
 export const AccidentReport: React.FC = () => {
   const { profile } = useAuth();
@@ -147,65 +144,16 @@ export const AccidentReport: React.FC = () => {
     c.location.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleExportExcel = () => {
-    if (cases.length === 0) {
-      toast.error('내보낼 데이터가 없습니다.');
-      return;
-    }
-    const data = cases.map(c => ({
-      '날짜': c.date,
-      '사고명': c.title,
-      '장소': c.location,
-      '심각도': c.severity === 'HIGH' ? '중대' : c.severity === 'MEDIUM' ? '경미' : '아차',
-      '제보자': c.reportedBy,
-      '내용': c.description,
-      '조치사항': c.measures || '-'
-    }));
-    exportToExcel(data, `사고즉보내역_${format(new Date(), 'yyyyMMdd')}`, '사고기록');
-  };
-
-  const handleExportPDF = async () => {
-    if (cases.length === 0) {
-      toast.error('내보낼 데이터가 없습니다.');
-      return;
-    }
-    const headers = ['날짜', '사고명', '장소', '심각도', '제보자'];
-    const data = cases.map(c => [
-      c.date,
-      c.title,
-      c.location,
-      c.severity === 'HIGH' ? '중대' : c.severity === 'MEDIUM' ? '경미' : '아차',
-      c.reportedBy
-    ]);
-    await exportToPDF('사고 즉보 통합 보고서', headers, data, `사고보고서_${format(new Date(), 'yyyyMMdd')}`);
-  };
-
   if (pageLoading) return <GlowLoading message="SECURITY" subMessage="Accessing Accident Logs..." />;
 
   return (
-    <div className="space-y-6 pb-24 px-2">
+    <div className="space-y-6 pb-24 px-2 overflow-x-hidden">
       <header className="py-6 flex justify-between items-end">
         <div>
            <h2 className="text-3xl font-black tracking-tight text-white leading-tight">사고 즉보</h2>
            <p className="text-muted-foreground font-bold">현장의 위험 요소를 즉시 보고하세요</p>
         </div>
         <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={handleExportExcel}
-            className="h-12 rounded-2xl bg-white/5 border-white/10 text-white font-black text-xs gap-2"
-          >
-            <Download className="w-4 h-4 text-emerald-400" /> 엑셀
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={handleExportPDF}
-            className="h-12 rounded-2xl bg-white/5 border-white/10 text-white font-black text-xs gap-2"
-          >
-            <FileText className="w-4 h-4 text-rose-400" /> PDF
-          </Button>
           {isSafetyManager && (
             <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
               <DialogTrigger 
@@ -213,7 +161,7 @@ export const AccidentReport: React.FC = () => {
               >
                  <Plus className="w-4 h-4" /> 제보
               </DialogTrigger>
-              <DialogContent className="bg-card border-none rounded-3xl text-white max-w-sm p-8 space-y-6 overflow-y-auto max-h-[90vh]">
+              <DialogContent className="bg-card border-none rounded-3xl text-white max-w-xl p-8 space-y-6 overflow-y-auto max-h-[90vh]">
                  <DialogHeader>
                     <DialogTitle className="text-xl font-black tracking-tight">사고 제보하기</DialogTitle>
                  </DialogHeader>
@@ -352,9 +300,8 @@ export const AccidentReport: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
-      {/* Detail View Dialog */}
       <Dialog open={!!selectedCase} onOpenChange={(open) => !open && setSelectedCase(null)}>
-        <DialogContent className="bg-card border-none rounded-3xl text-white max-w-sm overflow-y-auto max-h-[90vh] p-0 focus:outline-none">
+        <DialogContent className="bg-card border-none rounded-3xl text-white max-w-xl overflow-y-auto max-h-[90vh] p-0 focus:outline-none">
           {selectedCase && (
             <div className="flex flex-col">
               {/* Header Image or Placeholder */}

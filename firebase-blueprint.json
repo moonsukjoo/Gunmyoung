@@ -440,6 +440,18 @@
       },
       "required": ["uid", "userName", "startDate", "endDate", "status", "createdAt"]
     },
+    "GameSettings": {
+      "title": "Game Probability Settings",
+      "description": "Global settings for games like Roulette, Snail Race, and Fishing",
+      "type": "object",
+      "properties": {
+        "rouletteProbabilities": { "type": "array", "items": { "type": "number" } },
+        "snailProbabilities": { "type": "array", "items": { "type": "number" } },
+        "fishingProbabilities": { "type": "array", "items": { "type": "number" } },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string" }
+      }
+    },
     "SnackRequest": {
       "title": "Snack Request",
       "description": "Team-level request for snack delivery",
@@ -547,6 +559,10 @@
     "/redemptionRequests/{requestId}": {
       "schema": "RedemptionRequest",
       "description": "Point redemption requests"
+    },
+    "/settings/entertainment": {
+      "schema": "GameSettings",
+      "description": "Global probabilities for playground games"
     },
     "/settings/banner": {
       "schema": "Banner",

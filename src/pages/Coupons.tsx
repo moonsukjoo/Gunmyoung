@@ -324,7 +324,7 @@ export const Coupons: React.FC = () => {
                             .filter(u => u.uid !== profile?.uid)
                             .filter(u => {
                               const query = searchQuery.toLowerCase();
-                              return u.displayName.toLowerCase().includes(query) || 
+                              return (u.displayName?.toLowerCase() || '').includes(query) || 
                                      u.employeeId?.toLowerCase().includes(query) ||
                                      u.departmentName?.toLowerCase().includes(query);
                             }).length === 0 ? (
@@ -337,7 +337,7 @@ export const Coupons: React.FC = () => {
                                 .filter(u => u.uid !== profile?.uid)
                                 .filter(u => {
                                   const query = searchQuery.toLowerCase();
-                                  return u.displayName.toLowerCase().includes(query) || 
+                                  return (u.displayName?.toLowerCase() || '').includes(query) || 
                                          u.employeeId?.toLowerCase().includes(query) ||
                                          u.departmentName?.toLowerCase().includes(query);
                                 })
@@ -352,7 +352,7 @@ export const Coupons: React.FC = () => {
                                   >
                                     <div className="flex items-center gap-4 text-left">
                                        <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center font-black text-xl border-2 border-white/5 text-white/20 shadow-sm group-hover:bg-emerald-500 group-hover:text-white group-hover:border-emerald-500 transition-all">
-                                         {user.displayName.charAt(0)}
+                                         {user.displayName?.charAt(0) || '?'}
                                        </div>
                                        <div className="flex flex-col">
                                          <div className="flex items-center gap-2">

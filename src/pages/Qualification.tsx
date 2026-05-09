@@ -63,8 +63,8 @@ export const Qualification: React.FC = () => {
         name: '비계 설치 자격',
         category: 'SCAFFOLDING',
         level: '전문급',
-        issueDate: '2024-05-10',
-        expiryDate: '2027-05-09',
+        issueDate: '2025-05-10',
+        expiryDate: '2028-05-09',
         issuer: '한국산업인력공단'
       }
     ];
@@ -73,7 +73,7 @@ export const Qualification: React.FC = () => {
       {
         id: 'p1',
         name: '안전벨트 (Full Body Harness)',
-        serialNumber: 'S-2024-0012',
+        serialNumber: 'S-2025-0012',
         lastInspection: '2026-03-01',
         nextInspection: '2026-09-01',
         status: 'SAFE'

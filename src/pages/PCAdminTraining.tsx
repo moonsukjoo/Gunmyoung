@@ -55,10 +55,10 @@ const PCAdminTraining: React.FC = () => {
       // Dummy data for visual representation if collection empty
       if (records.length === 0) {
         setRecords([
-          { id: '1', userName: '장동건', userRole: 'A공구 팀장', courseName: '2024년 상반기 고소작업 안전교육', completionDate: '2024-03-15', expiryDate: '2025-03-15', status: 'valid', score: 95, instructor: '이건명' },
-          { id: '2', userName: '이순신', userRole: 'B공구 조장', courseName: '신규 입사자 기초 안전 보건 교육', completionDate: '2024-04-10', expiryDate: '2025-04-10', status: 'valid', score: 100, instructor: '김관리' },
-          { id: '3', userName: '강감찬', userRole: 'C공구 기공', courseName: '밀폐 공간 작업 특별 안전 교육', completionDate: '2023-05-20', expiryDate: '2024-05-20', status: 'expiring', score: 88, instructor: '최안전' },
-          { id: '4', userName: '을지문덕', userRole: '현장 지원', courseName: '응급처치 및 심폐소생술 교육', completionDate: '2023-01-10', expiryDate: '2024-01-10', status: 'expired', score: 92, instructor: '정의료' },
+          { id: '1', userName: '장동건', userRole: 'A공구 팀장', courseName: '2025년 상반기 고소작업 안전교육', completionDate: '2025-03-15', expiryDate: '2026-03-15', status: 'valid', score: 95, instructor: '이건명' },
+          { id: '2', userName: '이순신', userRole: 'B공구 조장', courseName: '신규 입사자 기초 안전 보건 교육', completionDate: '2025-04-10', expiryDate: '2026-04-10', status: 'valid', score: 100, instructor: '김관리' },
+          { id: '3', userName: '강감찬', userRole: 'C공구 기공', courseName: '밀폐 공간 작업 특별 안전 교육', completionDate: '2025-05-20', expiryDate: '2026-05-20', status: 'expiring', score: 88, instructor: '최안전' },
+          { id: '4', userName: '을지문덕', userRole: '현장 지원', courseName: '응급처치 및 심폐소생술 교육', completionDate: '2025-01-10', expiryDate: '2026-01-10', status: 'expired', score: 92, instructor: '정의료' },
         ]);
       }
     } finally {
@@ -84,7 +84,7 @@ const PCAdminTraining: React.FC = () => {
       <div className="max-w-[1600px] mx-auto space-y-10">
         <div className="flex justify-between items-end">
           <div className="space-y-4">
-            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Training & Certification</h2>
+            <h2 className="text-3xl font-black text-slate-900 tracking-tight">교육 및 평가 관리</h2>
             <p className="text-slate-500 font-medium">건명기업 임직원들의 안전 교육 이수 현황과 직무 자격을 체계적으로 관리합니다.</p>
           </div>
           <div className="flex gap-3">

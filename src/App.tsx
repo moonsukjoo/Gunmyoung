@@ -61,9 +61,11 @@ import { AltitudeTracker } from './components/AltitudeTracker';
 import { GhostGuardTracker } from './components/GhostGuardTracker';
 import { SafetySensorProvider } from './components/SafetySensorProvider';
 
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 import { GlowLoading } from './components/GlowLoading';
+import { doc, onSnapshot, setDoc, updateDoc, addDoc, collection } from 'firebase/firestore';
+import { db } from '@/src/firebase';
 
 const ProtectedRoute = ({ children, roles, permission }: { children: React.ReactNode, roles?: string[], permission?: string }) => {
   const { user, profile, loading } = useAuth();
@@ -116,9 +118,37 @@ const ProtectedRoute = ({ children, roles, permission }: { children: React.React
   return <Layout>{children}</Layout>;
 };
 
+const ErrorLogger = () => {
+  const { user } = useAuth();
+  
+  React.useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      console.error("Global Error Captured:", event.message);
+      if (db) {
+        addDoc(collection(db, 'client_errors'), {
+          message: event.message,
+          filename: event.filename,
+          lineno: event.lineno,
+          colno: event.colno,
+          stack: event.error?.stack,
+          uid: user?.uid,
+          email: user?.email,
+          url: window.location.href,
+          timestamp: new Date().toISOString()
+        }).catch(err => console.error("Could not log error to Firestore:", err));
+      }
+    };
+    window.addEventListener('error', handleError);
+    return () => window.removeEventListener('error', handleError);
+  }, [user]);
+
+  return null;
+};
+
 export default function App() {
   return (
     <AuthProvider>
+      <ErrorLogger />
       <SafetySensorProvider>
         <NotificationHandler />
         <FontSizeManager />

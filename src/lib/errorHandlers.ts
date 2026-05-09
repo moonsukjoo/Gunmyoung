@@ -1,4 +1,4 @@
-import { auth } from '../firebase';
+import { auth } from '../firebase-init';
 
 export enum OperationType {
   CREATE = 'create',
@@ -45,5 +45,6 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   }
   const errorJson = JSON.stringify(errInfo);
   console.error('Firestore Error: ', errorJson);
-  throw new Error(errorJson);
+  // Disabled throwing to prevent white screen crashes in async callbacks
+  // toast.error(`Firestore Error: ${errInfo.operationType} on ${errInfo.path}`);
 }
