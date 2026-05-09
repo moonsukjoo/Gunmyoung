@@ -17,6 +17,7 @@
     "@capacitor/filesystem": "^8.1.2",
     "@capacitor/local-notifications": "^8.0.2",
     "@capacitor/motion": "^8.0.0",
+    "@capacitor/share": "^8.0.1",
     "@fontsource-variable/geist": "^5.2.8",
     "@google/genai": "^1.29.0",
     "@react-three/cannon": "^6.6.0",

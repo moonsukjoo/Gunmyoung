@@ -126,13 +126,14 @@ export const exportToPDF = async (title: string, headers: string[], data: any[][
   
   try {
     const canvas = await html2canvas(container, {
-      scale: 1.5, // Balanced resolution
+      scale: 1.2, // Reduced scale for better memory management on mobile
       useCORS: true,
       logging: false,
       backgroundColor: '#ffffff'
     });
     
-    const imgData = canvas.toDataURL('image/jpeg', 0.85); // Use JPEG with compression to reduce 80MB size
+    // Using medium quality JPEG significantly reduces memory usage and file size
+    const imgData = canvas.toDataURL('image/jpeg', 0.75); 
     const pdf = new jsPDF('p', 'mm', 'a4');
     
     const pdfWidth = pdf.internal.pageSize.getWidth();
