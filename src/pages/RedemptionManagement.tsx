@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/src/components/AuthProvider';
-import { db, handleFirestoreError, OperationType } from '@/src/firebase';
+import { useAuth } from '@/components/AuthProvider';
+import { db, handleFirestoreError, OperationType } from '@/firebase';
 import { collection, query, onSnapshot, orderBy, doc, updateDoc, increment, getDoc, addDoc } from 'firebase/firestore';
-import { RedemptionRequest } from '@/src/types';
+import { RedemptionRequest } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -34,8 +34,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
-import { GlowLoading } from '@/src/components/GlowLoading';
-import { exportToExcel, exportToPDF } from '@/src/lib/exportUtils';
+import { GlowLoading } from '@/components/GlowLoading';
+import { exportToExcel, exportToPDF } from '@/lib/exportUtils';
 
 export const RedemptionManagement: React.FC = () => {
   const { profile } = useAuth();
@@ -166,19 +166,19 @@ export const RedemptionManagement: React.FC = () => {
     <div className="space-y-6 pb-24 px-1">
       <header className="py-6 space-y-4">
         <div>
-          <h2 className="text-3xl font-black tracking-tight text-white leading-tight">현물 신청 관리</h2>
+          <h2 className="text-3xl font-black tracking-tight text-foreground leading-tight">현물 신청 관리</h2>
           <p className="text-muted-foreground font-bold">포인트 환전 신청을 승인하고 지급을 관리하세요</p>
         </div>
 
         {/* Filter Tabs */}
-        <div className="flex bg-card p-1 rounded-2xl border border-white/5 overflow-x-auto scrollbar-hide">
+        <div className="flex bg-card p-1 rounded-2xl border border-border overflow-x-auto scrollbar-hide">
           {(['PENDING', 'APPROVED', 'COMPLETED', 'REJECTED', 'ALL'] as const).map((tab) => (
              <Button
                 key={tab}
                 variant="ghost"
                 className={cn(
                   "flex-1 h-10 font-black text-xs rounded-xl transition-all whitespace-nowrap px-4",
-                  filter === tab ? "bg-white/5 text-primary" : "text-muted-foreground hover:text-white"
+                  filter === tab ? "bg-muted text-primary" : "text-muted-foreground hover:text-foreground"
                 )}
                 onClick={() => setFilter(tab)}
              >
@@ -195,7 +195,7 @@ export const RedemptionManagement: React.FC = () => {
                type="month" 
                value={exportMonth}
                onChange={(e) => setExportMonth(e.target.value)}
-               className="w-full h-12 bg-card border border-white/5 rounded-xl px-4 text-xs font-black text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none"
+               className="w-full h-12 bg-card border border-border rounded-xl px-4 text-xs font-black text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none"
                style={{ colorScheme: 'dark' }}
              />
            </div>
@@ -218,7 +218,7 @@ export const RedemptionManagement: React.FC = () => {
 
       {/* Stats Summary */}
       <div className="grid grid-cols-2 gap-3">
-         <Card className="bg-card border-none rounded-2xl border border-white/5 overflow-hidden">
+         <Card className="bg-card border-none rounded-2xl border border-border overflow-hidden">
             <CardContent className="p-4 flex flex-col gap-1 items-center">
                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">대기 총액</span>
                <span className="text-xl font-black text-amber-500">
@@ -226,7 +226,7 @@ export const RedemptionManagement: React.FC = () => {
                </span>
             </CardContent>
          </Card>
-         <Card className="bg-card border-none rounded-2xl border border-white/5 overflow-hidden">
+         <Card className="bg-card border-none rounded-2xl border border-border overflow-hidden">
             <CardContent className="p-4 flex flex-col gap-1 items-center">
                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">금월 지급액</span>
                <span className="text-xl font-black text-emerald-500">
@@ -248,7 +248,7 @@ export const RedemptionManagement: React.FC = () => {
                 layout
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-card p-5 rounded-2xl border border-white/5 flex items-center justify-between group active:scale-[0.99] transition-all cursor-pointer"
+                className="bg-card p-5 rounded-2xl border border-border flex items-center justify-between group active:scale-[0.99] transition-all cursor-pointer"
                 onClick={() => {
                   setSelectedReq(req);
                   setIsDetailOpen(true);
@@ -260,7 +260,7 @@ export const RedemptionManagement: React.FC = () => {
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-black text-white">{req.userName}</span>
+                      <span className="text-sm font-black text-foreground">{req.userName}</span>
                       <Badge className={cn("rounded-lg font-black text-[9px] border-none px-1.5 h-4", statusInfo.bgColor, statusInfo.color)}>
                         {statusInfo.label}
                       </Badge>
@@ -269,24 +269,24 @@ export const RedemptionManagement: React.FC = () => {
                     <p className="text-xs font-black text-primary">{req.amount.toLocaleString()}원 ({req.pointsRequested}P)</p>
                   </div>
                 </div>
-                <MoreVertical className="w-5 h-5 text-white/10" />
+                <MoreVertical className="w-5 h-5 text-muted-foreground/30" />
               </motion.div>
             );
           })}
         </AnimatePresence>
 
         {!loading && filteredRequests.length === 0 && (
-          <div className="py-20 text-center opacity-20 bg-card rounded-2xl border border-dashed border-white/10">
-            <p className="text-xs font-black">내역이 없습니다</p>
+          <div className="py-20 text-center opacity-40 bg-card rounded-2xl border border-dashed border-border">
+            <p className="text-xs font-black text-foreground">내역이 없습니다</p>
           </div>
         )}
       </div>
 
       {/* Action Dialog */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="bg-card border-none rounded-3xl text-white p-0 overflow-hidden max-w-sm">
+        <DialogContent className="bg-card border border-border rounded-3xl text-foreground p-0 overflow-hidden max-w-sm">
           <DialogHeader className="p-8 pb-4">
-            <DialogTitle className="text-xl font-black">신청 상세 정보</DialogTitle>
+            <DialogTitle className="text-xl font-black text-foreground">신청 상세 정보</DialogTitle>
             <DialogDescription className="text-muted-foreground text-xs font-bold">신청 내역을 확인하고 승인 여부를 결정하세요</DialogDescription>
           </DialogHeader>
           
@@ -294,23 +294,23 @@ export const RedemptionManagement: React.FC = () => {
             <>
               <div className="px-8 space-y-6">
                 {/* Details card */}
-                <div className="bg-white/5 rounded-2xl p-6 space-y-4">
+                <div className="bg-muted p-6 space-y-4 rounded-2xl">
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-muted-foreground font-black uppercase">신청인</span>
-                    <span className="text-white font-black">{selectedReq.userName}</span>
+                    <span className="text-foreground font-black">{selectedReq.userName}</span>
                   </div>
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-muted-foreground font-black uppercase">신청 포인트</span>
-                    <span className="text-white font-black">{selectedReq.pointsRequested.toLocaleString()} P</span>
+                    <span className="text-foreground font-black">{selectedReq.pointsRequested.toLocaleString()} P</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-muted-foreground font-black uppercase">지급 금액</span>
                     <span className="text-xl font-black text-primary">{selectedReq.amount.toLocaleString()}원</span>
                   </div>
-                  <div className="pt-4 border-t border-white/5">
+                  <div className="pt-4 border-t border-border">
                     <div className="flex justify-between items-center text-[10px]">
                       <span className="text-muted-foreground font-black uppercase">신청일시</span>
-                      <span className="text-white font-bold">{format(new Date(selectedReq.createdAt), 'yyyy.MM.dd HH:mm')}</span>
+                      <span className="text-foreground font-bold">{format(new Date(selectedReq.createdAt), 'yyyy.MM.dd HH:mm')}</span>
                     </div>
                   </div>
                 </div>

@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { db, handleFirestoreError, OperationType } from '@/src/firebase';
+import { db, handleFirestoreError, OperationType } from '@/firebase';
 import { collection, onSnapshot, query, orderBy, deleteDoc, doc } from 'firebase/firestore';
-import { Notice } from '@/src/types';
-import { useAuth } from '@/src/components/AuthProvider';
+import { Notice } from '@/types';
+import { useAuth } from '@/components/AuthProvider';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,7 +24,7 @@ import {
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { grantRandomShipPart } from '@/src/services/shipService';
+import { grantRandomShipPart } from '@/services/shipService';
 
 export const Notices: React.FC = () => {
   const { profile } = useAuth();
@@ -71,15 +71,15 @@ export const Notices: React.FC = () => {
   return (
     <div className="space-y-6 pb-24 px-2">
       <header className="py-6">
-        <h2 className="text-3xl font-black tracking-tight text-white leading-tight">공지사항</h2>
+        <h2 className="text-3xl font-black tracking-tight text-foreground leading-tight">공지사항</h2>
         <p className="text-muted-foreground font-bold">회사 소식을 가장 빠르게 확인하세요</p>
       </header>
 
       <div className="relative">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
         <Input 
           placeholder="검색" 
-          className="h-14 pl-11 bg-card border-white/5 rounded-2xl text-white font-bold"
+          className="h-14 pl-11 bg-card border-border rounded-2xl text-foreground font-bold placeholder:text-muted-foreground/30"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
@@ -89,7 +89,7 @@ export const Notices: React.FC = () => {
         {filteredNotices.length > 0 ? filteredNotices.map((notice) => (
           <div 
             key={notice.id} 
-            className="bg-card p-5 rounded-2xl border border-white/5 flex items-start gap-4 cursor-pointer active:scale-[0.98] transition-all"
+            className="bg-card p-5 rounded-2xl border border-border flex items-start gap-4 cursor-pointer active:scale-[0.98] transition-all"
             onClick={() => {
               setSelectedNotice(notice);
               if (profile?.uid) {
@@ -123,10 +123,10 @@ export const Notices: React.FC = () => {
                     )}
                   </div>
                </div>
-               <h4 className="text-base font-black text-white tracking-tight truncate">{notice.title}</h4>
+               <h4 className="text-base font-black text-foreground tracking-tight truncate">{notice.title}</h4>
                <p className="text-xs text-muted-foreground font-bold line-clamp-1">{notice.content}</p>
             </div>
-            <ChevronRight className="w-5 h-5 text-white/10 self-center" />
+            <ChevronRight className="w-5 h-5 text-muted-foreground/30 self-center" />
           </div>
         )) : (
           <div className="py-20 text-center opacity-30">
@@ -137,16 +137,16 @@ export const Notices: React.FC = () => {
       </div>
 
       <Dialog open={!!selectedNotice} onOpenChange={(open) => !open && setSelectedNotice(null)}>
-        <DialogContent className="bg-card border-none rounded-3xl text-white max-w-[90vw] sm:max-w-md p-0 overflow-hidden">
+        <DialogContent className="bg-card border border-border rounded-3xl text-foreground max-w-[90vw] sm:max-w-md p-0 overflow-hidden">
           {selectedNotice && (
             <div className="flex flex-col">
               <div className="p-8 pb-6 flex flex-col items-center text-center gap-4">
-                <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center">
+                <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center">
                   <Megaphone className={cn("w-8 h-8", selectedNotice.isImportant ? "text-red-500" : "text-primary")} />
                 </div>
                 <div className="space-y-1">
                   {selectedNotice.isImportant && <Badge className="bg-red-500/20 text-red-500 border-none mb-1">핵심 공지</Badge>}
-                  <DialogTitle className="text-xl font-black tracking-tight leading-tight">{selectedNotice.title}</DialogTitle>
+                  <DialogTitle className="text-xl font-black tracking-tight leading-tight text-foreground">{selectedNotice.title}</DialogTitle>
                   <div className="flex items-center justify-center gap-4 mt-2">
                      <span className="text-[10px] font-bold text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" /> {format(new Date(selectedNotice.createdAt), 'yyyy.MM.dd HH:mm')}</span>
                      <span className="text-[10px] font-bold text-muted-foreground flex items-center gap-1"><User className="w-3 h-3" /> {selectedNotice.authorName}</span>
@@ -158,10 +158,10 @@ export const Notices: React.FC = () => {
                   {selectedNotice.content}
                 </p>
               </div>
-              <div className="p-6 pt-0 border-t border-white/5 space-y-3">
+              <div className="p-6 pt-0 border-t border-border space-y-3">
                 <Button 
                   onClick={() => setSelectedNotice(null)}
-                  className="w-full h-14 bg-white/5 hover:bg-white/10 text-white rounded-2xl font-black mt-6"
+                  className="w-full h-14 bg-primary text-primary-foreground hover:bg-primary/90 rounded-2xl font-black mt-6"
                 >
                   확인
                 </Button>
@@ -184,13 +184,13 @@ export const Notices: React.FC = () => {
       </Dialog>
 
       <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-        <DialogContent className="bg-card border-none rounded-[2rem] shadow-2xl max-w-sm w-[90%] p-8 overflow-hidden text-white">
+        <DialogContent className="bg-card border border-border rounded-[2rem] shadow-2xl max-w-sm w-[90%] p-8 overflow-hidden text-foreground">
           <div className="flex flex-col items-center text-center gap-4">
             <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center">
               <Trash2 className="w-8 h-8 text-red-500" />
             </div>
             <div className="space-y-1">
-              <DialogTitle className="text-xl font-black text-white">공지 삭제</DialogTitle>
+              <DialogTitle className="text-xl font-black text-foreground">공지 삭제</DialogTitle>
               <p className="text-muted-foreground font-bold text-xs">
                 이 공지사항을 정말 삭제하시겠습니까?<br />이 작업은 되돌릴 수 없습니다.
               </p>
@@ -205,7 +205,7 @@ export const Notices: React.FC = () => {
             </Button>
             <Button 
               variant="ghost"
-              className="w-full h-10 text-white/40 font-black hover:text-white"
+              className="w-full h-10 text-muted-foreground font-black hover:text-foreground"
               onClick={() => setIsDeleteOpen(false)}
             >
               취소

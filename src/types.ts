@@ -39,6 +39,7 @@ export interface UserProfile {
   altitudeUpdatedAt?: string;
   basePressure?: number;
   ghostGuardEnabled?: boolean;
+  lightTheme?: boolean;
   lastMovementAt?: string;
   isImmobile?: boolean;
   isFalling?: boolean;

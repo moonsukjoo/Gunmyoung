@@ -14,7 +14,7 @@ import {
   ClipboardList
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { auth, db } from '@/src/firebase';
+import { auth, db } from '@/firebase';
 import { cn } from '@/lib/utils';
 import { CompanyLogo } from './CompanyLogo';
 import { collection, query, where, onSnapshot, getDocs, addDoc } from 'firebase/firestore';
@@ -43,18 +43,18 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon: Icon, label, active }) => (
     to={to}
     className={cn(
       "flex flex-col items-center justify-center gap-1 flex-1 py-2 transition-all duration-300 relative",
-      active ? "text-white" : "text-muted-foreground hover:text-white"
+      active ? "text-primary" : "text-muted-foreground hover:text-foreground"
     )}
   >
     <Icon className={cn("w-5 h-5 transition-all", active && "scale-110")} />
     <span className={cn(
       "text-[10px] font-bold tracking-tight transition-all",
-      active ? "opacity-100" : "opacity-40"
+      active ? "opacity-100" : "opacity-80"
     )}>
       {label}
     </span>
     {active && (
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-1 bg-primary rounded-b-full shadow-[0_0_10px_rgba(45,212,191,0.5)]" />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-1 bg-primary rounded-b-full shadow-[0_0_10px_rgba(45,212,191,0.3)]" />
     )}
   </Link>
 );
@@ -173,9 +173,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   };
 
   const isExcludedRole = profile && (
-    ['EMPLOYEE', 'TEAM_LEADER', 'WORKER'].includes(profile.role?.toUpperCase() || '') || 
-    ['조장', '반장', '사원'].includes(profile.position?.trim() || '') ||
-    profile.employeeId?.trim().toLowerCase().includes('x66626') ||
+    ['EMPLOYEE', 'WORKER'].includes(profile.role?.toUpperCase() || '') || 
+    (['조장', '반장', '사원'].includes(profile.position?.trim() || '') && profile.role !== 'TEAM_LEADER') ||
+    profile.employeeId?.trim()?.toLowerCase()?.includes('x66626') ||
     profile.displayName?.toLowerCase().includes('x66626') ||
     profile.email?.toLowerCase().includes('x66626') ||
     user?.email?.toLowerCase().includes('x66626') ||
@@ -195,8 +195,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   ].filter(Boolean) as any[];
 
   return (
-    <div className="flex flex-col h-screen bg-[#121212] font-sans text-white select-none">
-      <header className="h-16 bg-[#121212]/80 backdrop-blur-xl border-b border-white/5 flex items-center justify-center flex-shrink-0 sticky top-0 z-50">
+    <div className="flex flex-col h-screen bg-background font-sans text-foreground select-none">
+      <header className="h-16 bg-background/80 backdrop-blur-xl border-b border-foreground/5 flex items-center justify-center flex-shrink-0 sticky top-0 z-50">
         <div className="w-full px-5 flex items-center justify-between">
           <div className="flex items-center gap-1">
             {location.pathname !== '/' && (
@@ -204,7 +204,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 variant="ghost"
                 size="icon"
                 onClick={() => navigate(-1)}
-                className="w-10 h-10 -ml-2 text-muted-foreground hover:text-white transition-all rounded-xl"
+                className="w-10 h-10 -ml-2 text-muted-foreground hover:text-foreground transition-all rounded-xl"
               >
                 <ChevronLeft className="w-6 h-6" />
               </Button>
@@ -214,7 +214,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 <CompanyLogo className="w-full h-full" />
               </div>
               <div className="flex flex-col">
-                <span className="font-black text-sm tracking-tight leading-none text-white">건명기업</span>
+                <span className="font-black text-sm tracking-tight leading-none text-foreground">건명기업</span>
               </div>
             </div>
           </div>
@@ -229,17 +229,17 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               <DialogContent className="bg-card border-none rounded-3xl p-0 overflow-hidden max-w-xs">
                 <div className="bg-red-600 p-6 text-center text-white">
                   <h2 className="text-xl font-black">긴급 상황 전송</h2>
-                  <p className="text-[10px] font-bold opacity-80">유형을 선택하면 관리자에게 즉시 알림이 전송됩니다</p>
+                  <p className="text-[10px] font-bold text-white/90">유형을 선택하면 관리자에게 즉시 알림이 전송됩니다</p>
                 </div>
                 <div className="p-4 grid grid-cols-2 gap-2">
                   {['화재', '추락', '협착', '기타'].map(type => (
                     <button 
                       key={type}
                       onClick={() => handleEmergencySOS(type)}
-                      className="h-20 bg-white/5 rounded-2xl flex flex-col items-center justify-center gap-1 font-black text-xs border border-white/5 active:scale-95 transition-all"
+                      className="h-20 bg-muted rounded-2xl flex flex-col items-center justify-center gap-1 font-black text-xs border border-border active:scale-95 transition-all hover:bg-muted/80"
                     >
-                      {type === '화재' ? '🔥' : type === '추락' ? '🧗' : type === '협착' ? '🏗️' : '🆘'}
-                      <span className="text-muted-foreground">{type}</span>
+                      <span className="text-xl mb-1">{type === '화재' ? '🔥' : type === '추락' ? '🧗' : type === '협착' ? '🏗️' : '🆘'}</span>
+                      <span className="text-foreground">{type}</span>
                     </button>
                   ))}
                 </div>
@@ -253,13 +253,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="w-10 h-10 text-muted-foreground hover:text-white transition-all rounded-xl"
+                className="w-10 h-10 text-muted-foreground hover:text-foreground transition-all rounded-xl"
                 onClick={() => navigate('/notifications')}
               >
                 <Bell className="w-5 h-5" />
               </Button>
               {unreadCount > 0 && (
-                <div className="absolute top-2 right-2 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-[#121212] flex items-center justify-center">
+                <div className="absolute top-2 right-2 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-background flex items-center justify-center">
                   <span className="text-[7px] font-black text-white">{unreadCount > 9 ? '9+' : unreadCount}</span>
                 </div>
               )}
@@ -268,13 +268,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto bg-[#121212]">
+      <main className="flex-1 overflow-y-auto bg-background">
         <div className="w-full pb-24">
           {children}
         </div>
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 h-16 bg-[#121212]/80 backdrop-blur-xl border-t border-white/5 flex items-center justify-around px-2 pb-safe z-50">
+      <nav className="fixed bottom-0 left-0 right-0 h-16 bg-background/80 backdrop-blur-xl border-t border-foreground/5 flex items-center justify-around px-2 pb-safe z-50">
         {navItems.map((item) => (
           <NavItem 
             key={item.to} 

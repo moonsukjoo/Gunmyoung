@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { useAuth } from '@/src/components/AuthProvider';
-import { db, handleFirestoreError, OperationType } from '@/src/firebase';
+import { useAuth } from '@/components/AuthProvider';
+import { db, handleFirestoreError, OperationType } from '@/firebase';
 import { collection, query, where, onSnapshot, orderBy, updateDoc, doc, writeBatch } from 'firebase/firestore';
-import { Notification } from '@/src/types';
+import { Notification } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Bell, Activity, ShieldAlert, Megaphone, Ship, CalendarDays } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { grantRandomShipPart } from '@/src/services/shipService';
+import { grantRandomShipPart } from '@/services/shipService';
 
 import { 
   Dialog, 
@@ -69,13 +69,13 @@ export const Notifications: React.FC = () => {
     <div className="space-y-6 pb-24 px-2">
       <header className="py-6 flex items-end justify-between">
         <div>
-           <h2 className="text-3xl font-black tracking-tight text-white leading-tight">알림</h2>
+           <h2 className="text-3xl font-black tracking-tight text-foreground leading-tight">알림</h2>
            <p className="text-muted-foreground font-bold">중요한 소식을 확인하세요</p>
         </div>
         {notifications.some(n => !n.isRead) && (
           <Button 
             variant="ghost" 
-            className="text-xs font-black text-primary hover:bg-white/5"
+            className="text-xs font-black text-primary hover:bg-muted"
             onClick={markAllAsRead}
           >
             모두 읽음
@@ -90,7 +90,7 @@ export const Notifications: React.FC = () => {
               key={notification.id} 
               className={cn(
                 "p-5 rounded-2xl flex items-start gap-4 transition-all cursor-pointer active:scale-[0.98]",
-                notification.isRead ? "bg-white/[0.02] opacity-50" : "bg-card border border-white/5"
+                notification.isRead ? "bg-muted/30 opacity-60" : "bg-card border border-border"
               )}
               onClick={() => {
                 setSelectedNotification(notification);
@@ -99,13 +99,13 @@ export const Notifications: React.FC = () => {
             >
               <div className={cn(
                 "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
-                notification.isRead ? "bg-white/5" : "bg-white/5 shadow-inner"
+                notification.isRead ? "bg-muted" : "bg-muted shadow-inner"
               )}>
                 {getIcon(notification.type)}
               </div>
               <div className="flex-1 space-y-1 overflow-hidden">
                 <div className="flex items-center justify-between">
-                  <h4 className={cn("text-sm tracking-tight truncate", notification.isRead ? "font-bold text-muted-foreground" : "font-black text-white")}>
+                  <h4 className={cn("text-sm tracking-tight truncate", notification.isRead ? "font-bold text-muted-foreground" : "font-black text-foreground")}>
                     {notification.title}
                   </h4>
                   <span className="text-[10px] font-bold text-muted-foreground shrink-0 ml-2">
@@ -129,15 +129,15 @@ export const Notifications: React.FC = () => {
       </div>
 
       <Dialog open={!!selectedNotification} onOpenChange={(open) => !open && setSelectedNotification(null)}>
-        <DialogContent className="bg-card border-none rounded-3xl text-white max-w-[90vw] sm:max-w-md p-0 overflow-hidden">
+        <DialogContent className="bg-card border-none rounded-3xl text-foreground max-w-[90vw] sm:max-w-md p-0 overflow-hidden">
           {selectedNotification && (
             <div className="flex flex-col">
               <div className="p-8 pb-6 flex flex-col items-center text-center gap-4">
-                <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center">
+                <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center">
                   {getIcon(selectedNotification.type)}
                 </div>
                 <div className="space-y-1">
-                  <DialogTitle className="text-xl font-black tracking-tight">{selectedNotification.title}</DialogTitle>
+                  <DialogTitle className="text-xl font-black tracking-tight text-foreground">{selectedNotification.title}</DialogTitle>
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                     {format(new Date(selectedNotification.createdAt), 'yyyy.MM.dd HH:mm')}
                   </p>
@@ -148,10 +148,10 @@ export const Notifications: React.FC = () => {
                   {selectedNotification.message}
                 </p>
               </div>
-              <div className="p-6 pt-0 border-t border-white/5">
+              <div className="p-6 pt-0 border-t border-border">
                 <Button 
                   onClick={() => setSelectedNotification(null)}
-                  className="w-full h-14 bg-white/5 hover:bg-white/10 text-white rounded-2xl font-black mt-6"
+                  className="w-full h-14 bg-muted hover:bg-muted/80 text-foreground rounded-2xl font-black mt-6 border border-border"
                 >
                   닫기
                 </Button>

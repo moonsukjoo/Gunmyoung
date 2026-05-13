@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/src/components/AuthProvider';
-import { db, handleFirestoreError, OperationType } from '@/src/firebase';
+import { useAuth } from '@/components/AuthProvider';
+import { db, handleFirestoreError, OperationType } from '@/firebase';
 import { collection, addDoc, query, where, onSnapshot, orderBy, doc, updateDoc, getDocs } from 'firebase/firestore';
-import { LeaveRequest } from '@/src/types';
+import { LeaveRequest } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,7 +33,7 @@ export const Leave: React.FC = () => {
     const joinedDate = parseISO(profile.joinedAt);
     const today = new Date();
     const months = differenceInMonths(today, joinedDate);
-    setAccruedDays(months);
+    setAccruedDays(months >= 12 ? months : 0);
   }, [profile?.joinedAt]);
 
   useEffect(() => {
@@ -105,7 +105,7 @@ export const Leave: React.FC = () => {
 
       const managersQuery = query(
         collection(db, 'users'),
-        where('role', 'in', ['CEO', 'DIRECTOR', 'GENERAL_AFFAIRS', 'GENERAL_MANAGER'])
+        where('role', 'in', ['TEAM_LEADER', 'DIRECTOR', 'GENERAL_AFFAIRS'])
       );
       const managersSnapshot = await getDocs(managersQuery);
       const uniqueManagers = Array.from(new Set(managersSnapshot.docs.map(m => m.id)));
@@ -136,17 +136,17 @@ export const Leave: React.FC = () => {
   return (
     <div className="space-y-6 pb-24 px-1">
       <header className="py-6">
-        <h2 className="text-3xl font-black tracking-tight text-white leading-tight">연차 관리</h2>
+        <h2 className="text-3xl font-black tracking-tight text-foreground leading-tight">연차 관리</h2>
         <p className="text-muted-foreground font-bold">휴가와 반차를 신청하고 관리하세요</p>
       </header>
 
       <div className="space-y-6">
-        <div className="bg-card p-6 rounded-2xl border border-white/5 space-y-8">
-          <div className="bg-white/5 p-5 rounded-2xl flex items-center justify-between">
+        <div className="bg-card p-6 rounded-2xl border border-border space-y-8">
+          <div className="bg-muted/50 p-5 rounded-2xl flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">사용 가능 연차</span>
-              <span className="text-2xl font-black text-white">{currentBalance}일</span>
-              <span className="text-[10px] font-bold text-white/20 mt-1">
+              <span className="text-2xl font-black text-foreground">{currentBalance}일</span>
+              <span className="text-[10px] font-bold text-muted-foreground mt-1">
                 (발생: {accruedDays}일 / 사용: {usedDays}일)
               </span>
             </div>
@@ -156,14 +156,14 @@ export const Leave: React.FC = () => {
           </div>
 
           <div className="space-y-4">
-             <div className="grid grid-cols-3 gap-2 p-1 bg-white/5 rounded-2xl">
+             <div className="grid grid-cols-3 gap-2 p-1 bg-muted rounded-2xl">
                 {['ANNUAL', 'AM_HALF', 'PM_HALF'].map((type) => (
                   <button
                     key={type}
                     onClick={() => setLeaveType(type as any)}
                     className={cn(
                       "h-12 rounded-xl text-xs font-black transition-all",
-                      leaveType === type ? "bg-white text-black shadow-lg" : "text-muted-foreground hover:text-white"
+                      leaveType === type ? "bg-card text-foreground shadow-lg border border-border/50" : "text-muted-foreground hover:text-foreground"
                     )}
                   >
                     {type === 'ANNUAL' ? '연차' : type === 'AM_HALF' ? '오전반차' : '오후반차'}
@@ -173,16 +173,17 @@ export const Leave: React.FC = () => {
           </div>
 
           <div className="space-y-4">
-             <div className="bg-white/5 border border-white/5 rounded-2xl p-4 flex justify-center">
-                <style>{`
+             <div className="bg-card border border-border rounded-2xl p-4 flex justify-center shadow-inner">
+                 <style>{`
                   .rdp { --rdp-cell-size: 44px; margin: 0; width: 100%; }
-                  .rdp-caption { padding-left: 12px; padding-right: 8px; }
-                  .rdp-caption_label { color: #fff; font-weight: 900; font-size: 1rem; display: flex; align-items: center; justify-content: flex-start; gap: 4px; }
-                  .rdp-head_cell { color: #ffffff40; font-weight: 900; font-size: 0.7rem; }
-                  .rdp-day { color: #ffffff; font-weight: 700; font-size: 0.9rem; }
-                  .rdp-day_selected { background-color: var(--color-primary) !important; color: white !important; font-weight: 900; border-radius: 12px; }
-                  .rdp-day_today { color: var(--color-primary) !important; }
-                  .rdp-button:hover:not([disabled]):not(.rdp-day_selected) { background-color: #ffffff10; border-radius: 12px; }
+                  .rdp-caption { padding-left: 12px; padding-right: 8px; margin-bottom: 8px; }
+                  .rdp-caption_label { color: var(--foreground); font-weight: 900; font-size: 1rem; display: flex; align-items: center; justify-content: flex-start; gap: 4px; }
+                  .rdp-head_cell { color: var(--muted-foreground); font-weight: 900; font-size: 0.7rem; }
+                  .rdp-day { color: var(--foreground); font-weight: 700; font-size: 0.9rem; }
+                  .rdp-day_selected { background-color: var(--primary) !important; color: var(--primary-foreground) !important; font-weight: 900; border-radius: 12px; }
+                  .rdp-day_today { color: var(--primary) !important; font-weight: 900; }
+                  .rdp-button:hover:not([disabled]):not(.rdp-day_selected) { background-color: var(--muted); border-radius: 12px; }
+                  .rdp-nav_button { color: var(--foreground); }
                 `}</style>
                 {leaveType === 'ANNUAL' ? (
                   <DayPicker 
@@ -207,7 +208,7 @@ export const Leave: React.FC = () => {
               placeholder="사유를 입력해 주세요"
               value={reason}
               onChange={e => setReason(e.target.value)}
-              className="min-h-[120px] bg-white/5 border-white/10 rounded-2xl text-white font-bold placeholder:text-muted-foreground/30"
+              className="min-h-[120px] bg-muted/50 border-border rounded-2xl text-foreground font-bold placeholder:text-muted-foreground/30"
             />
           </div>
 
@@ -226,7 +227,7 @@ export const Leave: React.FC = () => {
              {requests.map(req => (
                <div key={req.id} className="bg-card p-5 rounded-2xl border border-white/5 flex items-center justify-between">
                   <div className="space-y-1 overflow-hidden">
-                     <p className="text-sm font-black text-white truncate">
+                     <p className="text-sm font-black text-foreground truncate">
                         {req.startDate}{req.startDate !== req.endDate ? ` ~ ${req.endDate}` : ''}
                      </p>
                      <div className="flex items-center gap-2">
@@ -236,7 +237,7 @@ export const Leave: React.FC = () => {
                         <span className="text-xs text-muted-foreground font-bold truncate">{req.reason}</span>
                      </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-white/10 shrink-0" />
+                  <ChevronRight className="w-5 h-5 text-muted-foreground/20 shrink-0" />
                </div>
              ))}
            </div>

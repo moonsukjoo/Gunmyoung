@@ -14,7 +14,7 @@ export const GlowLoading: React.FC<GlowLoadingProps> = ({
   fullScreen = true 
 }) => {
   return (
-    <div className={`${fullScreen ? 'h-screen w-full fixed inset-0 z-[100]' : 'h-64 w-full'} flex flex-col items-center justify-center bg-[#050505] overflow-hidden font-sans`}>
+    <div className={`${fullScreen ? 'h-screen w-full fixed inset-0 z-[100]' : 'h-64 w-full'} flex flex-col items-center justify-center bg-background overflow-hidden font-sans`}>
       {/* Dynamic Background Grid */}
       <div className="absolute inset-0 z-0 opacity-20" style={{ 
         backgroundImage: `linear-gradient(#22d3ee22 1px, transparent 1px), linear-gradient(90deg, #22d3ee22 1px, transparent 1px)`,
@@ -78,7 +78,7 @@ export const GlowLoading: React.FC<GlowLoadingProps> = ({
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
-              className="font-black text-4xl tracking-tighter text-white bg-clip-text text-transparent bg-gradient-to-b from-white to-gray-400"
+              className="font-black text-4xl tracking-tighter text-foreground bg-clip-text text-transparent bg-gradient-to-b from-foreground/100 to-foreground/60"
             >
               {message}
             </motion.h1>
@@ -92,7 +92,7 @@ export const GlowLoading: React.FC<GlowLoadingProps> = ({
             </motion.p>
           </div>
 
-          <div className="flex items-center gap-2 overflow-hidden w-48 h-1 bg-white/5 rounded-full relative">
+          <div className="flex items-center gap-2 overflow-hidden w-48 h-1 bg-foreground/5 rounded-full relative">
             <motion.div 
               initial={{ x: "-100%" }}
               animate={{ x: "100%" }}
@@ -104,7 +104,7 @@ export const GlowLoading: React.FC<GlowLoadingProps> = ({
           <motion.span 
             animate={{ opacity: [0.4, 1, 0.4] }}
             transition={{ duration: 1.5, repeat: Infinity }}
-            className="text-[8px] font-mono text-gray-500 font-bold"
+            className="text-[8px] font-mono text-muted-foreground font-bold"
           >
             보안 데이터 접속 중...
           </motion.span>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/src/components/AuthProvider';
-import { db, handleFirestoreError, OperationType } from '@/src/firebase';
+import { useAuth } from '@/components/AuthProvider';
+import { db, handleFirestoreError, OperationType } from '@/firebase';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, increment, orderBy, limit } from 'firebase/firestore';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,17 +36,27 @@ export const Entertainment: React.FC = () => {
   const [activeTab, setActiveTab] = useState('roulette');
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
-  const [pointsToBet, setPointsToBet] = useState(1);
+  const [pointsToBet, setPointsToBet] = useState(0.2); // Fixed to 0.2
   const [gameHistory, setGameHistory] = useState<any[]>([]);
+
+  // Ship Race State
+  const [selectedShip, setSelectedShip] = useState<number | null>(null);
+  const [isRacing, setIsRacing] = useState(false);
+  const [shipStats, setShipStats] = useState<any[]>(
+    Array(5).fill(0).map(() => ({ pos: 0, status: 'normal', speed: 0, event: null }))
+  );
+  const [winner, setWinner] = useState<number | null>(null);
+  const [shipRaceProbs, setShipRaceProbs] = useState<number[]>([1, 1, 1, 1, 1]);
 
   // Snail Race State
   const [selectedSnail, setSelectedSnail] = useState<number | null>(null);
-  const [isRacing, setIsRacing] = useState(false);
+  const [isSnailRacing, setIsSnailRacing] = useState(false);
   const [snailStats, setSnailStats] = useState<any[]>(
-    Array(5).fill(0).map(() => ({ pos: 0, status: 'normal', speed: 0 }))
+    Array(5).fill(0).map(() => ({ pos: 0, status: 'normal', speed: 0, event: null }))
   );
-  const [winner, setWinner] = useState<number | null>(null);
-  const [snailProbs, setSnailProbs] = useState<number[]>([1, 1, 1, 1, 1]);
+  const [snailWinner, setSnailWinner] = useState<number | null>(null);
+  const [snailRaceProbs, setSnailRaceProbs] = useState<number[]>([1, 1, 1, 1, 1]);
+
   const [isFishing, setIsFishing] = useState(false);
   const [fishingStatus, setFishingStatus] = useState<'idle' | 'casting' | 'waiting' | 'bite' | 'fight' | 'caught' | 'lost' | 'result'>('idle');
   const [fishingResult, setFishingResult] = useState<any>(null);
@@ -57,7 +67,7 @@ export const Entertainment: React.FC = () => {
     { id: 'boss', name: '보스 상어', multiplier: 100, probability: 0.04, icon: '🦈' },
     { id: 'legend', name: '황금 전설 고기', multiplier: 500, probability: 0.01, icon: '👑' }
   ]);
-  const [fishingPointsBet, setFishingPointsBet] = useState(1);
+  const [fishingPointsBet, setFishingPointsBet] = useState(0.2); // Fixed to 0.2
   const [lineTension, setLineTension] = useState(0);
   const [fishHealth, setFishHealth] = useState(100);
   const [isReeling, setIsReeling] = useState(false);
@@ -80,7 +90,8 @@ export const Entertainment: React.FC = () => {
     const unsubscribeProbs = onSnapshot(doc(db, 'settings', 'entertainment'), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
-        setSnailProbs(data.snailProbabilities || [1, 1, 1, 1, 1]);
+        setShipRaceProbs(data.shipRaceProbabilities || [1, 1, 1, 1, 1]);
+        setSnailRaceProbs(data.snailRaceProbabilities || [1, 1, 1, 1, 1]);
         if (data.fishingSettings) {
           setFishingSettings(data.fishingSettings);
         } else if (data.fishingProbabilities) {
@@ -102,8 +113,9 @@ export const Entertainment: React.FC = () => {
   }, [profile]);
 
   const spinRoulette = async () => {
-    if (isSpinning || !profile || pointsToBet <= 0) return;
-    if (profile.points < pointsToBet) {
+    const FIXED_BET = 0.2;
+    if (isSpinning || !profile) return;
+    if (profile.points < FIXED_BET) {
       toast.error('포인트가 부족합니다.');
       return;
     }
@@ -126,20 +138,17 @@ export const Entertainment: React.FC = () => {
       const selected = DEFAULT_ROULETTE_SETTINGS[selectedIdx];
       const segmentAngle = 360 / DEFAULT_ROULETTE_SETTINGS.length;
       
-      // Absolute target angle relative to 0 that brings segment to the top
-      // Segment 0 is at -90 in SVG. Center of segment i is i*angle - 90 + angle/2.
-      // To bring this to -90: (i * angle - 90 + angle/2) + Rotation = -90 => Rotation = - (i * angle + angle/2)
       const targetRotationOffset = 360 - (selectedIdx * segmentAngle + segmentAngle / 2);
       
-      const randomNoise = (Math.random() - 0.5) * (segmentAngle * 0.6); // 60% of segment width
+      const randomNoise = (Math.random() - 0.5) * (segmentAngle * 0.6); 
       const totalNewRotation = Math.ceil(rotation / 360) * 360 + (360 * 10) + targetRotationOffset + randomNoise;
       
       setRotation(totalNewRotation);
 
       setTimeout(async () => {
         setIsSpinning(false);
-        const winPoints = Math.floor(pointsToBet * selected.multiplier);
-        const pointDiff = winPoints - pointsToBet;
+        const winPoints = parseFloat((FIXED_BET * selected.multiplier).toFixed(2));
+        const pointDiff = parseFloat((winPoints - FIXED_BET).toFixed(2));
 
         await updateDoc(doc(db, 'users', profile.uid), {
           points: increment(pointDiff)
@@ -149,7 +158,7 @@ export const Entertainment: React.FC = () => {
           uid: profile.uid,
           type: 'ROULETTE',
           label: selected.label,
-          betPoints: pointsToBet,
+          betPoints: FIXED_BET,
           winPoints: winPoints,
           createdAt: new Date().toISOString()
         });
@@ -167,9 +176,10 @@ export const Entertainment: React.FC = () => {
     }
   };
 
-  const startSnailRace = async () => {
-    if (isRacing || selectedSnail === null || pointsToBet <= 0 || !profile) return;
-    if (profile.points < pointsToBet) {
+  const startShipRace = async () => {
+    const FIXED_BET = 0.2;
+    if (isRacing || selectedShip === null || !profile) return;
+    if (profile.points < FIXED_BET) {
       toast.error('포인트가 부족합니다.');
       return;
     }
@@ -177,60 +187,212 @@ export const Entertainment: React.FC = () => {
     setIsRacing(true);
     setWinner(null);
     
+    // Smooth race simulation (v-based)
     const initialStats = Array(5).fill(0).map((_, i) => ({ 
       pos: 0, 
       status: 'normal', 
-      speed: (Math.random() * 0.08 + 0.04), // Slow base speed for ~15-20s race
+      event: null as string | null,
+      speed: 0,
+      targetSpeed: 0
     }));
-    setSnailStats(initialStats);
+    setShipStats(initialStats);
 
     const startTime = Date.now();
-    let currentStats = [...initialStats];
+    const DURATION = 15000;
+    let currentStats = initialStats.map(s => ({ ...s }));
+    let lastTime = startTime;
 
     const updateRace = () => {
+      const now = Date.now();
+      const deltaTime = (now - lastTime) / 1000;
+      lastTime = now;
+
+      const elapsed = now - startTime;
+      const progress = Math.min(1, elapsed / DURATION);
+      
       let isDone = false;
       let winnerIdx = -1;
 
-      const nextStats = currentStats.map((snail, i) => {
-        if (isDone || snail.pos >= 100) return snail;
+      const nextStats = currentStats.map((ship, i) => {
+        if (isDone || ship.pos >= 100) return ship;
 
-        let moveAmount = 0;
-        let nextStatus = snail.status;
+        const prob = shipRaceProbs[i] || 1;
+        
+        // Base speed to reach 100 in 15 seconds (~6.67 units/sec)
+        // Adjust by probability
+        const baseSpeed = (100 / 15) * (0.9 + (prob - 1) * 0.15);
+        
+        let eventMultiplier = 1.0;
+        let nextStatus = ship.status;
+        let nextEvent = ship.event;
 
-        // Status logic
-        if (snail.status === 'normal') {
-          if (Math.random() < 0.005 && snail.pos > 10 && snail.pos < 90) {
-            const dice = Math.random();
-            if (dice < 0.3) nextStatus = 'sleeping';
-            else if (dice < 0.6) nextStatus = 'eating';
-            else nextStatus = 'tired';
-            
-            // Auto recovery after delay
-            setTimeout(() => {
-              setSnailStats(prev => {
-                const updated = [...prev];
-                if (updated[i]) updated[i].status = 'normal';
-                return updated;
-              });
-              currentStats[i].status = 'normal';
-            }, 2000 + Math.random() * 3000);
+        // Random events logic for ships (smooth speed transitions)
+        if (ship.status === 'normal' && Math.random() < 0.007) {
+          const type = Math.random();
+          if (type < 0.25) {
+             nextStatus = 'fuel';
+             nextEvent = '기름 충전! ⛽';
+          } else if (type < 0.5) {
+             nextStatus = 'repair';
+             nextEvent = '수리 중... 🔧';
+          } else if (type < 0.75) {
+             nextStatus = 'booster';
+             nextEvent = '부스터 온! 🚀';
+          } else {
+             nextStatus = 'reef';
+             nextEvent = '암초 회피 중 ⚓';
           }
-          moveAmount = (Math.random() * 0.15 + 0.05) * (snailProbs[i] || 1);
-        } else if (snail.status === 'tired') {
-          moveAmount = Math.random() * 0.04;
-        } else if (snail.status === 'eating') {
-          moveAmount = -0.02;
-        } else {
-          moveAmount = 0; // sleeping
+
+          setTimeout(() => {
+            currentStats[i].status = 'normal';
+            currentStats[i].event = null;
+          }, 2000);
         }
 
-        const nextPos = Math.max(0, Math.min(100, snail.pos + moveAmount));
+        if (nextStatus === 'fuel') eventMultiplier = 1.4;
+        else if (nextStatus === 'booster') eventMultiplier = 1.7;
+        else if (nextStatus === 'repair') eventMultiplier = 0.6;
+        else if (nextStatus === 'reef') eventMultiplier = 0.4;
+
+        // Smooth speed transition
+        const currentTargetSpeed = baseSpeed * eventMultiplier;
+        const speedFollowFactor = 0.8; // Smooth but responsive
+        ship.speed += (currentTargetSpeed - ship.speed) * Math.min(1, deltaTime * speedFollowFactor);
+
+        // Natural jitter
+        const jitter = Math.random() * 0.15;
+        const delta = (ship.speed + jitter) * deltaTime;
+        
+        let nextPos = ship.pos + delta;
+
+        // Extremely subtle finish push if behind
+        if (progress > 0.85 && nextPos < 100) {
+          nextPos += (100 - nextPos) * (0.01 * deltaTime * 60);
+        }
+
         if (nextPos >= 100 && !isDone) {
           isDone = true;
           winnerIdx = i;
         }
 
-        return { ...snail, pos: nextPos, status: nextStatus };
+        return { ...ship, pos: nextPos, status: nextStatus, event: nextEvent };
+      });
+
+      currentStats = nextStats;
+      setShipStats(nextStats);
+
+      if (elapsed < DURATION + 3000 && !isDone) {
+        requestAnimationFrame(updateRace);
+      } else if (isDone) {
+        setTimeout(() => handleShipRaceEnd(winnerIdx), 800);
+      } else {
+        const leaderIdx = currentStats.reduce((prev, curr, idx) => curr.pos > currentStats[prev].pos ? idx : prev, 0);
+        handleShipRaceEnd(leaderIdx);
+      }
+    };
+
+    setTimeout(() => {
+      lastTime = Date.now(); // Reset lastTime right before starting for smoothness
+      requestAnimationFrame(updateRace);
+    }, 1000);
+  };
+
+  const startSnailRace = async () => {
+    const FIXED_BET = 0.2;
+    if (isSnailRacing || selectedSnail === null || !profile) return;
+    if (profile.points < FIXED_BET) {
+      toast.error('포인트가 부족합니다.');
+      return;
+    }
+
+    setIsSnailRacing(true);
+    setSnailWinner(null);
+    
+    const initialStats = Array(5).fill(0).map((_, i) => ({ 
+      pos: 0, 
+      status: 'normal', 
+      event: null as string | null,
+      speed: 0
+    }));
+    setSnailStats(initialStats);
+
+    const startTime = Date.now();
+    const DURATION = 15000; // 15 seconds race
+    let currentStats = initialStats.map(s => ({ ...s }));
+    let lastTime = startTime;
+    let isDone = false;
+    let winnerIdx = -1;
+
+    const updateRace = () => {
+      const now = Date.now();
+      const deltaTime = (now - lastTime) / 1000;
+      lastTime = now;
+
+      const elapsed = now - startTime;
+      const progress = Math.min(1.2, elapsed / DURATION); 
+
+      const nextStats = currentStats.map((snail, i) => {
+        if (isDone || snail.pos >= 100) return snail;
+
+        const prob = snailRaceProbs[i] || 1;
+        // Base speed ensure finishing in ~13-15s
+        const baseSpeed = (100 / 14) * (0.95 + (prob - 1) * 0.15);
+
+        let nextStatus = snail.status;
+        let nextEvent = snail.event;
+        let eventMultiplier = 1.0;
+
+        if (snail.status === 'normal' && Math.random() < 0.015) {
+           const type = Math.random();
+           if (type < 0.4) {
+              nextStatus = 'eating';
+              nextEvent = "밥 묵자! 🥬";
+           } else if (type < 0.8) {
+              nextStatus = 'asleep';
+              nextEvent = "쿨쿨... 💤";
+           } else {
+              nextStatus = 'speed';
+              nextEvent = "아자아자! 🔥";
+           }
+
+           setTimeout(() => {
+              if (currentStats[i]) {
+                 currentStats[i].status = 'normal';
+                 currentStats[i].event = null;
+              }
+           }, 1800);
+        }
+
+        if (nextStatus === 'eating' || nextStatus === 'asleep') {
+           eventMultiplier = 0;
+           snail.speed = 0;
+        } else if (nextStatus === 'speed') {
+           eventMultiplier = 2.4; // Slightly reduced boost for stability
+        }
+
+        const currentTargetSpeed = baseSpeed * eventMultiplier;
+        const speedFollowFactor = 1.0; // Responsive start
+        snail.speed += (currentTargetSpeed - snail.speed) * Math.min(1, deltaTime * speedFollowFactor);
+
+        const jitter = Math.random() * 0.2; // Natural snail jitter
+        const delta = (snail.speed + jitter) * deltaTime;
+        
+        let nextPos = snail.pos + delta;
+
+        // Extremely subtle finish push
+        if (progress > 0.85 && nextPos < 100 && nextStatus === 'normal') {
+           nextPos += (100 - nextPos) * (0.01 * deltaTime * 60);
+        }
+
+        if (nextPos >= 100) {
+          nextPos = 100;
+          if (!isDone) {
+            isDone = true;
+            winnerIdx = i;
+          }
+        }
+
+        return { ...snail, pos: nextPos, status: nextStatus, event: nextEvent };
       });
 
       currentStats = nextStats;
@@ -239,25 +401,29 @@ export const Entertainment: React.FC = () => {
       if (!isDone) {
         requestAnimationFrame(updateRace);
       } else {
-        setTimeout(() => handleRaceEnd(winnerIdx), 800);
+        setTimeout(() => {
+          handleSnailRaceEnd(winnerIdx);
+        }, 1000);
       }
     };
 
-    // Slight delay before race starts for anticipation
     setTimeout(() => {
+      lastTime = Date.now(); // Reset lastTime right before starting for smoothness
       requestAnimationFrame(updateRace);
     }, 1000);
   };
 
-  const handleRaceEnd = async (winningSnail: number) => {
-    setWinner(winningSnail);
-    setIsRacing(false);
+  const handleSnailRaceEnd = async (winningSnail: number) => {
+    const FIXED_BET = 0.2;
+    setSnailWinner(winningSnail);
+    setIsSnailRacing(false);
     
     if (!profile) return;
 
     const isWin = winningSnail === selectedSnail;
-    const winPoints = isWin ? pointsToBet * 5 : 0; // 5 snails so 5x reward
-    const pointDiff = winPoints - pointsToBet;
+    const winPoints = isWin ? parseFloat((FIXED_BET * 5).toFixed(2)) : 0; 
+    const pointDiff = parseFloat((winPoints - FIXED_BET).toFixed(2));
+    const snailNames = ['건', '명', '안', '전', '승'];
 
     try {
       await updateDoc(doc(db, 'users', profile.uid), {
@@ -267,18 +433,55 @@ export const Entertainment: React.FC = () => {
       await addDoc(collection(db, 'lottoHistory'), {
         uid: profile.uid,
         type: 'SNAIL_RACE',
-        label: `달팽이 ${winningSnail + 1}번 승리`,
-        betPoints: pointsToBet,
+        label: `${snailNames[winningSnail]} 승리!`,
+        betPoints: FIXED_BET,
         winPoints: winPoints,
         createdAt: new Date().toISOString()
       });
 
       if (isWin) {
         confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
-        toast.success(`축하합니다! ${winningSnail + 1}번 달팽이가 승리하여 ${winPoints}P를 획득했습니다!`);
+        toast.success(`축하합니다! '${snailNames[winningSnail]}' 달팽이가 승리하여 ${winPoints}P를 획득했습니다!`);
       } else {
-        toast.error(`${winningSnail + 1}번 달팽이가 승리했습니다. 아쉽네요!`);
+        toast.error(`'${snailNames[winningSnail]}' 달팽이가 승리했습니다. 아쉽네요!`);
       }
+    } catch (error) {
+      toast.error('결과 저장 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleShipRaceEnd = async (winningShip: number) => {
+    const FIXED_BET = 0.2;
+    setWinner(winningShip);
+    setIsRacing(false);
+    
+    if (!profile) return;
+
+    const isWin = winningShip === selectedShip;
+    const winPoints = isWin ? parseFloat((FIXED_BET * 5).toFixed(2)) : 0; 
+    const pointDiff = parseFloat((winPoints - FIXED_BET).toFixed(2));
+
+    try {
+      await updateDoc(doc(db, 'users', profile.uid), {
+        points: increment(pointDiff)
+      });
+
+      const shipNames = ['컨테이너선', 'LNG선', '유조선', '벌크선', '화학선'];
+    await addDoc(collection(db, 'lottoHistory'), {
+      uid: profile.uid,
+      type: 'SHIP_RACE',
+      label: `${shipNames[winningShip]} 승리!`,
+      betPoints: FIXED_BET,
+      winPoints: winPoints,
+      createdAt: new Date().toISOString()
+    });
+
+    if (isWin) {
+      confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+      toast.success(`축하합니다! ${shipNames[winningShip]}이 승리하여 ${winPoints}P를 획득했습니다!`);
+    } else {
+      toast.error(`${shipNames[winningShip]}이 승리했습니다. 아쉽네요!`);
+    }
     } catch (error) {
       toast.error('결과 저장 중 오류가 발생했습니다.');
     }
@@ -315,20 +518,20 @@ export const Entertainment: React.FC = () => {
 
       setFishHealth(prev => {
         if (isReeling) {
-          // Early Failure Logic: 70% of fishes are pre-determined to escape
-          if (timeInFight < 4000 && willEscape && Math.random() < 0.15) {
+          // Early Failure Logic: 70% of fishes are pre-determined to escape within 5 seconds
+          if (timeInFight < 5000 && willEscape && Math.random() < 0.12) {
             handleFishingFail('ESCAPE');
             return prev;
           }
 
           // Damage logic: Optimal zone 45-75
           const isOptimal = nextTension > 45 && nextTension < 75;
-          const tensionFactor = isOptimal ? 3.0 : 0.2; 
+          const tensionFactor = isOptimal ? 4.5 : 1.2; // Increased base damage
           
-          if (isOptimal) setCombo(c => Math.min(100, c + 3));
-          else setCombo(c => Math.max(0, c - 6));
+          if (isOptimal) setCombo(c => Math.min(100, c + 5));
+          else setCombo(c => Math.max(0, c - 8));
 
-          const damage = (Math.random() * 2.0 + 1.0) * tensionFactor * (1 + (combo / 50));
+          const damage = (Math.random() * 3.0 + 2.0) * tensionFactor * (1 + (combo / 40));
           const nextHealth = prev - damage;
           
           if (nextHealth <= 0) {
@@ -466,7 +669,7 @@ export const Entertainment: React.FC = () => {
 
 
   return (
-    <div className="space-y-6 pb-24 px-1 text-white">
+    <div className="space-y-6 pb-24 px-1 text-foreground">
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes ripple {
           0% { transform: scale(0.8); opacity: 0.5; }
@@ -475,7 +678,7 @@ export const Entertainment: React.FC = () => {
         .ripple-effect {
           position: absolute;
           border-radius: 50%;
-          background: rgba(255,255,255,0.4);
+          background: rgba(var(--primary), 0.4);
           animation: ripple 2s infinite;
         }
         @keyframes drift {
@@ -487,278 +690,504 @@ export const Entertainment: React.FC = () => {
         }
       `}} />
       <header className="py-8 text-center space-y-2">
-        <h2 className="text-3xl font-black tracking-tight italic drop-shadow-lg uppercase">건명 놀이터</h2>
+        <h2 className="text-3xl font-black tracking-tight italic drop-shadow-lg uppercase text-foreground">건명 놀이터</h2>
         <p className="text-[10px] font-black text-primary tracking-[0.3em] uppercase">프리미엄 아케이드</p>
       </header>
 
-      <div className="bg-card p-6 rounded-3xl border border-white/5 flex flex-col items-center gap-4 text-center shadow-xl">
+      <div className="bg-card p-6 rounded-3xl border border-border flex flex-col items-center gap-4 text-center shadow-xl">
          <div className="w-12 h-12 bg-yellow-500/10 rounded-2xl flex items-center justify-center border border-yellow-500/20">
             <Coins className="w-6 h-6 text-yellow-500" />
          </div>
          <div className="space-y-1">
-            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">CURRENT BALANCE</p>
-            <p className="text-4xl font-black italic text-white leading-none">{profile?.points?.toLocaleString() || 0} <span className="text-xl text-yellow-500 not-italic">P</span></p>
+            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">현재 보유 포인트</p>
+            <p className="text-4xl font-black italic text-foreground leading-none">{profile?.points?.toLocaleString() || 0} <span className="text-xl text-yellow-500 not-italic">P</span></p>
          </div>
       </div>
 
-      <div className="bg-card p-1.5 rounded-3xl flex gap-2 border border-white/5 shadow-2xl relative overflow-hidden">
+      <div className="bg-muted p-2 rounded-3xl grid grid-cols-4 gap-1.5 border border-border shadow-2xl relative overflow-hidden">
          <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-primary/5 pointer-events-none" />
          {[
-           {id:'roulette', label:'행운의 선물 룰렛'},
-           {id:'snail', label:'건명 달팽이 레이싱'},
-           {id:'fishing', label:'건명 강태공 낚시'}
+           {id:'roulette', label:'룰렛'},
+           {id:'ship', label:'진수식'},
+           {id:'snail', label:'달팽이'},
+           {id:'fishing', label:'낚시'}
          ].map(tab => (
             <button 
               key={tab.id} 
-              onClick={() => {
-                if(isSpinning || isRacing || isFishing) return;
-                setActiveTab(tab.id);
-              }} 
+              onClick={() => setActiveTab(tab.id as any)}
               className={cn(
-                "flex-1 h-12 rounded-2xl text-[11px] font-black transition-all relative z-10", 
-                activeTab === tab.id ? "bg-white text-black shadow-xl scale-[1.02]" : "text-muted-foreground hover:text-white"
-            )}
-          >
-             {tab.label}
-          </button>
-       ))}
-    </div>
+                "py-3 px-1 rounded-2xl font-black text-[10px] uppercase tracking-tighter transition-all duration-300 relative z-10 whitespace-nowrap",
+                activeTab === tab.id ? "text-foreground shadow-2xl scale-[1.05]" : "text-muted-foreground hover:text-foreground hover:bg-muted"
+              )}
+            >
+              {activeTab === tab.id && (
+                <motion.div layoutId="activeTabSlot" className="absolute inset-0 bg-primary/20 backdrop-blur-md rounded-2xl border border-primary/30" transition={{ type: "spring", bounce: 0.2, duration: 0.6 }} />
+              )}
+              <span className="relative z-10 italic">{tab.label}</span>
+            </button>
+          ))}
+       </div>
 
-    <div className="min-h-[460px]">
-       <AnimatePresence mode="wait">
-          {activeTab === 'roulette' && (
-            <motion.div key="roulette" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6 flex flex-col items-center pt-2">
-               {/* Roulette Board Background */}
-               <div className="relative w-full max-w-sm bg-[#1e293b] rounded-[3rem] p-8 pb-12 shadow-2xl border-b-8 border-black overflow-hidden group">
-                  <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10" />
-                  
-                  {/* Header in the board */}
-                  <div className="relative z-10 text-center mb-8 flex flex-col items-center gap-1">
-                     <div className="flex gap-1 mb-2">
-                        {[1,2,3,4,5].map(i => <div key={i} className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" style={{ animationDelay: `${i*0.2}s` }} />)}
-                     </div>
-                     <h3 className="text-2xl font-black text-white italic tracking-tighter drop-shadow-lg uppercase leading-none">건명 행운의 포인트 룰렛</h3>
-                     <p className="text-[9px] font-black text-yellow-400 tracking-[0.3em] uppercase">Kunmyung Lucky Point</p>
-                  </div>
-
-                  <div className="relative flex items-center justify-center pt-4" style={{ perspective: '1200px' }}>
-                     {/* Shadow below wheel */}
-                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 bg-black/40 blur-2xl rounded-full" />
+       <div className="min-h-[460px] relative">
+         <AnimatePresence mode="wait">
+            {activeTab === 'roulette' && (
+              <motion.div key="roulette" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6 flex flex-col items-center pt-2">
+                {/* Roulette Board Background */}
+                <div className="relative w-full max-w-sm bg-[#1e293b] rounded-[3rem] p-8 pb-12 shadow-2xl border-b-8 border-black overflow-hidden group">
+                   <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10" />
+                   
+                   {/* Header in the board */}
+                   <div className="relative z-10 text-center mb-8 flex flex-col items-center gap-1">
+                      <div className="flex gap-1 mb-2">
+                         {[1,2,3,4,5].map(i => <div key={i} className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" style={{ animationDelay: `${i*0.2}s` }} />)}
+                      </div>
+                      <h3 className="text-2xl font-black text-white italic tracking-tighter drop-shadow-lg uppercase leading-none">건명 행운의 포인트 룰렛</h3>
+                      <p className="text-[9px] font-black text-yellow-400 tracking-[0.3em] uppercase">건명 행운 포인트</p>
+                   </div>
+ 
+                   <div className="relative flex items-center justify-center pt-4" style={{ perspective: '1200px' }}>
+                      {/* Shadow below wheel */}
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 bg-black/40 blur-2xl rounded-full" />
+                      
+                      {/* The Wheel */}
+                      <motion.div 
+                        className="w-72 h-72 rounded-full relative z-10 shadow-2xl border-[10px] border-[#3182f6]" 
+                        style={{ transformStyle: 'preserve-3d', background: '#3182f6' }}
+                        animate={{ rotate: rotation }} 
+                        transition={{ 
+                          rotate: { 
+                            duration: 7, 
+                            ease: [0.15, 0, 0.05, 1],
+                            type: "spring",
+                            stiffness: 15,
+                            damping: 8,
+                            mass: 1.2
+                          } 
+                        }}
+                      >
+                         <svg viewBox="0 0 100 100" className="w-full h-full">
+                            {DEFAULT_ROULETTE_SETTINGS.map((s, i) => {
+                               const angle = 360 / DEFAULT_ROULETTE_SETTINGS.length;
+                               const sAngle = i * angle - 90;
+                               const eAngle = (i + 1) * angle - 90;
+                               const x1 = 50 + 50 * Math.cos((Math.PI * sAngle) / 180);
+                               const y1 = 50 + 50 * Math.sin((Math.PI * sAngle) / 180);
+                               const x2 = 50 + 50 * Math.cos((Math.PI * eAngle) / 180);
+                               const y2 = 50 + 50 * Math.sin((Math.PI * eAngle) / 180);
+                               return (
+                                 <g key={s.id}>
+                                    <path d={`M 50 50 L ${x1} ${y1} A 50 50 0 0 1 ${x2} ${y2} Z`} fill={s.color} stroke="#3182f6" strokeWidth="1" />
+                                    <text 
+                                      x="50" y="16" 
+                                      transform={`rotate(${sAngle + angle/2 + 90}, 50, 50)`} 
+                                      fill={s.label === '꽝!' ? '#ef4444' : '#1e293b'} 
+                                      className="text-[5px] font-black uppercase tracking-tighter" 
+                                      textAnchor="middle"
+                                    >
+                                       {s.label}
+                                    </text>
+                                 </g>
+                               );
+                            })}
+                            
+                            {/* Small dot lights on the border */}
+                            {[...Array(12)].map((_, i) => {
+                              const dotAngle = i * (360/12);
+                              const dx = 50 + 47 * Math.cos((Math.PI * dotAngle) / 180);
+                              const dy = 50 + 47 * Math.sin((Math.PI * dotAngle) / 180);
+                              return <circle key={i} cx={dx} cy={dy} r="2" fill="white" className="animate-pulse" style={{ animationDelay: `${i*0.2}s` }} />;
+                            })}
+                         </svg>
+ 
+                         {/* Center START Button */}
+                         <div className="absolute inset-0 flex items-center justify-center">
+                            <button 
+                              onClick={spinRoulette}
+                              disabled={isSpinning}
+                              className={cn(
+                                "w-16 h-16 rounded-full bg-rose-500 border-4 border-white shadow-xl flex items-center justify-center transition-all active:scale-90",
+                                isSpinning ? "opacity-50 grayscale" : "hover:scale-105"
+                              )}
+                            >
+                               <span className="text-[10px] font-black text-white italic drop-shadow-md">시작!</span>
+                            </button>
+                         </div>
+                      </motion.div>
+ 
+                      {/* Top Pointer */}
+                      <div className="absolute top-[-10px] left-1/2 -translate-x-1/2 z-20 flex flex-col items-center">
+                         <motion.div 
+                           className="w-8 h-10 bg-rose-500 border-2 border-white rounded-t-full rounded-b-2xl shadow-xl flex flex-col items-center justify-start pt-1"
+                           animate={{ rotate: isSpinning ? [-2, 2, -2] : 0 }}
+                           transition={{ repeat: Infinity, duration: 0.1 }}
+                         >
+                            <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />
+                         </motion.div>
+                      </div>
+                   </div>
+ 
+                   <div className="relative z-10 mt-12 flex flex-col items-center gap-4">
+                      <div className="flex items-center gap-4 bg-black/40 p-4 rounded-3xl border border-white/5 w-full justify-center">
+                         <div className="text-center">
+                            <p className="text-[10px] font-black text-rose-400 uppercase tracking-[0.2em] mb-1">고정 배팅 금액</p>
+                            <p className="text-3xl font-black text-white italic">0.2 <span className="text-sm font-bold text-rose-500 not-italic">P</span></p>
+                         </div>
+                      </div>
+                      
+                      <p className="text-[10px] font-black text-white/40 italic">돌릴 때마다 행운이 찾아옵니다! 지금 바로 시작을 누르세요.</p>
+                   </div>
+                </div>
+             </motion.div>
+           )}
+ 
+             {activeTab === 'ship' && (
+               <motion.div key="ship" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.05 }} className="space-y-6 pt-4">
+                  <div className="relative bg-[#075985] rounded-[2.5rem] border-8 border-slate-900 shadow-2xl overflow-hidden min-h-[440px] group">
+                     {/* Shipyard Background */}
+                     <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=1200&auto=format&fit=crop')] bg-cover bg-center opacity-40 mix-blend-overlay" />
+                     <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-blue-900 via-blue-900/40 to-transparent pointer-events-none" />
+                     <div className="absolute inset-0 bg-blue-500/5 backdrop-blur-[0.5px]" />
                      
-                     {/* The Wheel */}
-                     <motion.div 
-                       className="w-72 h-72 rounded-full relative z-10 shadow-2xl border-[10px] border-[#3182f6]" 
-                       style={{ transformStyle: 'preserve-3d', background: '#3182f6' }}
-                       animate={{ rotate: rotation }} 
-                       transition={{ 
-                         rotate: { 
-                           duration: 7, 
-                           ease: [0.15, 0, 0.05, 1],
-                           type: "spring",
-                           stiffness: 15,
-                           damping: 8,
-                           mass: 1.2
-                         } 
-                       }}
+                     {/* Waves animations */}
+                     <div className="absolute bottom-0 left-0 right-0 h-24 overflow-hidden pointer-events-none">
+                        <div className="water-animation opacity-30 absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/waves.png')] scale-150" />
+                     </div>
+ 
+                     {/* Header Board */}
+                     <div className="relative z-20 flex justify-center pt-6 pb-2">
+                        <div className="bg-slate-900 border-2 border-primary/40 px-8 py-3 rounded-2xl shadow-2xl backdrop-blur-xl">
+                           <h3 className="text-xl md:text-2xl font-black text-white italic tracking-tighter drop-shadow-lg uppercase leading-none">
+                              진수식 배 띄우기 레이스
+                           </h3>
+                           <div className="flex justify-center gap-1 mt-1">
+                              {[1,2,3].map(i => <div key={i} className="w-1 h-1 rounded-full bg-primary/40 animate-pulse" style={{ animationDelay: `${i*0.2}s` }} />)}
+                           </div>
+                        </div>
+                     </div>
+ 
+                     <div className="relative px-4 pb-12 space-y-2.5 mt-6">
+                        {/* Finish Line (Harbor Entrance) */}
+                        <div className="absolute right-4 top-0 bottom-0 w-8 bg-gradient-to-r from-transparent via-white/5 to-transparent border-x border-white/10 z-10 flex flex-col items-center justify-around">
+                           {[...Array(10)].map((_, i) => <div key={i} className="w-2 h-0.5 bg-yellow-400/50" />)}
+                        </div>
+                        
+                        {[0, 1, 2, 3, 4].map(idx => {
+                          const shipNames = ['컨테이너선', 'LNG선', '유조선', '벌크선', '화학선'];
+                          const shipIcons = ['🚢', '⛴️', '🛳️', '🛥️', '🚢'];
+                          const shipColors = ['from-orange-500 to-rose-600', 'from-blue-500 to-cyan-600', 'from-emerald-500 to-teal-600', 'from-purple-500 to-indigo-600', 'from-amber-500 to-yellow-600'];
+                          
+                          return (
+                            <div key={idx} className="relative h-14 flex flex-col justify-center">
+                               {/* Dock Lane */}
+                               <div className="absolute inset-y-1 left-0 right-4 bg-slate-900/40 border-y border-white/5 rounded-lg flex items-center px-4">
+                                  <span className="text-[10px] font-black text-white/5 uppercase tracking-widest">{shipNames[idx]} 선석</span>
+                               </div>
+                               
+                               <motion.div 
+                                 animate={{ x: `${shipStats[idx]?.pos}%` }} 
+                                 transition={{ type: 'tween', ease: 'linear', duration: 0.1 }}
+                                 className="absolute inset-y-0 z-20 left-0 right-12 flex items-center"
+                               >
+                                  <div className="flex items-center gap-3">
+                                     <div className="relative">
+                                        <div className={cn(
+                                          "w-12 h-12 rounded-2xl border-2 border-white/20 shadow-2xl flex items-center justify-center text-xl relative bg-gradient-to-br overflow-hidden",
+                                          shipColors[idx],
+                                          winner === idx && "ring-4 ring-yellow-400 animate-pulse scale-125 z-30",
+                                          shipStats[idx]?.status !== 'normal' && "filter contrast-125"
+                                        )}>
+                                           <div className="absolute inset-0 bg-black/20" />
+                                           <span className="relative z-10 drop-shadow-lg">{shipIcons[idx]}</span>
+                                           
+                                           {/* Propeller animation if normal/fuel */}
+                                           {(shipStats[idx]?.status === 'normal' || shipStats[idx]?.status === 'fuel') && (
+                                             <div className="absolute left-0 bottom-0 w-full h-1 bg-white/20 animate-pulse" />
+                                           )}
+                                        </div>
+                                        
+                                        {/* Name Badge */}
+                                        <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap bg-black/80 px-1.5 py-0.5 rounded border border-white/10 z-20">
+                                           <p className="text-[7px] font-black text-white uppercase tracking-tighter italic">{shipNames[idx]} | {Math.floor(shipStats[idx]?.pos || 0)}%</p>
+                                        </div>
+                                     </div>
+ 
+                                     {/* Event Feedback */}
+                                     <AnimatePresence>
+                                        {shipStats[idx]?.event && (
+                                          <motion.div 
+                                            initial={{ opacity: 0, x: -20 }} 
+                                            animate={{ opacity: 1, x: 0 }} 
+                                            exit={{ opacity: 0, y: -20 }}
+                                            className="bg-black/90 p-1.5 rounded-lg border border-white/10 shadow-xl"
+                                          >
+                                             <p className="text-[8px] font-black text-white italic whitespace-nowrap">{shipStats[idx].event}</p>
+                                          </motion.div>
+                                        )}
+                                     </AnimatePresence>
+                                  </div>
+                               </motion.div>
+                            </div>
+                          );
+                        })}
+                     </div>
+ 
+                     {!isRacing && winner === null && (
+                       <div className="absolute inset-0 flex items-center justify-center z-30 px-6 backdrop-blur-[2px]">
+                         <div className="bg-slate-900 border-2 border-primary/40 p-6 rounded-[2.5rem] shadow-2xl max-w-xs w-full text-center space-y-4">
+                            <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto border border-primary/20">
+                               <Anchor className="w-6 h-6 text-primary" />
+                            </div>
+                            <div className="space-y-1">
+                               <h4 className="text-white font-black text-lg italic uppercase leading-none">진수식 레이스 대기</h4>
+                               <p className="text-white/40 text-[9px] font-bold uppercase tracking-widest leading-relaxed">
+                                  격동하는 바다를 가를 선박을 선택하세요!<br/>
+                                  우승 시 배팅액의 <span className="text-primary font-black text-xs">5배</span> 획득
+                               </p>
+                            </div>
+                         </div>
+                       </div>
+                     )}
+                  </div>
+ 
+                  <div className="grid grid-cols-5 gap-2">
+                     {[0, 1, 2, 3, 4].map(idx => {
+                       const shipNames = ['컨테이너선', 'LNG선', '유조선', '벌크선', '화학선'];
+                       const shipIcons = ['🚢', '⛴️', '🛳️', '🛥️', '🚢'];
+                       const shipColors = ['bg-orange-500', 'bg-blue-500', 'bg-emerald-500', 'bg-purple-500', 'bg-amber-500'];
+                       
+                       return (
+                         <button 
+                           key={idx} 
+                           onClick={() => !isRacing && setSelectedShip(idx)} 
+                           className={cn(
+                             "group p-3 rounded-[1.5rem] border-2 transition-all text-center flex flex-col items-center gap-2", 
+                             selectedShip === idx 
+                               ? "bg-white border-primary text-black shadow-xl translate-y-[-4px] scale-105" 
+                               : "bg-white/5 border-white/5 text-white/40 hover:text-white hover:bg-white/10"
+                           )}
+                         >
+                           <div className={cn("w-10 h-10 rounded-2xl flex items-center justify-center text-xl shadow-lg transition-transform group-hover:scale-110", shipColors[idx])}>{shipIcons[idx]}</div>
+                           <div className="text-[8px] font-black uppercase tracking-tighter leading-tight italic">{shipNames[idx]}</div>
+                         </button>
+                       );
+                     })}
+                  </div>
+ 
+                  <div className="space-y-4">
+                     <div className="bg-slate-900 border border-white/5 p-4 rounded-3xl flex flex-col items-center gap-1 shadow-inner relative overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-primary/5 pointer-events-none" />
+                        <span className="text-[9px] font-black text-white/40 uppercase tracking-[0.2em] relative z-10">진수식 배 띄우기</span>
+                        <span className="text-3xl font-black text-white italic relative z-10">0.2 <span className="text-sm font-bold text-primary not-italic">P</span></span>
+                     </div>
+                     
+                     <Button 
+                       onClick={startShipRace} 
+                       disabled={isRacing || selectedShip === null} 
+                       className={cn(
+                         "w-full h-16 rounded-[1.8rem] font-black text-xl shadow-2xl transition-all active:scale-95 uppercase italic",
+                         isRacing ? "bg-white/5 text-white/20" : "bg-gradient-to-r from-primary to-[#3182f6] text-white hover:shadow-primary/20"
+                       )}
                      >
-                        <svg viewBox="0 0 100 100" className="w-full h-full">
-                           {DEFAULT_ROULETTE_SETTINGS.map((s, i) => {
-                              const angle = 360 / DEFAULT_ROULETTE_SETTINGS.length;
-                              const sAngle = i * angle - 90;
-                              const eAngle = (i + 1) * angle - 90;
-                              const x1 = 50 + 50 * Math.cos((Math.PI * sAngle) / 180);
-                              const y1 = 50 + 50 * Math.sin((Math.PI * sAngle) / 180);
-                              const x2 = 50 + 50 * Math.cos((Math.PI * eAngle) / 180);
-                              const y2 = 50 + 50 * Math.sin((Math.PI * eAngle) / 180);
-                              return (
-                                <g key={s.id}>
-                                   <path d={`M 50 50 L ${x1} ${y1} A 50 50 0 0 1 ${x2} ${y2} Z`} fill={s.color} stroke="#3182f6" strokeWidth="1" />
-                                   <text 
-                                     x="50" y="16" 
-                                     transform={`rotate(${sAngle + angle/2 + 90}, 50, 50)`} 
-                                     fill={s.label === '꽝!' ? '#ef4444' : '#1e293b'} 
-                                     className="text-[5px] font-black uppercase tracking-tighter" 
-                                     textAnchor="middle"
-                                   >
-                                      {s.label}
-                                   </text>
-                                </g>
-                              );
-                           })}
-                           
-                           {/* Small dot lights on the border */}
-                           {[...Array(12)].map((_, i) => {
-                             const dotAngle = i * (360/12);
-                             const dx = 50 + 47 * Math.cos((Math.PI * dotAngle) / 180);
-                             const dy = 50 + 47 * Math.sin((Math.PI * dotAngle) / 180);
-                             return <circle key={i} cx={dx} cy={dy} r="2" fill="white" className="animate-pulse" style={{ animationDelay: `${i*0.2}s` }} />;
-                           })}
-                        </svg>
-
-                        {/* Center START Button */}
-                        <div className="absolute inset-0 flex items-center justify-center">
-                           <button 
-                             onClick={spinRoulette}
-                             disabled={isSpinning}
-                             className={cn(
-                               "w-16 h-16 rounded-full bg-rose-500 border-4 border-white shadow-xl flex items-center justify-center transition-all active:scale-90",
-                               isSpinning ? "opacity-50 grayscale" : "hover:scale-105"
-                             )}
-                           >
-                              <span className="text-[10px] font-black text-white italic drop-shadow-md">START!</span>
-                           </button>
-                        </div>
-                     </motion.div>
-
-                     {/* Top Pointer */}
-                     <div className="absolute top-[-10px] left-1/2 -translate-x-1/2 z-20 flex flex-col items-center">
-                        <motion.div 
-                          className="w-8 h-10 bg-rose-500 border-2 border-white rounded-t-full rounded-b-2xl shadow-xl flex flex-col items-center justify-start pt-1"
-                          animate={{ rotate: isSpinning ? [-2, 2, -2] : 0 }}
-                          transition={{ repeat: Infinity, duration: 0.1 }}
-                        >
-                           <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />
-                        </motion.div>
-                     </div>
+                       {isRacing ? '진수식 진행 중...' : '배팅 완료 & 배 띄우기'}
+                     </Button>
                   </div>
-
-                  <div className="relative z-10 mt-12 flex flex-col items-center gap-4">
-                     <div className="flex items-center gap-4 bg-black/40 p-2 rounded-2xl border border-white/5 w-full">
-                        <Button variant="ghost" className="h-12 w-12 rounded-xl hover:bg-white/10" onClick={() => setPointsToBet(Math.max(1, pointsToBet - 10))} disabled={isSpinning}><Minus className="w-4 h-4" /></Button>
-                        <div className="flex-1 text-center">
-                           <p className="text-[8px] font-bold text-white/40 uppercase mb-0.5">BETTING AMOUNT</p>
-                           <Input value={pointsToBet} readOnly className="h-8 border-none bg-transparent text-lg font-black text-center p-0 focus-visible:ring-0" />
-                        </div>
-                        <Button variant="ghost" className="h-12 w-12 rounded-xl hover:bg-white/10" onClick={() => setPointsToBet(pointsToBet + 10)} disabled={isSpinning}><Plus className="w-4 h-4" /></Button>
-                     </div>
-                     
-                     <p className="text-[10px] font-black text-white/40 italic">돌릴 때마다 행운이 찾아옵니다! 지금 바로 START를 누르세요.</p>
-                  </div>
-               </div>
-            </motion.div>
-          )}
+               </motion.div>
+            )}
 
             {activeTab === 'snail' && (
-              <motion.div key="snail" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.05 }} className="space-y-6 pt-4">
-                 <div className="relative bg-[#4a6b22] rounded-[2.5rem] border-4 border-[#3a2a1a] shadow-2xl overflow-hidden min-h-[400px]">
-                    {/* Forest Background overlay */}
-                    <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1441974231531-c6227db76b6e?q=80&w=800&auto=format&fit=crop')] bg-cover bg-center opacity-60 mix-blend-overlay" />
-                    
-                    {/* Header Board */}
-                    <div className="relative z-20 flex justify-center pt-4 pb-2">
-                       <div className="bg-[#5c4033] border-4 border-[#3a2a1a] px-8 py-3 rounded-xl shadow-lg transform -rotate-1">
-                          <h3 className="text-xl md:text-2xl font-black text-[#fef3c7] drop-shadow-[0_2px_0_rgba(0,0,0,1)] uppercase tracking-tighter">
-                             건명 달팽이 레이싱 게임
-                          </h3>
-                       </div>
-                    </div>
+                <motion.div key="snail" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.05 }} className="space-y-6 pt-4">
+                   <div className="relative bg-[#4a6b22] rounded-[3rem] border-[10px] border-[#3e2723] shadow-2xl overflow-hidden min-h-[580px] group">
+                      {/* Nature Background */}
+                      <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1441974231531-c6227db76b6e?q=80&w=1200&auto=format&fit=crop')] bg-cover bg-center brightness-90 scale-110" />
+                      <div className="absolute inset-0 bg-emerald-900/20 backdrop-blur-[0.5px]" />
+                      
+                      {/* Title Bar */}
+                      <div className="relative z-20 flex justify-center pt-8 pb-4">
+                         <div className="bg-gradient-to-b from-[#a1887f] to-[#8d6e63] border-4 border-yellow-400 px-8 py-3 rounded-2xl shadow-[0_8px_0_#5d4037] transform -rotate-1 relative overflow-hidden">
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent" />
+                            <div className="absolute top-0 left-0 w-full h-1 bg-white/30" />
+                            <div className="flex items-center gap-2">
+                               <Trophy className="w-5 h-5 text-yellow-300 drop-shadow-md" />
+                               <h3 className="text-xl md:text-2xl font-black text-white italic tracking-tighter drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] uppercase leading-none font-serif whitespace-nowrap">
+                                  건명 달팽이 레이싱
+                               </h3>
+                               <Trophy className="w-5 h-5 text-yellow-300 drop-shadow-md" />
+                            </div>
+                         </div>
+                      </div>
 
-                    <div className="relative px-4 pb-8 space-y-3 mt-4">
-                       {/* Finish line */}
-                       <div className="absolute right-12 top-0 bottom-0 w-4 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] bg-white/20 border-x border-black/20 z-10" />
-                       
-                       {[0, 1, 2, 3, 4].map(idx => {
+                      <div className="relative px-8 pb-16 space-y-7 mt-8">
+                         {/* Finish Line Flag */}
+                         <div className="absolute right-4 top-0 bottom-0 w-8 flex flex-col items-center justify-around z-10 pointer-events-none opacity-80">
+                            {[...Array(12)].map((_, i) => (
+                               <div key={i} className="flex flex-col items-center gap-1">
+                                  <div className="w-4 h-4 bg-white/10 rounded-full border-2 border-white/20 flex items-center justify-center font-black text-[8px] text-white/40">G</div>
+                               </div>
+                            ))}
+                         </div>
+                         
+                         {[0, 1, 2, 3, 4].map(idx => {
+                            const snailNames = ['건', '명', '안', '전', '승'];
+                            const snailColors = ['#fbbf24', '#60a5fa', '#34d399', '#c084fc', '#fb7185'];
+                            
+                            return (
+                              <div key={idx} className="relative h-14 flex flex-col justify-center">
+                                {/* Track Line */}
+                                <div className="absolute inset-y-1 left-0 right-4 bg-[#8d6e63] border-y-4 border-[#5d4037] rounded-full overflow-hidden shadow-inner">
+                                   <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] opacity-15 brightness-200" />
+                                   <div className="absolute inset-x-0 h-0.5 top-1/2 -translate-y-1/2 flex justify-between px-20">
+                                      {[...Array(6)].map((_, i) => <div key={i} className="w-8 h-full bg-white/10 rounded-full" />)}
+                                   </div>
+                                </div>
+                                
+                                <motion.div 
+                                  animate={{ left: `${snailStats[idx]?.pos}%` }} 
+                                  transition={{ type: 'tween', ease: 'linear', duration: 0.1 }}
+                                  className="absolute inset-y-0 z-20 left-0 flex items-center"
+                                  style={{ transform: 'translateX(-50%)' }}
+                                >
+                                   <div className="flex flex-col items-center relative">
+                                      {/* Event Bubble */}
+                                      <AnimatePresence>
+                                         {snailStats[idx]?.event && (
+                                            <motion.div 
+                                              initial={{ opacity: 0, scale: 0.5 }}
+                                              animate={{ opacity: 1, y: -45, scale: 1 }}
+                                              exit={{ opacity: 0, scale: 0.8 }}
+                                              className="absolute top-0 flex justify-center z-30"
+                                            >
+                                               <div className="bg-white/95 text-black text-[10px] font-black px-3 py-1.5 rounded-full shadow-2xl border-2 border-primary/30 whitespace-nowrap animate-bounce flex items-center gap-1">
+                                                  <span>{snailStats[idx].event}</span>
+                                               </div>
+                                            </motion.div>
+                                         )}
+                                      </AnimatePresence>
+                                      
+                                      <div className="relative group flex flex-col items-center">
+                                         {/* Name Tag */}
+                                         <motion.div 
+                                           animate={isSnailRacing ? { y: [0, -2, 0] } : {}}
+                                           transition={{ repeat: Infinity, duration: 0.5 }}
+                                           className="px-2 py-0.5 rounded-full border-[2px] border-white flex items-center justify-center text-[9px] font-black shadow-lg relative z-20 mb-[-4px]"
+                                           style={{ backgroundColor: snailColors[idx] }}
+                                         >
+                                            <span className="text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)] italic z-10">{snailNames[idx]}</span>
+                                         </motion.div>
+ 
+                                         {/* Snail Body (Icon) - Facing Forward (Right) */}
+                                         <div className="text-5xl filter drop-shadow-md z-10 translate-y-1 scale-x-[-1] relative">
+                                            <span className={cn(isSnailRacing && "inline-block animate-bounce")}>🐌</span>
+                                            
+                                            {/* Percentage Display */}
+                                            <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 scale-x-[-1] whitespace-nowrap bg-black/70 px-2 py-0.5 rounded-full border border-white/20 shadow-xl">
+                                               <p className="text-[10px] font-black text-yellow-400 italic font-mono">{Math.floor(snailStats[idx]?.pos || 0)}%</p>
+                                            </div>
+                                         </div>
+                                      </div>
+                                   </div>
+                                </motion.div>
+                              </div>
+                            );
+                         })}
+                      </div>
+
+                      {!isSnailRacing && snailWinner === null && (
+                        <div className="absolute inset-0 flex items-center justify-center z-30 px-6 backdrop-blur-[2px]">
+                          <motion.div 
+                            initial={{ scale: 0.9, opacity: 0 }} 
+                            animate={{ scale: 1, opacity: 1 }}
+                            className="bg-[#fff9e6] border-[6px] border-[#fde68a] p-10 rounded-[3rem] shadow-2xl max-w-sm w-full text-center space-y-6 relative overflow-hidden"
+                          >
+                             <div className="absolute top-0 inset-x-0 h-2 bg-yellow-400/20" />
+                             
+                             <h4 className="text-[#3c2a1a] font-black text-3xl italic uppercase drop-shadow-sm whitespace-nowrap">레이싱 진행정보</h4>
+                             <div className="h-0.5 w-full bg-[#3c2a1a]/10" />
+                             
+                             <p className="text-[#3c2a1a] text-sm font-bold leading-relaxed px-2">
+                                원하시는 달팽이를 선택하고 배팅 버튼을 눌러주세요!<br/>
+                                <span className="text-rose-600 font-extrabold">1등 도착 시 배팅액의 5배</span>를 획득합니다.
+                             </p>
+
+                             <div className="flex justify-center gap-1 animate-bounce">
+                                {[1,2,3].map(i => <div key={i} className="w-2 h-2 rounded-full bg-yellow-500" />)}
+                             </div>
+                          </motion.div>
+                        </div>
+                      )}
+                      
+                      <AnimatePresence>
+                         {snailWinner !== null && (
+                            <motion.div 
+                              initial={{ opacity: 0, scale: 0.9 }} 
+                              animate={{ opacity: 1, scale: 1 }}
+                              className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+                            >
+                               <div className="bg-[#5d4037] border-4 border-yellow-500 p-8 rounded-[3rem] text-center shadow-2xl max-w-xs w-full">
+                                  <Trophy className="w-16 h-16 text-yellow-400 mx-auto mb-4 drop-shadow-lg" />
+                                  <h4 className="text-3xl font-black text-white italic mb-2">승리!</h4>
+                                  <div 
+                                    className="w-20 h-20 rounded-full mx-auto flex items-center justify-center text-4xl font-black text-white border-4 border-white mb-4 shadow-xl"
+                                    style={{ backgroundColor: ['#fbbf24', '#60a5fa', '#34d399', '#c084fc', '#fb7185'][snailWinner] }}
+                                  >
+                                     {['건', '명', '안', '전', '승'][snailWinner]}
+                                  </div>
+                                  <Button 
+                                    onClick={() => setSnailWinner(null)}
+                                    className="w-full bg-yellow-500 hover:bg-yellow-600 text-[#3e2723] font-black h-12 rounded-xl text-lg shadow-[0_4px_0_#b8860b]"
+                                  >
+                                     확인
+                                  </Button>
+                               </div>
+                            </motion.div>
+                         )}
+                      </AnimatePresence>
+                   </div>
+
+                   <div className="grid grid-cols-5 gap-3">
+                      {[0, 1, 2, 3, 4].map(idx => {
                          const snailNames = ['건', '명', '안', '전', '승'];
-                         const snailColors = ['bg-orange-500', 'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-rose-500'];
+                         const snailColors = ['bg-[#fbbf24]', 'bg-[#60a5fa]', 'bg-[#34d399]', 'bg-[#c084fc]', 'bg-[#fb7185]'];
                          
                          return (
-                           <div key={idx} className="relative h-14 md:h-16 flex flex-col justify-center">
-                              {/* Track */}
-                              <div className="absolute inset-0 bg-[#3d2b1f]/40 border-b border-white/5 rounded-lg" />
-                              
-                              <motion.div 
-                                animate={{ x: `${snailStats[idx]?.pos}%` }} 
-                                className="absolute z-20 left-0 right-16 flex items-center gap-2"
-                              >
-                                 <div className="flex flex-col items-center">
-                                    <div className={cn(
-                                      "w-10 h-10 md:w-12 md:h-12 rounded-full border-4 border-white shadow-xl flex items-center justify-center text-lg font-black text-white relative",
-                                      snailColors[idx],
-                                      winner === idx && "ring-4 ring-yellow-400 animate-pulse scale-110",
-                                      snailStats[idx]?.status === 'sleeping' && "grayscale opacity-50"
-                                    )}>
-                                       {snailNames[idx]}
-                                       <div className="absolute -right-2 top-0 text-xl overflow-visible">🐌</div>
-                                    </div>
-                                    
-                                    {/* Progress badge */}
-                                    <div className="mt-1 bg-black/60 rounded px-1.5 py-0.5 border border-white/10">
-                                       <p className="text-[8px] font-black text-white tracking-tighter">{(snailStats[idx]?.pos || 0).toFixed(2)}%</p>
-                                    </div>
-                                 </div>
-
-                                 <AnimatePresence>
-                                   {snailStats[idx]?.status === 'sleeping' && (
-                                     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 10 }} exit={{ opacity: 0 }} className="text-sm">💤</motion.div>
-                                   )}
-                                   {snailStats[idx]?.status === 'eating' && (
-                                     <motion.div initial={{ opacity: 0, scale: 0 }} animate={{ opacity: 1, scale: 1, x: 10 }} exit={{ opacity: 0 }} className="text-lg">🥬</motion.div>
-                                   )}
-                                 </AnimatePresence>
-                              </motion.div>
-                           </div>
+                          <button 
+                            key={idx} 
+                            onClick={() => !isSnailRacing && setSelectedSnail(idx)} 
+                            className={cn(
+                              "group p-3 rounded-[1.8rem] border-[4px] transition-all text-center flex flex-col items-center justify-center", 
+                              selectedSnail === idx 
+                                ? "bg-primary border-yellow-500 text-primary-foreground shadow-xl translate-y-[-6px] scale-105" 
+                                : "bg-muted border-border text-muted-foreground hover:bg-card"
+                            )}
+                          >
+                            <div className={cn("w-14 h-14 rounded-full flex items-center justify-center text-2xl font-black text-white transition-transform group-hover:rotate-12 shadow-lg", snailColors[idx])}>{snailNames[idx]}</div>
+                          </button>
                          );
-                       })}
-                    </div>
+                      })}
+                   </div>
 
-                    {!isRacing && winner === null && (
-                      <div className="absolute inset-0 flex items-center justify-center z-30 px-6">
-                        <div className="bg-[#fef3c7] border-8 border-[#5c4033] p-6 rounded-2xl shadow-2xl max-w-xs w-full text-center transform scale-90">
-                           <h4 className="text-[#5c4033] font-black text-lg mb-2 border-b-2 border-[#5c4033]/20 pb-1">레이싱 진행정보</h4>
-                           <p className="text-[#5c4033]/80 text-[10px] font-bold leading-tight">
-                              원하시는 달팽이를 선택하고 배팅 버튼을 눌러주세요!<br/>
-                              1등 도착 시 배팅액의 <span className="text-red-600 font-black">5배</span>를 획득합니다.
-                           </p>
-                        </div>
+                   <div className="space-y-4">
+                      <div className="bg-[#3e2723]/60 border-2 border-white/10 p-6 rounded-[2.5rem] flex flex-col items-center gap-1 shadow-2xl relative overflow-hidden backdrop-blur-xl">
+                         <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/5 to-transparent pointer-events-none" />
+                         <span className="text-[10px] font-black text-white/40 uppercase tracking-[0.4em] relative z-10">건명 달팽이 레이스</span>
+                         <span className="text-4xl font-black text-white italic relative z-10">0.2 <span className="text-sm font-bold text-yellow-500 not-italic">P</span></span>
                       </div>
-                    )}
-                 </div>
-
-                 <div className="grid grid-cols-5 gap-2">
-                    {[0, 1, 2, 3, 4].map(idx => {
-                      const snailNames = ['건', '명', '안', '전', '승'];
-                      const snailColors = ['bg-orange-500', 'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-rose-500'];
                       
-                      return (
-                        <button 
-                          key={idx} 
-                          onClick={() => !isRacing && setSelectedSnail(idx)} 
-                          className={cn(
-                            "p-3 rounded-xl border-4 transition-all text-center flex flex-col items-center gap-1.5", 
-                            selectedSnail === idx 
-                              ? "bg-white border-[#5c4033] text-[#5c4033] shadow-xl scale-105 z-10" 
-                              : "bg-white/5 border-transparent opacity-40 hover:opacity-100"
-                          )}
-                        >
-                          <div className={cn("w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-xs font-black text-white", snailColors[idx])}>{snailNames[idx]}</div>
-                          <div className="text-[9px] font-black">{idx + 1}호</div>
-                        </button>
-                      );
-                    })}
-                 </div>
-
-                 <div className="space-y-4">
-                    <div className="flex items-center gap-4">
-                       <Button variant="ghost" className="h-14 w-14 rounded-xl bg-white/5" onClick={() => setPointsToBet(Math.max(1, pointsToBet - 10))} disabled={isRacing}><Minus/></Button>
-                       <Input value={pointsToBet} readOnly className="h-14 text-center font-black bg-slate-900 border-white/5 rounded-xl flex-1 text-primary" />
-                       <Button variant="ghost" className="h-14 w-14 rounded-xl bg-white/5" onClick={() => setPointsToBet(pointsToBet + 10)} disabled={isRacing}><Plus/></Button>
-                    </div>
-                    <Button 
-                      onClick={startSnailRace} 
-                      disabled={isRacing || selectedSnail === null} 
-                      className={cn(
-                        "w-full h-16 rounded-[2rem] font-black text-xl shadow-2xl transition-all active:scale-95",
-                        isRacing ? "bg-white/10 text-white/50" : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-blue-500/20"
-                      )}
-                    >
-                      {isRacing ? '레이스 광란의 질주 중!' : '내 달팽이 배팅하기 (5배)'}
-                    </Button>
-                    <p className="text-[10px] text-center font-black text-white/20 uppercase tracking-widest italic">다섯 마리의 달팽이가 보여주는 10초간의 긴박한 드라마!</p>
-                 </div>
-              </motion.div>
+                      <Button 
+                        onClick={startSnailRace} 
+                        disabled={isSnailRacing || selectedSnail === null} 
+                        className={cn(
+                          "w-full h-20 rounded-[2.5rem] font-black text-2xl shadow-2xl transition-all active:scale-95 uppercase italic",
+                          isSnailRacing ? "bg-white/5 text-white/20" : "bg-gradient-to-r from-yellow-600 to-yellow-500 text-white hover:from-yellow-500 hover:to-yellow-400 hover:shadow-yellow-500/20"
+                        )}
+                      >
+                        {isSnailRacing ? '레이스 중...' : '배팅 완료 & 시작'}
+                      </Button>
+                      <p className="text-[11px] text-center font-black text-white/30 uppercase tracking-[0.2em] italic">※ 결과는 0.01초의 오차 없이 공정하게 계산됩니다.</p>
+                   </div>
+                </motion.div>
             )}
 
-            {activeTab === 'fishing' && (
+          {activeTab === 'fishing' && (
             <motion.div key="fishing" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.05 }} className="space-y-6 pt-4 h-full">
                <div className="relative h-[500px] bg-[#0ea5e9] rounded-[3rem] border-8 border-[#3a2a1a] shadow-2xl overflow-hidden group select-none">
                   {/* Immersive Background */}
@@ -796,7 +1225,7 @@ export const Entertainment: React.FC = () => {
                                  <div className="absolute inset-y-0 left-[50%] right-[30%] bg-emerald-500/30 border-x border-white/20" />
                               </div>
                               <div className="flex justify-between px-4 mt-1.5">
-                                 <span className="text-[9px] font-black text-white/50 tracking-tighter italic">릴 텐션 (TENSION)</span>
+                                 <span className="text-[9px] font-black text-white/50 tracking-tighter italic">릴 텐션</span>
                                  <span className={cn("text-[9px] font-black italic tracking-tighter", lineTension > 70 ? "text-red-400 animate-pulse" : "text-emerald-400")}>
                                     {lineTension > 70 ? "줄 끊어짐 위험!" : lineTension > 50 ? "좋아요! 유지하세요" : "조금 더 당기세요"}
                                  </span>
@@ -806,33 +1235,29 @@ export const Entertainment: React.FC = () => {
                     )}
                  </AnimatePresence>
 
-                  {/* UI: Fish HP (Top Left - Clear of Reel Button) */}
+                  {/* UI: Fish HP (Top Center - Repositioned to avoid overlap) */}
                   <AnimatePresence>
                      {fishingStatus === 'fight' && (
                         <motion.div 
-                          initial={{ x: -100, opacity: 0 }}
-                          animate={{ x: 20, opacity: 1 }}
-                          className="absolute top-24 left-4 z-40 pointer-events-none w-36"
+                          initial={{ y: -100, opacity: 0 }}
+                          animate={{ y: 80, opacity: 1 }}
+                          className="absolute top-0 left-1/2 -translate-x-1/2 z-40 pointer-events-none w-48"
                         >
-                           <div className="bg-black/90 backdrop-blur-xl rounded-2xl p-3 border border-white/10 shadow-2xl">
-                              <div className="flex items-center gap-3 mb-2">
-                                 <div className="text-3xl animate-bounce">
-                                    {targetFish?.icon || '🐟'}
-                                 </div>
-                                 <div className="flex flex-col">
+                           <div className="bg-black/95 backdrop-blur-xl rounded-2xl p-3 border border-white/20 shadow-2xl">
+                              <div className="flex items-center justify-between mb-2">
+                                 <div className="flex items-center gap-2">
+                                    <div className="text-2xl animate-bounce">
+                                       {targetFish?.icon || '🐟'}
+                                    </div>
                                     <span className="text-[10px] font-black text-white italic tracking-tight truncate uppercase">{targetFish?.name || '목표'}</span>
-                                    <span className="text-[7px] font-bold text-red-500 tracking-[0.2em] uppercase">Energy Gauge</span>
                                  </div>
+                                 <span className="text-[10px] font-black text-white/60 italic">{Math.ceil(fishHealth)}%</span>
                               </div>
                               <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden border border-white/5">
                                  <motion.div 
                                    className="h-full bg-gradient-to-r from-red-600 via-yellow-500 to-red-400" 
                                    style={{ width: `${fishHealth}%` }} 
                                  />
-                              </div>
-                              <div className="mt-1 flex justify-between items-center">
-                                 <span className="text-[7px] font-bold text-white/20">STATUS: FIGHTING</span>
-                                 <span className="text-[10px] font-black text-white/60 italic">{Math.ceil(fishHealth)}%</span>
                               </div>
                            </div>
                         </motion.div>
@@ -1042,20 +1467,12 @@ export const Entertainment: React.FC = () => {
 
                <div className="space-y-6">
                   {/* Bet Selection */}
+                  {/* Bet Information (Fixed at 0.2P) */}
                   {!isFishing && (
-                     <div className="bg-black/20 p-2 rounded-3xl border border-white/5 flex gap-2">
-                        {[1, 10, 50, 100, 500].map(points => (
-                           <button
-                             key={points}
-                             onClick={() => setFishingPointsBet(points)}
-                             className={cn(
-                               "flex-1 h-10 rounded-2xl text-xs font-black transition-all",
-                               fishingPointsBet === points ? "bg-primary text-white shadow-lg" : "text-white/40 hover:text-white"
-                             )}
-                           >
-                              {points}
-                           </button>
-                        ))}
+                     <div className="bg-slate-900/40 p-4 rounded-3xl border border-white/5 flex flex-col items-center gap-1 shadow-inner relative overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 via-transparent to-emerald-500/5 pointer-events-none" />
+                        <span className="text-[9px] font-black text-white/40 uppercase tracking-[0.2em] relative z-10">고정 배팅 금액</span>
+                        <span className="text-3xl font-black text-white italic relative z-10">0.2 <span className="text-sm font-bold text-emerald-500 not-italic">P</span></span>
                      </div>
                   )}
 
@@ -1102,23 +1519,23 @@ export const Entertainment: React.FC = () => {
          </AnimatePresence>
       </div>
 
-      <div className="space-y-4 pt-4">
-         <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest px-1">최근 행운 내역</h4>
-         <div className="space-y-2">
-            {gameHistory.map((h, i) => (
-              <div key={i} className="bg-card p-4 rounded-2xl border border-white/5 flex justify-between items-center shadow-lg">
-                 <div className="flex items-center gap-3">
-                    <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", h.winPoints > 0 ? "bg-primary/20 text-primary" : "bg-white/5 text-white/20")}><Trophy className="w-5 h-5" /></div>
-                    <div>
-                       <p className="text-sm font-black">{h.label}</p>
-                       <p className="text-[10px] text-muted-foreground font-bold">{format(new Date(h.createdAt), 'HH:mm:ss')}</p>
-                    </div>
-                 </div>
-                 <span className={cn("text-lg font-black", h.winPoints > 0 ? "text-primary" : "text-white/20")}>{h.winPoints > 0 ? `+${h.winPoints}` : '0'}P</span>
-              </div>
-            ))}
-         </div>
-      </div>
+          <div className="space-y-4 pt-4">
+             <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest px-1">최근 행운 내역</h4>
+             <div className="space-y-2">
+                {gameHistory.map((h, i) => (
+                  <div key={i} className="bg-card p-4 rounded-2xl border border-border flex justify-between items-center shadow-lg">
+                     <div className="flex items-center gap-3">
+                        <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", h.winPoints > 0 ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground/30")}><Trophy className="w-5 h-5" /></div>
+                        <div>
+                           <p className="text-sm font-black text-foreground">{h.label}</p>
+                           <p className="text-[10px] text-muted-foreground font-bold">{format(new Date(h.createdAt), 'HH:mm:ss')}</p>
+                        </div>
+                     </div>
+                     <span className={cn("text-lg font-black", h.winPoints > 0 ? "text-primary" : "text-muted-foreground/30")}>{h.winPoints > 0 ? `+${h.winPoints}` : '0'}P</span>
+                  </div>
+                ))}
+             </div>
+          </div>
     </div>
   );
 };

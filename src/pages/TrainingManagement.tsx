@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '@/src/firebase';
+import { db } from '@/firebase';
 import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
 import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, orderBy } from 'firebase/firestore';
-import { Training, JobRole, QuizQuestion, UserProfile, TrainingResult } from '@/src/types';
+import { Training, JobRole, QuizQuestion, UserProfile, TrainingResult } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,13 +25,13 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Plus, Trash2, BookOpen, Layers, HelpCircle, CheckCircle2, AlertCircle, FileUp, Clock, Eye, Send, Circle, Zap, Trophy, Download, FileText } from 'lucide-react';
-import { useAuth } from '@/src/components/AuthProvider';
+import { useAuth } from '@/components/AuthProvider';
 import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { GoogleGenAI } from "@google/genai";
 
-import { GlowLoading } from '@/src/components/GlowLoading';
-import { exportToExcel, exportToPDF } from '@/src/lib/exportUtils';
+import { GlowLoading } from '@/components/GlowLoading';
+import { exportToExcel, exportToPDF } from '@/lib/exportUtils';
 
 export const TrainingManagement: React.FC = () => {
   const { profile } = useAuth();
@@ -399,7 +399,7 @@ ${aiPrompt}`,
     return (
       <div className="flex flex-col items-center justify-center p-20 text-center">
         <AlertCircle className="w-12 h-12 text-red-400 mb-4 opacity-50" />
-        <h2 className="text-xl font-black text-white mb-2">권한이 없습니다</h2>
+        <h2 className="text-xl font-black text-foreground mb-2">권한이 없습니다</h2>
         <p className="text-sm font-bold text-muted-foreground">교육 관리 권한이 있는 관리자만 접근 가능합니다.</p>
       </div>
     );
@@ -412,12 +412,12 @@ ${aiPrompt}`,
       <div className="w-full max-w-lg space-y-10">
         {/* Title Area - Brutalist Label style */}
         <div className="flex flex-col gap-6 pt-4 text-left">
-          <div className="flex items-center gap-4 bg-card p-4 rounded-3xl shadow-sm border border-white/5">
+          <div className="flex items-center gap-4 bg-card p-4 rounded-3xl shadow-sm border border-border">
             <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-200/20">
               <Layers className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-bold tracking-tight text-white leading-none">교육 관리 시스템</h2>
+              <h2 className="text-xl font-bold tracking-tight text-foreground leading-none">교육 관리 시스템</h2>
               <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mt-1.5 flex items-center gap-1">
                 <Circle className="w-1.5 h-1.5 fill-emerald-500 text-emerald-500" /> Admin Service
               </p>
@@ -427,9 +427,9 @@ ${aiPrompt}`,
           <div className="flex gap-2">
             <Button 
               onClick={() => setIsAddOpen(true)}
-              className="h-16 flex-1 rounded-3xl bg-primary hover:bg-primary/90 shadow-xl shadow-primary/20 gap-3 font-black text-lg active:scale-[0.98] transition-all border-b-4 border-primary/70 text-white"
+              className="h-16 flex-1 rounded-3xl bg-primary hover:bg-primary/90 shadow-xl shadow-primary/20 gap-3 font-black text-lg active:scale-[0.98] transition-all border-b-4 border-primary/70 text-primary-foreground"
             >
-              <Plus className="w-6 h-6 text-white" /> 새 교육 자료 등록
+              <Plus className="w-6 h-6 text-primary-foreground" /> 새 교육 자료 등록
             </Button>
             <div className="flex flex-col gap-2">
               <Button 
@@ -446,7 +446,7 @@ ${aiPrompt}`,
                   }));
                   exportToExcel(data, '교육자료목록', '교육');
                 }}
-                className="h-7 rounded-lg bg-card border-white/5 text-muted-foreground font-black text-[9px] gap-1 px-2"
+                className="h-7 rounded-lg bg-card border-border text-muted-foreground font-black text-[9px] gap-1 px-2"
               >
                 <Download className="w-3 h-3 text-emerald-400" /> EXCEL
               </Button>
@@ -464,7 +464,7 @@ ${aiPrompt}`,
                   ]);
                   await exportToPDF('교육 자료 통합 보고서', headers, data, '교육보고서');
                 }}
-                className="h-7 rounded-lg bg-card border-white/5 text-muted-foreground font-black text-[9px] gap-1 px-2"
+                className="h-7 rounded-lg bg-card border-border text-muted-foreground font-black text-[9px] gap-1 px-2"
               >
                 <FileText className="w-3 h-3 text-rose-400" /> PDF
               </Button>
@@ -474,14 +474,14 @@ ${aiPrompt}`,
 
         {/* Custom Tab Switcher - More robust than standard Tabs component */}
         <div className="space-y-6">
-          <div className="bg-white/5 p-1.5 rounded-[2rem] flex gap-1.5 shadow-inner border border-white/5">
+          <div className="bg-muted p-1.5 rounded-[2rem] flex gap-1.5 shadow-inner border border-border">
             <button
               onClick={() => setActiveTab('PUBLISHED')}
               className={cn(
                 "flex-1 h-14 rounded-[1.7rem] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2",
                 activeTab === 'PUBLISHED' 
-                  ? "bg-white text-black shadow-lg scale-100" 
-                  : "text-muted-foreground hover:text-white hover:bg-white/5 scale-95 opacity-70"
+                  ? "bg-card text-foreground shadow-lg scale-100" 
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted scale-95 opacity-70"
               )}
             >
               <CheckCircle2 className={cn("w-4 h-4", activeTab === 'PUBLISHED' ? "text-emerald-500" : "text-muted-foreground")} />
@@ -492,8 +492,8 @@ ${aiPrompt}`,
               className={cn(
                 "flex-1 h-14 rounded-[1.7rem] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2",
                 activeTab === 'DRAFT' 
-                  ? "bg-white text-black shadow-lg scale-100" 
-                  : "text-muted-foreground hover:text-white hover:bg-white/5 scale-95 opacity-70"
+                  ? "bg-card text-foreground shadow-lg scale-100" 
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted scale-95 opacity-70"
               )}
             >
               <Eye className={cn("w-4 h-4", activeTab === 'DRAFT' ? "text-primary" : "text-muted-foreground")} />
@@ -524,9 +524,9 @@ ${aiPrompt}`,
 
       {/* Dialogs remain similar but ensure responsive padding */}
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <DialogContent className="bg-card border-none rounded-[2rem] sm:rounded-[3rem] shadow-2xl max-w-2xl w-[95vw] p-0 overflow-hidden flex flex-col max-h-[90vh] text-white">
-          <DialogHeader className="p-6 sm:p-10 pb-4 sm:pb-6 bg-white/5 border-b border-white/5 shrink-0 text-left">
-            <DialogTitle className="text-xl sm:text-3xl font-black tracking-tighter flex items-center gap-3 sm:gap-4 text-white">
+        <DialogContent className="bg-card border-none rounded-[2rem] sm:rounded-[3rem] shadow-2xl max-w-2xl w-[95vw] p-0 overflow-hidden flex flex-col max-h-[90vh] text-foreground">
+          <DialogHeader className="p-6 sm:p-10 pb-4 sm:pb-6 bg-muted/30 border-b border-border shrink-0 text-left">
+            <DialogTitle className="text-xl sm:text-3xl font-black tracking-tighter flex items-center gap-3 sm:gap-4 text-foreground">
               <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-500 shrink-0">
                 <BookOpen className="w-5 h-5 sm:w-7 h-7" />
               </div>
@@ -537,15 +537,15 @@ ${aiPrompt}`,
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">교육 제목</label>
-                <Input value={newTraining.title} onChange={e => setNewTraining({...newTraining, title: e.target.value})} placeholder="교육 제목 입력" className="h-12 font-bold bg-white/5 border-white/5 rounded-xl px-4 text-white placeholder:text-white/20" />
+                <Input value={newTraining.title} onChange={e => setNewTraining({...newTraining, title: e.target.value})} placeholder="교육 제목 입력" className="h-12 font-bold bg-muted border-border rounded-xl px-4 text-foreground placeholder:text-muted-foreground/30" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">대상 직무</label>
                 <Select value={newTraining.targetJobRole} onValueChange={v => setNewTraining({...newTraining, targetJobRole: v})}>
-                  <SelectTrigger className="h-12 bg-white/5 border-white/5 rounded-xl font-bold px-4 text-white">
+                  <SelectTrigger className="h-12 bg-muted border-border rounded-xl font-bold px-4 text-foreground">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#1c1c1e] rounded-xl border-white/5 shadow-xl text-white">
+                  <SelectContent className="bg-card rounded-xl border-border shadow-xl text-foreground">
                     <SelectItem value="ALL">전체 공통</SelectItem>
                     {jobRoles.map(jr => <SelectItem key={jr.id} value={jr.name}>{jr.name}</SelectItem>)}
                     {jobRoles.length === 0 && DEFAULT_JOB_ROLES.map(jr => <SelectItem key={jr} value={jr}>{jr}</SelectItem>)}
@@ -557,10 +557,10 @@ ${aiPrompt}`,
               <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">학습 파일 (PDF/Excel) - 파일 선택 또는 URL 입력</label>
               <div className="flex flex-col gap-2">
                 <div className="flex flex-col sm:flex-row gap-2">
-                  <div className="flex-1 h-12 bg-white/5 border border-white/5 rounded-xl flex items-center px-4 text-white/40 font-bold text-xs truncate">
+                  <div className="flex-1 h-12 bg-muted border border-border rounded-xl flex items-center px-4 text-muted-foreground/40 font-bold text-xs truncate">
                     {newTraining.fileName || '선택된 파일 없음'}
                   </div>
-                  <Button variant="outline" className="h-12 px-4 rounded-xl font-black border-white/10 bg-white/5 text-white gap-2 shrink-0 hover:bg-white/10" onClick={() => document.getElementById('edu-file-upload')?.click()}>
+                  <Button variant="outline" className="h-12 px-4 rounded-xl font-black border-border bg-muted text-foreground gap-2 shrink-0 hover:bg-muted/80" onClick={() => document.getElementById('edu-file-upload')?.click()}>
                     <FileUp className="w-4 h-4" /> 파일 찾기
                   </Button>
                   <input id="edu-file-upload" type="file" className="hidden" accept=".pdf,.xlsx,.xls,.doc,.docx,.ppt,.pptx,.hwp" onChange={handleFileUpload} />
@@ -569,33 +569,25 @@ ${aiPrompt}`,
                   value={newTraining.fileUrl} 
                   onChange={e => setNewTraining({...newTraining, fileUrl: e.target.value, fileName: e.target.value ? (newTraining.fileName || '교안 자료') : ''})} 
                   placeholder="또는 직접 다운로드 URL 입력 (https://...)" 
-                  className="h-12 font-bold bg-white/5 border-white/5 rounded-xl px-4 text-white placeholder:text-white/20" 
+                  className="h-12 font-bold bg-muted border-border rounded-xl px-4 text-foreground placeholder:text-muted-foreground/30" 
                 />
-                {newTraining.fileUrl && !newTraining.fileName && (
-                  <Input 
-                    value={newTraining.fileName} 
-                    onChange={e => setNewTraining({...newTraining, fileName: e.target.value})} 
-                    placeholder="표시할 파일 이름 입력" 
-                    className="h-12 font-bold bg-white/5 border-white/5 rounded-xl px-4 text-white placeholder:text-white/20" 
-                  />
-                )}
               </div>
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">설명</label>
-              <Input value={newTraining.description} onChange={e => setNewTraining({...newTraining, description: e.target.value})} placeholder="교육 리스트 요약 설명" className="h-12 font-bold bg-white/5 border-white/5 rounded-xl px-4 text-white placeholder:text-white/20" />
+              <Input value={newTraining.description} onChange={e => setNewTraining({...newTraining, description: e.target.value})} placeholder="교육 리스트 요약 설명" className="h-12 font-bold bg-muted border-border rounded-xl px-4 text-foreground placeholder:text-muted-foreground/30" />
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">비디오 URL</label>
-              <Input value={newTraining.videoUrl} onChange={e => setNewTraining({...newTraining, videoUrl: e.target.value})} placeholder="YouTube URL" className="h-12 font-bold bg-white/5 border-white/5 rounded-xl px-4 text-white placeholder:text-white/20" />
+              <Input value={newTraining.videoUrl} onChange={e => setNewTraining({...newTraining, videoUrl: e.target.value})} placeholder="YouTube URL" className="h-12 font-bold bg-muted border-border rounded-xl px-4 text-foreground placeholder:text-muted-foreground/30" />
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">상세 내용 (Markdown)</label>
-              <Textarea value={newTraining.content} onChange={e => setNewTraining({...newTraining, content: e.target.value})} placeholder="교육 내용 입력" className="min-h-[160px] font-bold bg-white/5 border-white/5 rounded-2xl p-4 text-sm text-white placeholder:text-white/20" />
+              <Textarea value={newTraining.content} onChange={e => setNewTraining({...newTraining, content: e.target.value})} placeholder="교육 내용 입력" className="min-h-[160px] font-bold bg-muted border-border rounded-2xl p-4 text-sm text-foreground placeholder:text-muted-foreground/30" />
             </div>
           </div>
-          <DialogFooter className="p-6 sm:p-10 pt-4 bg-white/5 border-t border-white/5 flex flex-col sm:flex-row gap-2 shrink-0">
-            <Button variant="ghost" className="h-12 rounded-xl font-black text-muted-foreground hover:text-white" onClick={() => handleCreateEducation('DRAFT')}>
+          <DialogFooter className="p-6 sm:p-10 pt-4 bg-muted/30 border-t border-border flex flex-col sm:flex-row gap-2 shrink-0">
+            <Button variant="ghost" className="h-12 rounded-xl font-black text-muted-foreground hover:text-foreground" onClick={() => handleCreateEducation('DRAFT')}>
               초안 저장
             </Button>
             <Button className="h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 font-black text-white px-8" onClick={() => handleCreateEducation('PUBLISHED')}>
@@ -607,9 +599,9 @@ ${aiPrompt}`,
 
       {/* Edit Dialog */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="bg-card border-none rounded-[2rem] sm:rounded-[3rem] shadow-2xl max-w-2xl w-[95vw] p-0 overflow-hidden flex flex-col max-h-[90vh] text-white">
-          <DialogHeader className="p-6 sm:p-10 pb-4 sm:pb-6 bg-white/5 border-b border-white/5 shrink-0 text-left">
-            <DialogTitle className="text-xl sm:text-3xl font-black tracking-tighter flex items-center gap-3 sm:gap-4 text-white">
+        <DialogContent className="bg-card border-none rounded-[2rem] sm:rounded-[3rem] shadow-2xl max-w-2xl w-[95vw] p-0 overflow-hidden flex flex-col max-h-[90vh] text-foreground">
+          <DialogHeader className="p-6 sm:p-10 pb-4 sm:pb-6 bg-muted/30 border-b border-border shrink-0 text-left">
+            <DialogTitle className="text-xl sm:text-3xl font-black tracking-tighter flex items-center gap-3 sm:gap-4 text-foreground">
               <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-500 shrink-0">
                 <FileUp className="w-5 h-5 sm:w-7 h-7" />
               </div>
@@ -621,15 +613,15 @@ ${aiPrompt}`,
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">교육 제목</label>
-                  <Input value={editTraining.title} onChange={e => setEditTraining({...editTraining, title: e.target.value})} placeholder="교육 제목 입력" className="h-12 font-bold bg-white/5 border-white/5 rounded-xl px-4 text-white placeholder:text-white/20" />
+                  <Input value={editTraining.title} onChange={e => setEditTraining({...editTraining, title: e.target.value})} placeholder="교육 제목 입력" className="h-12 font-bold bg-muted border-border rounded-xl px-4 text-foreground placeholder:text-muted-foreground/30" />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">대상 직무</label>
                   <Select value={editTraining.targetJobRole || 'ALL'} onValueChange={v => setEditTraining({...editTraining, targetJobRole: v})}>
-                    <SelectTrigger className="h-12 bg-white/5 border-white/5 rounded-xl font-bold px-4 text-white">
+                    <SelectTrigger className="h-12 bg-muted border-border rounded-xl font-bold px-4 text-foreground">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-[#1c1c1e] rounded-xl border-white/5 shadow-xl text-white">
+                    <SelectContent className="bg-card rounded-xl border-border shadow-xl text-foreground">
                       <SelectItem value="ALL">전체 공통</SelectItem>
                       {jobRoles.map(jr => <SelectItem key={jr.id} value={jr.name}>{jr.name}</SelectItem>)}
                       {jobRoles.length === 0 && DEFAULT_JOB_ROLES.map(jr => <SelectItem key={jr} value={jr}>{jr}</SelectItem>)}
@@ -641,10 +633,10 @@ ${aiPrompt}`,
                 <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">학습 파일 (PDF/Excel) - 파일 선택 또는 URL 입력</label>
                 <div className="flex flex-col gap-2">
                   <div className="flex flex-col sm:flex-row gap-2">
-                    <div className="flex-1 h-12 bg-white/5 border border-white/5 rounded-xl flex items-center px-4 text-white/40 font-bold text-xs truncate">
+                    <div className="flex-1 h-12 bg-muted border border-border rounded-xl flex items-center px-4 text-muted-foreground/40 font-bold text-xs truncate">
                       {editTraining.fileName || '선택된 파일 없음'}
                     </div>
-                    <Button variant="outline" className="h-12 px-4 rounded-xl font-black border-white/10 bg-white/5 text-white gap-2 shrink-0 hover:bg-white/10" onClick={() => document.getElementById('edit-edu-file-upload')?.click()}>
+                    <Button variant="outline" className="h-12 px-4 rounded-xl font-black border-border bg-muted text-foreground gap-2 shrink-0 hover:bg-muted/80" onClick={() => document.getElementById('edit-edu-file-upload')?.click()}>
                       <FileUp className="w-4 h-4" /> 파일 찾기
                     </Button>
                     <input id="edit-edu-file-upload" type="file" className="hidden" accept=".pdf,.xlsx,.xls,.doc,.docx,.ppt,.pptx,.hwp" onChange={(e) => {
@@ -656,26 +648,26 @@ ${aiPrompt}`,
                     value={editTraining.fileUrl || ''} 
                     onChange={e => setEditTraining({...editTraining, fileUrl: e.target.value, fileName: e.target.value ? (editTraining.fileName || '교안 자료') : ''})} 
                     placeholder="또는 직접 다운로드 URL 입력 (https://...)" 
-                    className="h-12 font-bold bg-white/5 border-white/5 rounded-xl px-4 text-white placeholder:text-white/20" 
+                    className="h-12 font-bold bg-muted border-border rounded-xl px-4 text-foreground placeholder:text-muted-foreground/30" 
                   />
                 </div>
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">설명</label>
-                <Input value={editTraining.description} onChange={e => setEditTraining({...editTraining, description: e.target.value})} placeholder="교육 리스트 요약 설명" className="h-12 font-bold bg-white/5 border-white/5 rounded-xl px-4 text-white placeholder:text-white/20" />
+                <Input value={editTraining.description} onChange={e => setEditTraining({...editTraining, description: e.target.value})} placeholder="교육 리스트 요약 설명" className="h-12 font-bold bg-muted border-border rounded-xl px-4 text-foreground placeholder:text-muted-foreground/30" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">비디오 URL</label>
-                <Input value={editTraining.videoUrl || ''} onChange={e => setEditTraining({...editTraining, videoUrl: e.target.value})} placeholder="YouTube URL" className="h-12 font-bold bg-white/5 border-white/5 rounded-xl px-4 text-white placeholder:text-white/20" />
+                <Input value={editTraining.videoUrl || ''} onChange={e => setEditTraining({...editTraining, videoUrl: e.target.value})} placeholder="YouTube URL" className="h-12 font-bold bg-muted border-border rounded-xl px-4 text-foreground placeholder:text-muted-foreground/30" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">상세 내용 (Markdown)</label>
-                <Textarea value={editTraining.content} onChange={e => setEditTraining({...editTraining, content: e.target.value})} placeholder="교육 내용 입력" className="min-h-[160px] font-bold bg-white/5 border-white/5 rounded-2xl p-4 text-sm text-white placeholder:text-white/20" />
+                <Textarea value={editTraining.content} onChange={e => setEditTraining({...editTraining, content: e.target.value})} placeholder="교육 내용 입력" className="min-h-[160px] font-bold bg-muted border-border rounded-2xl p-4 text-sm text-foreground placeholder:text-muted-foreground/30" />
               </div>
             </div>
           )}
-          <DialogFooter className="p-6 sm:p-10 pt-4 bg-white/5 border-t border-white/5 flex flex-col sm:flex-row gap-2 shrink-0">
-            <Button variant="ghost" className="h-12 rounded-xl font-black text-muted-foreground hover:text-white" onClick={() => setIsEditOpen(false)}>
+          <DialogFooter className="p-6 sm:p-10 pt-4 bg-muted/30 border-t border-border flex flex-col sm:flex-row gap-2 shrink-0">
+            <Button variant="ghost" className="h-12 rounded-xl font-black text-muted-foreground hover:text-foreground" onClick={() => setIsEditOpen(false)}>
               취소
             </Button>
             <Button className="h-12 rounded-xl bg-blue-600 hover:bg-blue-700 font-black text-white px-8" onClick={handleUpdateEducation}>
@@ -686,10 +678,10 @@ ${aiPrompt}`,
       </Dialog>
 
       <Dialog open={isExamOpen} onOpenChange={setIsExamOpen}>
-        <DialogContent className="bg-card rounded-[2rem] sm:rounded-[3rem] border-none shadow-2xl max-w-3xl w-[95vw] p-0 overflow-hidden flex flex-col max-h-[90vh] text-white">
-          <DialogHeader className="p-6 sm:p-10 pb-4 sm:pb-6 bg-card text-white shrink-0 text-left border-b border-white/5">
+        <DialogContent className="bg-card rounded-[2rem] sm:rounded-[3rem] border-none shadow-2xl max-w-3xl w-[95vw] p-0 overflow-hidden flex flex-col max-h-[90vh] text-foreground">
+          <DialogHeader className="p-6 sm:p-10 pb-4 sm:pb-6 bg-muted/30 text-foreground shrink-0 text-left border-b border-border">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-emerald-400 shrink-0">
+              <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-400 shrink-0">
                 <HelpCircle className="w-5 h-5" />
               </div>
               <DialogTitle className="text-xl sm:text-2xl font-black tracking-tighter">평가 및 시험 설정</DialogTitle>
@@ -699,22 +691,22 @@ ${aiPrompt}`,
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">출제 문항 수</label>
-                <Input type="number" min={1} value={examSettings.questionsPerExam} onChange={e => setExamSettings({...examSettings, questionsPerExam: parseInt(e.target.value) || 1})} className="h-12 font-black text-lg bg-white/5 border-white/5 rounded-xl px-4 text-white" />
+                <Input type="number" min={1} value={examSettings.questionsPerExam} onChange={e => setExamSettings({...examSettings, questionsPerExam: parseInt(e.target.value) || 1})} className="h-12 font-black text-lg bg-muted border-border rounded-xl px-4 text-foreground" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">제한 시간 (분)</label>
-                <Input type="number" min={1} value={examSettings.timeLimit} onChange={e => setExamSettings({...examSettings, timeLimit: parseInt(e.target.value) || 1})} className="h-12 font-black text-lg bg-white/5 border-white/5 rounded-xl px-4 text-white" />
+                <Input type="number" min={1} value={examSettings.timeLimit} onChange={e => setExamSettings({...examSettings, timeLimit: parseInt(e.target.value) || 1})} className="h-12 font-black text-lg bg-muted border-border rounded-xl px-4 text-foreground" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">문항당 배점</label>
-                <Input type="number" min={1} value={examSettings.pointsPerQuestion} onChange={e => setExamSettings({...examSettings, pointsPerQuestion: parseInt(e.target.value) || 0})} className="h-12 font-black text-lg bg-white/5 border-white/5 rounded-xl px-4 text-white" />
+                <Input type="number" min={1} value={examSettings.pointsPerQuestion} onChange={e => setExamSettings({...examSettings, pointsPerQuestion: parseInt(e.target.value) || 0})} className="h-12 font-black text-lg bg-muted border-border rounded-xl px-4 text-foreground" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">합격 기준 (점)</label>
-                <Input type="number" min={1} value={examSettings.passingScore} onChange={e => setExamSettings({...examSettings, passingScore: parseInt(e.target.value) || 0})} className="h-12 font-black text-lg bg-white/5 border-white/5 rounded-xl px-4 text-white" />
+                <Input type="number" min={1} value={examSettings.passingScore} onChange={e => setExamSettings({...examSettings, passingScore: parseInt(e.target.value) || 0})} className="h-12 font-black text-lg bg-muted border-border rounded-xl px-4 text-foreground" />
               </div>
             </div>
-            <div className="space-y-6 pt-6 border-t border-white/5">
+            <div className="space-y-6 pt-6 border-t border-border">
               <div className="bg-primary/5 p-5 rounded-2xl border border-primary/20 space-y-4">
                 <div className="flex items-center gap-2 text-primary">
                   <Zap className="w-5 h-5" />
@@ -727,12 +719,12 @@ ${aiPrompt}`,
                   value={aiPrompt}
                   onChange={e => setAiPrompt(e.target.value)}
                   placeholder="여기에 교육 자료 텍스트를 붙여넣으세요..."
-                  className="bg-black/20 border-white/5 min-h-[100px] text-xs font-medium focus-visible:ring-primary/50"
+                  className="bg-muted border-border min-h-[100px] text-xs font-medium focus-visible:ring-primary/50 text-foreground"
                 />
                 <Button 
                   onClick={handleAiGenerateQuestions}
                   disabled={isAiGenerating || !aiPrompt.trim()}
-                  className="w-full bg-primary text-white font-black h-11 rounded-xl shadow-lg shadow-primary/20"
+                  className="w-full bg-primary text-primary-foreground font-black h-11 rounded-xl shadow-lg shadow-primary/20"
                 >
                   {isAiGenerating ? (
                     <><Clock className="w-4 h-4 mr-2 animate-spin" /> 인공지능이 분석 중...</>
@@ -743,23 +735,23 @@ ${aiPrompt}`,
               </div>
 
               <div className="flex items-center justify-between gap-4">
-                <h4 className="font-black text-lg text-white">문제은행 ({examSettings.questions.length})</h4>
+                <h4 className="font-black text-lg text-foreground">문제은행 ({examSettings.questions.length})</h4>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" className="h-9 px-3 rounded-lg font-black text-[10px] border-white/10 bg-white/5 text-white gap-1.5 hover:bg-white/10" onClick={() => document.getElementById('exam-excel-upload')?.click()}>
+                  <Button variant="outline" className="h-9 px-3 rounded-lg font-black text-[10px] border-border bg-muted text-foreground gap-1.5 hover:bg-muted/80" onClick={() => document.getElementById('exam-excel-upload')?.click()}>
                     <FileUp className="w-3.5 h-3.5 text-emerald-400" /> 엑셀
                   </Button>
                   <input id="exam-excel-upload" type="file" accept=".xlsx,.xls" className="hidden" onChange={handleExcelUpload} />
-                  <Button onClick={handleAddQuestion} className="h-9 px-3 rounded-lg font-black text-[10px] bg-white text-black gap-1.5">
+                  <Button onClick={handleAddQuestion} className="h-9 px-3 rounded-lg font-black text-[10px] bg-primary text-primary-foreground gap-1.5">
                     <Plus className="w-3.5 h-3.5" /> 추가
                   </Button>
                 </div>
               </div>
               <div className="space-y-4">
                 {examSettings.questions.map((q, idx) => (
-                  <div key={q.id} className="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-4 shadow-sm">
+                  <div key={q.id} className="p-4 bg-muted border border-border rounded-2xl space-y-4 shadow-sm">
                     <div className="flex items-center justify-between">
-                      <Badge className="bg-white/10 text-white/50 border-none font-black px-2 py-1 rounded text-[9px]">문항 {idx + 1}</Badge>
-                      <Button variant="ghost" size="icon" onClick={() => setExamSettings({...examSettings, questions: examSettings.questions.filter((_, i) => i !== idx)})} className="h-8 w-8 text-white/20 hover:text-red-400 hover:bg-red-400/10">
+                      <Badge className="bg-foreground/10 text-muted-foreground border-none font-black px-2 py-1 rounded text-[9px]">문항 {idx + 1}</Badge>
+                      <Button variant="ghost" size="icon" onClick={() => setExamSettings({...examSettings, questions: examSettings.questions.filter((_, i) => i !== idx)})} className="h-8 w-8 text-muted-foreground/20 hover:text-red-400 hover:bg-red-400/10">
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
@@ -767,14 +759,14 @@ ${aiPrompt}`,
                       const newQs = [...examSettings.questions];
                       newQs[idx].question = e.target.value;
                       setExamSettings({...examSettings, questions: newQs});
-                    }} placeholder="질문 입력" className="font-bold bg-black/20 h-11 border-white/5 rounded-xl text-xs text-white placeholder:text-white/20" />
+                    }} placeholder="질문 입력" className="font-bold bg-card h-11 border-border rounded-xl text-xs text-foreground placeholder:text-muted-foreground/20" />
                     <div className="grid grid-cols-2 gap-2">
                       {q.options.map((opt, oIdx) => (
                         <div key={oIdx} className="flex gap-2 items-center">
                           <button 
                             className={cn(
                               "w-7 h-7 rounded flex items-center justify-center cursor-pointer border-2 transition-all text-[10px] font-black shrink-0",
-                              q.correctAnswer === oIdx ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white/5 border-white/5 text-white/20"
+                              q.correctAnswer === oIdx ? "bg-emerald-500 border-emerald-500 text-white" : "bg-card border-border text-muted-foreground/20"
                             )}
                             onClick={() => {
                               const newQs = [...examSettings.questions];
@@ -785,7 +777,7 @@ ${aiPrompt}`,
                             {oIdx + 1}
                           </button>
                           <div className="flex-1 relative">
-                             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-white/30 pointer-events-none">
+                             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-muted-foreground/30 pointer-events-none">
                                {oIdx + 1}.
                              </div>
                              <Input 
@@ -796,7 +788,7 @@ ${aiPrompt}`,
                                  setExamSettings({...examSettings, questions: newQs});
                                }} 
                                placeholder={`내용 입력`} 
-                               className="h-9 font-bold bg-black/20 border-white/5 rounded-lg text-[10px] text-white placeholder:text-white/20 pl-8" 
+                               className="h-9 font-bold bg-card border-border rounded-lg text-[10px] text-foreground placeholder:text-muted-foreground/20 pl-8" 
                              />
                            </div>
                         </div>
@@ -807,21 +799,21 @@ ${aiPrompt}`,
               </div>
             </div>
           </div>
-          <DialogFooter className="p-6 sm:p-10 pt-4 bg-white/5 border-t border-white/5 shrink-0">
-            <Button className="w-full h-14 rounded-xl bg-primary hover:bg-primary/90 font-black text-white active:scale-95 transition-all gap-2" onClick={handleSaveExamSetup}>
-              <CheckCircle2 className="w-5 h-5 text-white" /> 설정 저장하기
+          <DialogFooter className="p-6 sm:p-10 pt-4 bg-muted/30 border-t border-border shrink-0">
+            <Button className="w-full h-14 rounded-xl bg-primary hover:bg-primary/90 font-black text-primary-foreground active:scale-95 transition-all gap-2" onClick={handleSaveExamSetup}>
+              <CheckCircle2 className="w-5 h-5 text-primary-foreground" /> 설정 저장하기
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
-        <DialogContent className="bg-card border-none rounded-[2.5rem] shadow-2xl max-w-sm w-[90vw] p-8 text-center space-y-6 text-white">
+        <DialogContent className="bg-card border-none rounded-[2.5rem] shadow-2xl max-w-sm w-[90vw] p-8 text-center space-y-6 text-foreground">
           <div className="w-20 h-20 bg-red-500/10 rounded-[2rem] flex items-center justify-center text-red-500 mx-auto">
             <Trash2 className="w-10 h-10" />
           </div>
           <div className="space-y-2">
-            <DialogTitle className="text-2xl font-black tracking-tight text-white">영구 삭제하시겠습니까?</DialogTitle>
+            <DialogTitle className="text-2xl font-black tracking-tight text-foreground">영구 삭제하시겠습니까?</DialogTitle>
             <DialogDescription className="text-sm font-bold text-muted-foreground leading-relaxed">
               이 작업은 복구할 수 없습니다.<br />모든 교육 자료와 관련 데이터가 삭제됩니다.
             </DialogDescription>
@@ -836,7 +828,7 @@ ${aiPrompt}`,
             </Button>
             <Button 
               variant="ghost" 
-              className="h-14 rounded-2xl font-black text-muted-foreground hover:text-white" 
+              className="h-14 rounded-2xl font-black text-muted-foreground hover:text-foreground" 
               onClick={() => setIsDeleteConfirmOpen(false)}
             >
               아니오, 유지할게요
@@ -876,28 +868,28 @@ const RenderTrainingCard = ({ t, onToggle, onDelete, onUpdateExam, onEdit, allRe
   const failCount = Math.max(0, examTakenCount - passCount);
 
   return (
-  <Card className="border-none shadow-xl bg-card rounded-[2.5rem] overflow-hidden hover:border-emerald-500/20 shadow-emerald-500/5 transition-all w-full border border-white/5 relative">
+  <Card className="border-none shadow-xl bg-card rounded-[2.5rem] overflow-hidden hover:border-emerald-500/20 shadow-emerald-500/5 transition-all w-full border border-border relative">
     <CardContent className="p-6 sm:p-8 space-y-6">
       {/* Dashboard Stats */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-6 bg-emerald-500 rounded-full" />
-            <h4 className="text-xs font-black text-white uppercase tracking-wider">교육 현황 대시보드</h4>
+            <h4 className="text-xs font-black text-foreground uppercase tracking-wider">교육 현황 대시보드</h4>
           </div>
           <Button 
             variant="ghost" 
             size="icon"
             onClick={onDelete} 
-            className="w-8 h-8 rounded-xl text-white/20 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+            className="w-8 h-8 rounded-xl text-muted-foreground/20 hover:text-red-400 hover:bg-red-400/10 transition-colors"
           >
             <Trash2 className="w-4 h-4" />
           </Button>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 bg-black/20 p-4 rounded-3xl border border-white/5">
-          <div className="text-center p-2 rounded-2xl bg-white/5 border border-white/5">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 bg-muted/30 p-4 rounded-3xl border border-border">
+          <div className="text-center p-2 rounded-2xl bg-card border border-border">
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-1">총 인원</p>
-            <p className="text-sm font-black text-white">{totalUsers}명</p>
+            <p className="text-sm font-black text-foreground">{totalUsers}명</p>
           </div>
           <div className="text-center p-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
             <p className="text-[9px] font-black text-emerald-500/60 uppercase tracking-widest mb-1">교육 이수</p>
@@ -907,9 +899,9 @@ const RenderTrainingCard = ({ t, onToggle, onDelete, onUpdateExam, onEdit, allRe
             <p className="text-[9px] font-black text-red-500/60 uppercase tracking-widest mb-1">미이수</p>
             <p className="text-sm font-black text-red-400">{notCompletedCount}명</p>
           </div>
-          <div className="text-center p-2 rounded-2xl bg-white/5 border border-white/5">
+          <div className="text-center p-2 rounded-2xl bg-card border border-border">
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-1">평가 응시</p>
-            <p className="text-sm font-black text-white">{examTakenCount}명</p>
+            <p className="text-sm font-black text-foreground">{examTakenCount}명</p>
           </div>
           <div className="text-center p-2 rounded-2xl bg-blue-500/10 border border-blue-500/20">
             <p className="text-[9px] font-black text-blue-500/60 uppercase tracking-widest mb-1">합격</p>
@@ -935,31 +927,31 @@ const RenderTrainingCard = ({ t, onToggle, onDelete, onUpdateExam, onEdit, allRe
             </Badge>
           )}
         </div>
-        <h3 className="text-2xl font-black tracking-tight text-white leading-tight">
+        <h3 className="text-2xl font-black tracking-tight text-foreground leading-tight">
           {t.title}
         </h3>
-        <p className="text-sm text-white/50 font-bold max-w-[280px] line-clamp-2">
+        <p className="text-sm text-muted-foreground/50 font-bold max-w-[280px] line-clamp-2">
           {t.description || '상세 설명이 등록되지 않은 교육 자료입니디.'}
         </p>
       </div>
 
       {/* Stats Icons */}
-      <div className="flex items-center justify-center gap-4 py-4 bg-white/5 rounded-3xl border border-dashed border-white/10">
+      <div className="flex items-center justify-center gap-4 py-4 bg-muted/30 rounded-3xl border border-dashed border-border">
         <div className="flex flex-col items-center gap-1">
-          <Layers className="w-4 h-4 text-white/20" />
-          <span className="text-[10px] font-black text-white/40 uppercase tracking-tighter">{t.questions?.length || 0}문항</span>
+          <Layers className="w-4 h-4 text-muted-foreground/20" />
+          <span className="text-[10px] font-black text-muted-foreground/40 uppercase tracking-tighter">{t.questions?.length || 0}문항</span>
         </div>
-        <div className="flex flex-col items-center gap-1 border-x border-white/10 px-4">
-          <Clock className="w-4 h-4 text-white/20" />
-          <span className="text-[10px] font-black text-white/40 uppercase tracking-tighter">{t.timeLimit || 15}분</span>
+        <div className="flex flex-col items-center gap-1 border-x border-border px-4">
+          <Clock className="w-4 h-4 text-muted-foreground/20" />
+          <span className="text-[10px] font-black text-muted-foreground/40 uppercase tracking-tighter">{t.timeLimit || 15}분</span>
         </div>
-        <div className="flex flex-col items-center gap-1 border-r border-white/10 pr-4">
-          <HelpCircle className="w-4 h-4 text-white/20" />
-          <span className="text-[10px] font-black text-white/40 uppercase tracking-tighter">{t.questionsPerExam || 0}문제</span>
+        <div className="flex flex-col items-center gap-1 border-r border-border pr-4">
+          <HelpCircle className="w-4 h-4 text-muted-foreground/20" />
+          <span className="text-[10px] font-black text-muted-foreground/40 uppercase tracking-tighter">{t.questionsPerExam || 0}문제</span>
         </div>
         <div className="flex flex-col items-center gap-1">
-          <Trophy className="w-4 h-4 text-white/20" />
-          <span className="text-[10px] font-black text-white/40 uppercase tracking-tighter">{t.passingScore || 60}점 합격</span>
+          <Trophy className="w-4 h-4 text-muted-foreground/20" />
+          <span className="text-[10px] font-black text-muted-foreground/40 uppercase tracking-tighter">{t.passingScore || 60}점 합격</span>
         </div>
       </div>
 
@@ -968,14 +960,14 @@ const RenderTrainingCard = ({ t, onToggle, onDelete, onUpdateExam, onEdit, allRe
         <Button 
           variant="outline" 
           onClick={onEdit} 
-          className="h-14 rounded-2xl font-black text-base gap-2 border-white/10 bg-white/5 text-white hover:bg-blue-500/10 hover:text-blue-400 hover:border-blue-500/20 shadow-sm transition-all"
+          className="h-14 rounded-2xl font-black text-base gap-2 border-border bg-muted text-foreground hover:bg-blue-500/10 hover:text-blue-400 hover:border-blue-500/20 shadow-sm transition-all"
         >
           <FileUp className="w-5 h-5" /> 수정
         </Button>
         <Button 
           variant="outline" 
           onClick={onUpdateExam} 
-          className="h-14 rounded-2xl font-black text-base gap-2 border-white/10 bg-white/5 text-white hover:bg-emerald-500/10 hover:text-emerald-400 hover:border-emerald-500/20 shadow-sm transition-all"
+          className="h-14 rounded-2xl font-black text-base gap-2 border-border bg-muted text-foreground hover:bg-emerald-500/10 hover:text-emerald-400 hover:border-emerald-500/20 shadow-sm transition-all"
         >
           <HelpCircle className="w-5 h-5" /> 시험
         </Button>
@@ -983,10 +975,10 @@ const RenderTrainingCard = ({ t, onToggle, onDelete, onUpdateExam, onEdit, allRe
           variant="outline" 
           onClick={onToggle} 
           className={cn(
-            "col-span-2 h-14 rounded-2xl font-black text-base gap-2 shadow-sm transition-all text-white",
+            "col-span-2 h-14 rounded-2xl font-black text-base gap-2 shadow-sm transition-all",
             t.status === 'PUBLISHED' 
-              ? "border-white/10 bg-white/5 hover:bg-white/10" 
-              : "border-primary bg-primary text-white hover:bg-primary/90"
+              ? "border-border bg-muted text-foreground hover:bg-muted/80" 
+              : "border-primary bg-primary text-primary-foreground hover:bg-primary/90"
           )}
         >
           {t.status === 'PUBLISHED' ? <><Eye className="w-5 h-5" /> 교육 내리기</> : <><Send className="w-5 h-5" /> 교육 게시하기</>}
@@ -994,7 +986,7 @@ const RenderTrainingCard = ({ t, onToggle, onDelete, onUpdateExam, onEdit, allRe
         <Button 
           variant="ghost" 
           onClick={onDelete} 
-          className="col-span-2 h-12 rounded-xl text-white/20 hover:text-red-400 hover:bg-red-400/10 font-bold text-xs gap-2"
+          className="col-span-2 h-12 rounded-xl text-muted-foreground/20 hover:text-red-400 hover:bg-red-400/10 font-bold text-xs gap-2"
         >
           <Trash2 className="w-4 h-4" /> 교육 자료 영구 삭제
         </Button>
@@ -1005,13 +997,13 @@ const RenderTrainingCard = ({ t, onToggle, onDelete, onUpdateExam, onEdit, allRe
 };
 
 const EmptyState = ({ text }: { text: string }) => (
-  <div className="py-24 text-center bg-card rounded-[3rem] border-2 border-dashed border-white/5 flex flex-col items-center justify-center gap-6 px-10 shadow-inner">
-    <div className="w-20 h-20 bg-white/5 rounded-[2rem] flex items-center justify-center shadow-sm">
-      <BookOpen className="w-10 h-10 text-white/10" />
+  <div className="py-24 text-center bg-muted rounded-[3rem] border-2 border-dashed border-border flex flex-col items-center justify-center gap-6 px-10 shadow-inner">
+    <div className="w-20 h-20 bg-card rounded-[2rem] flex items-center justify-center shadow-sm border border-border">
+      <BookOpen className="w-10 h-10 text-muted-foreground/10" />
     </div>
     <div className="space-y-2">
-      <p className="font-black text-lg text-white/30 tracking-tight">{text}</p>
-      <p className="text-[10px] font-bold text-white/10 uppercase tracking-[0.3em]">No data found</p>
+      <p className="font-black text-lg text-muted-foreground tracking-tight">{text}</p>
+      <p className="text-[10px] font-bold text-muted-foreground/10 uppercase tracking-[0.3em]">No data found</p>
     </div>
   </div>
 );

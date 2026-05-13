@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/src/components/AuthProvider';
-import { db } from '@/src/firebase';
+import { useAuth } from '@/components/AuthProvider';
+import { db } from '@/firebase';
 import { 
   collection, 
   query, 
@@ -14,10 +14,11 @@ import {
   getDocs,
   getDoc,
   where,
+  deleteDoc,
   Timestamp,
   runTransaction
 } from 'firebase/firestore';
-import { Praise, UserProfile, PraiseComment } from '@/src/types';
+import { Praise, UserProfile, PraiseComment } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -54,7 +55,7 @@ const RankingSection: React.FC<{ rankings: UserProfile[] }> = ({ rankings }) => 
     <div className="mb-8">
       <div className="flex items-center gap-2 mb-4">
         <Trophy className="w-5 h-5 text-yellow-500" />
-        <h3 className="text-lg font-black text-white">이번 달 칭찬 랭킹</h3>
+        <h3 className="text-lg font-black text-foreground">이번 달 칭찬 랭킹</h3>
       </div>
       
       <div className="grid grid-cols-1 gap-3">
@@ -72,8 +73,8 @@ const RankingSection: React.FC<{ rankings: UserProfile[] }> = ({ rankings }) => 
               className={cn(
                 "flex items-center justify-between p-4 rounded-2xl border",
                 isFirst ? "bg-yellow-500/10 border-yellow-500/20" : 
-                isSecond ? "bg-gray-400/10 border-gray-400/20" : 
-                isThird ? "bg-orange-500/10 border-orange-500/20" : "bg-white/5 border-white/5"
+                isSecond ? "bg-muted/50 border-border" : 
+                isThird ? "bg-orange-500/10 border-orange-500/20" : "bg-muted/30 border-border"
               )}
             >
               <div className="flex items-center gap-4">
@@ -82,17 +83,17 @@ const RankingSection: React.FC<{ rankings: UserProfile[] }> = ({ rankings }) => 
                    isSecond ? <Medal className="w-5 h-5 text-gray-400" /> : 
                    isThird ? <Medal className="w-5 h-5 text-orange-500" /> : index + 1}
                 </div>
-                <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center">
+                <div className="w-10 h-10 bg-muted rounded-xl flex items-center justify-center">
                   <UserIcon className="w-5 h-5 text-muted-foreground opacity-50" />
                 </div>
                 <div>
-                  <p className="text-sm font-black text-white">{user.displayName}님</p>
+                  <p className="text-sm font-black text-foreground">{user.displayName}님</p>
                   <p className="text-[10px] font-bold text-muted-foreground">{user.departmentName}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-1 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
+              <div className="flex items-center gap-1 bg-muted px-3 py-1.5 rounded-full border border-border">
                 <Heart className="w-3 h-3 text-pink-500 fill-pink-500" />
-                <span className="text-xs font-black text-white">{user.monthlyKudosCount || 0}</span>
+                <span className="text-xs font-black text-foreground">{user.monthlyKudosCount || 0}</span>
               </div>
             </motion.div>
           );
@@ -399,12 +400,12 @@ export const PraiseFeed: React.FC = () => {
             variant="ghost" 
             size="icon" 
             onClick={() => navigate(-1)}
-            className="w-10 h-10 rounded-xl bg-white/5 text-white"
+            className="w-10 h-10 rounded-xl bg-muted border border-border text-foreground"
           >
             <ChevronLeft className="w-5 h-5" />
           </Button>
           <div>
-            <h2 className="text-2xl font-black text-white tracking-tight">칭찬 릴레이</h2>
+            <h2 className="text-2xl font-black text-foreground tracking-tight">칭찬 릴레이</h2>
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Praise Relay & Kudos</p>
           </div>
         </div>
@@ -412,7 +413,7 @@ export const PraiseFeed: React.FC = () => {
           onClick={() => setIsWriteOpen(!isWriteOpen)}
           className={cn(
             " rounded-2xl font-black gap-2 transition-all shadow-lg",
-            isWriteOpen ? "bg-white/10 text-white" : "bg-primary text-white shadow-primary/20"
+            isWriteOpen ? "bg-muted text-foreground" : "bg-primary text-white shadow-primary/20"
           )}
         >
           {isWriteOpen ? '취소' : (

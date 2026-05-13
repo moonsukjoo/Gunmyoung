@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { db } from '@/src/firebase';
+import { db } from '@/firebase';
 import { collection, query, onSnapshot, updateDoc, doc, addDoc, orderBy } from 'firebase/firestore';
-import { UserProfile, SafetyScoreLog, Department } from '@/src/types';
-import { useAuth } from '@/src/components/AuthProvider';
+import { UserProfile, SafetyScoreLog, Department } from '@/types';
+import { useAuth } from '@/components/AuthProvider';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,7 +35,7 @@ import {
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { exportToExcel, exportToPDF } from '@/src/lib/exportUtils';
+import { exportToExcel, exportToPDF } from '@/lib/exportUtils';
 import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
 
 export const SafetyRanking: React.FC = () => {
@@ -92,7 +92,7 @@ export const SafetyRanking: React.FC = () => {
         const matchesDept = selectedDeptId === 'all' || user.departmentId === selectedDeptId;
         return matchesSearch && matchesDept;
       })
-      .sort((a, b) => (b.safetyScore || 0) - (a.safetyScore || 0));
+      .sort((a, b) => (b.safetyScore ?? 100) - (a.safetyScore ?? 100));
   }, [users, searchTerm, selectedDeptId]);
 
   const userMonthlyStats = useMemo(() => {
@@ -218,7 +218,7 @@ export const SafetyRanking: React.FC = () => {
     <div className="space-y-6 pb-24 px-1">
       <header className="py-6 flex items-end justify-between">
         <div>
-          <h2 className="text-3xl font-black tracking-tight text-white leading-tight">안전 지수</h2>
+          <h2 className="text-3xl font-black tracking-tight text-foreground leading-tight">안전 지수</h2>
           <p className="text-muted-foreground font-bold">우리 회사의 안전 랭킹을 확인하세요</p>
         </div>
         <div className="flex gap-2">
@@ -226,7 +226,7 @@ export const SafetyRanking: React.FC = () => {
             variant="outline"
             size="sm"
             onClick={handleExportExcel}
-            className="h-10 rounded-xl bg-white/5 border-white/10 text-white font-black text-[10px] gap-2"
+            className="h-10 rounded-xl bg-muted/50 border-border text-foreground font-black text-[10px] gap-2"
           >
             <Download className="w-3.5 h-3.5 text-emerald-400" /> EXCEL
           </Button>
@@ -234,21 +234,21 @@ export const SafetyRanking: React.FC = () => {
             variant="outline"
             size="sm"
             onClick={handleExportPDF}
-            className="h-10 rounded-xl bg-white/5 border-white/10 text-white font-black text-[10px] gap-2"
+            className="h-10 rounded-xl bg-muted/50 border-border text-foreground font-black text-[10px] gap-2"
           >
             <FileText className="w-3.5 h-3.5 text-rose-400" /> PDF
           </Button>
         </div>
       </header>
 
-      <div className="bg-white/5 p-1 rounded-2xl flex gap-1">
+      <div className="bg-muted/50 p-1 rounded-2xl flex gap-1">
         {(['INDIVIDUAL', 'TEAM', 'LOGS'] as const).map((view) => (
           <button
             key={view}
             onClick={() => setActiveView(view)}
             className={cn(
               "flex-1 h-12 rounded-xl text-xs font-black transition-all",
-              activeView === view ? "bg-white text-black shadow-lg" : "text-muted-foreground hover:text-white"
+              activeView === view ? "bg-card text-foreground shadow-lg" : "text-muted-foreground/60 hover:text-muted-foreground/90"
             )}
           >
             {view === 'INDIVIDUAL' ? '개인별' : view === 'TEAM' ? '팀별' : '히스토리'}
@@ -260,12 +260,12 @@ export const SafetyRanking: React.FC = () => {
         {activeView === 'INDIVIDUAL' && (
           <div className="space-y-6">
             <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
               <Input 
                 placeholder="이름 검색..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="h-14 pl-11 bg-card border-white/5 rounded-2xl text-white font-bold"
+                className="h-14 pl-11 bg-card border-border rounded-2xl text-foreground font-bold placeholder:text-muted-foreground/30"
               />
             </div>
 
@@ -275,14 +275,14 @@ export const SafetyRanking: React.FC = () => {
                   <div className="flex items-center gap-4">
                     <div className={cn(
                       "w-10 h-10 rounded-xl flex items-center justify-center font-black",
-                      idx === 0 ? "bg-amber-500/20 text-amber-500 shadow-amber-500/10 shadow-lg" : "bg-white/5 text-muted-foreground"
+                      idx === 0 ? "bg-amber-500/20 text-amber-600 shadow-amber-500/10 shadow-lg" : "bg-muted text-muted-foreground"
                     )}>
                       {idx < 3 ? <Trophy className="w-5 h-5" /> : (idx + 1)}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-base font-black text-white">{user.displayName}</span>
-                        <Badge variant="outline" className="text-[9px] font-black bg-white/5 border-none opacity-60">
+                        <span className="text-base font-black text-foreground">{user.displayName}</span>
+                        <Badge variant="outline" className="text-[9px] font-black bg-muted border-none opacity-60">
                            {user.departmentName}
                         </Badge>
                       </div>
@@ -291,7 +291,7 @@ export const SafetyRanking: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right">
-                      <div className={cn("text-xl font-black", (user.safetyScore ?? 100) >= 90 ? "text-emerald-500" : "text-amber-500")}>
+                      <div className={cn("text-xl font-black", (user.safetyScore ?? 100) >= 90 ? "text-emerald-500" : "text-amber-600")}>
                         {user.safetyScore ?? 100}
                         <span className="text-[10px] ml-1 opacity-40">pts</span>
                       </div>
@@ -301,7 +301,7 @@ export const SafetyRanking: React.FC = () => {
                         size="icon" 
                         variant="ghost"
                         onClick={() => { setTargetUser(user); setIsAdjustmentOpen(true); }}
-                        className="w-10 h-10 rounded-xl bg-white/5 text-muted-foreground"
+                        className="w-10 h-10 rounded-xl bg-muted text-muted-foreground"
                       >
                         <Plus className="w-5 h-5" />
                       </Button>
@@ -316,20 +316,20 @@ export const SafetyRanking: React.FC = () => {
         {activeView === 'TEAM' && (
           <div className="space-y-4">
             {teamRankings.map((team, idx) => (
-              <div key={team.id} className="bg-card p-6 rounded-2xl border border-white/5 space-y-4">
+              <div key={team.id} className="bg-card p-6 rounded-2xl border border-border space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-primary/20 text-primary flex items-center justify-center rounded-xl font-black">
                       {idx + 1}
                     </div>
-                    <span className="text-lg font-black text-white">{team.name}</span>
+                    <span className="text-lg font-black text-foreground">{team.name}</span>
                   </div>
                   <div className="text-right">
                      <span className="text-2xl font-black text-primary">{team.average.toFixed(1)}</span>
                      <span className="text-xs text-muted-foreground ml-1">AVG</span>
                   </div>
                 </div>
-                <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
+                <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                    <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(team.average, 100)}%` }} className="h-full bg-primary rounded-full shadow-lg shadow-primary/20" />
                 </div>
               </div>
@@ -340,7 +340,7 @@ export const SafetyRanking: React.FC = () => {
         {activeView === 'LOGS' && (
           <div className="space-y-2">
             {logs.map((log) => (
-              <div key={log.id} className="bg-card p-5 rounded-2xl border border-white/5 flex items-start gap-4">
+              <div key={log.id} className="bg-card p-5 rounded-2xl border border-border flex items-start gap-4">
                 <div className={cn(
                   "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
                   log.type === 'REWARD' ? "bg-emerald-500/20 text-emerald-500" : "bg-red-500/20 text-red-500"
@@ -349,7 +349,7 @@ export const SafetyRanking: React.FC = () => {
                 </div>
                 <div className="flex-1 overflow-hidden">
                   <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm font-black text-white">{log.targetName}</span>
+                    <span className="text-sm font-black text-foreground">{log.targetName}</span>
                     <span className={cn("text-xs font-black", log.scoreDelta > 0 ? "text-emerald-500" : "text-red-500")}>
                       {log.scoreDelta > 0 ? `+${log.scoreDelta}` : log.scoreDelta}
                     </span>
@@ -364,16 +364,16 @@ export const SafetyRanking: React.FC = () => {
       </div>
 
       <Dialog open={isAdjustmentOpen} onOpenChange={setIsAdjustmentOpen}>
-        <DialogContent className="bg-card border-none rounded-3xl text-white">
+        <DialogContent className="bg-card border-none rounded-3xl text-foreground">
           <DialogHeader>
             <DialogTitle className="text-xl font-black flex items-center gap-2">
               <Star className="w-5 h-5 text-amber-500" /> 점수 조정
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-6 pt-4">
-             <div className="bg-white/5 p-4 rounded-2xl flex items-center justify-between">
+             <div className="bg-muted p-4 rounded-2xl flex items-center justify-between">
                 <div>
-                   <h4 className="text-sm font-black text-white">{targetUser?.displayName}</h4>
+                   <h4 className="text-sm font-black text-foreground">{targetUser?.displayName}</h4>
                    <span className="text-[10px] text-muted-foreground">{targetUser?.employeeId}</span>
                 </div>
                 <span className="text-xl font-black text-primary">{targetUser?.safetyScore ?? 100}</span>
@@ -381,11 +381,11 @@ export const SafetyRanking: React.FC = () => {
              <div className="grid grid-cols-2 gap-2">
                 <button 
                   onClick={() => setAdjustmentType('REWARD')}
-                  className={cn("h-12 rounded-xl font-black text-xs border", adjustmentType === 'REWARD' ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white/5 border-white/5 text-muted-foreground")}
+                  className={cn("h-12 rounded-xl font-black text-xs border", adjustmentType === 'REWARD' ? "bg-emerald-500 border-emerald-500 text-white" : "bg-muted border-border text-muted-foreground")}
                 >상점 (+)</button>
                 <button 
                   onClick={() => setAdjustmentType('PENALTY')}
-                  className={cn("h-12 rounded-xl font-black text-xs border", adjustmentType === 'PENALTY' ? "bg-red-500 border-red-500 text-white" : "bg-white/5 border-white/5 text-muted-foreground")}
+                  className={cn("h-12 rounded-xl font-black text-xs border", adjustmentType === 'PENALTY' ? "bg-red-500 border-red-500 text-white" : "bg-muted border-border text-muted-foreground")}
                 >벌점 (-)</button>
              </div>
              <Input 
@@ -393,13 +393,13 @@ export const SafetyRanking: React.FC = () => {
                 placeholder="점수" 
                 value={scoreDelta} 
                 onChange={e => setScoreDelta(e.target.value)} 
-                className="bg-white/5 border-white/10 h-14 rounded-2xl text-lg font-black text-center"
+                className="bg-muted border-border h-14 rounded-2xl text-lg font-black text-center"
              />
              <Input 
                 placeholder="사유" 
                 value={reason} 
                 onChange={e => setReason(e.target.value)} 
-                className="bg-white/5 border-white/10 h-14 rounded-2xl font-bold"
+                className="bg-muted border-border h-14 rounded-2xl font-bold"
              />
           </div>
           <DialogFooter className="mt-4">

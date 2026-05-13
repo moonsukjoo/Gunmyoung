@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '@/src/firebase';
+import { db } from '@/firebase';
 import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
-import { UserProfile } from '@/src/types';
+import { UserProfile } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -19,7 +19,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 
-import { GlowLoading } from '@/src/components/GlowLoading';
+import { GlowLoading } from '@/components/GlowLoading';
 
 export const HighWorkMonitoring: React.FC = () => {
   const navigate = useNavigate();
@@ -77,15 +77,15 @@ export const HighWorkMonitoring: React.FC = () => {
       <header className="flex items-center justify-between py-8">
         <div className="flex items-center gap-4">
           <Button 
-            variant="ghost" 
+            variant="outline" 
             size="icon" 
             onClick={() => navigate(-1)}
-            className="w-12 h-12 rounded-2xl bg-white/5 text-white"
+            className="w-12 h-12 rounded-2xl bg-muted border-border text-foreground"
           >
             <ChevronLeft className="w-6 h-6" />
           </Button>
           <div>
-            <h2 className="text-2xl font-black text-white tracking-tight text-glow">고소 작업 모니터링</h2>
+            <h2 className="text-2xl font-black text-foreground tracking-tight">고소 작업 모니터링</h2>
           </div>
         </div>
         <div className="w-12 h-12 bg-primary/20 rounded-2xl flex items-center justify-center text-primary">
@@ -95,16 +95,16 @@ export const HighWorkMonitoring: React.FC = () => {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 gap-4 mb-6">
-        <Card className="bg-card border-white/5 rounded-3xl overflow-hidden shadow-xl">
+        <Card className="bg-card border-border rounded-3xl overflow-hidden shadow-xl">
           <CardContent className="p-6">
             <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2">상부 작업 인원</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-white">{workers.length}</span>
+              <span className="text-3xl font-black text-foreground">{workers.length}</span>
               <span className="text-xs font-bold text-muted-foreground">명</span>
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-card border-white/5 rounded-3xl overflow-hidden shadow-xl">
+        <Card className="bg-card border-border rounded-3xl overflow-hidden shadow-xl">
           <CardContent className="p-6">
             <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-2">현재 무동작 인원</p>
             <div className="flex items-baseline gap-2">
@@ -117,7 +117,7 @@ export const HighWorkMonitoring: React.FC = () => {
 
       <div className="space-y-4">
         <div className="flex items-center justify-between px-1">
-          <h3 className="text-sm font-black text-white flex items-center gap-2">
+          <h3 className="text-sm font-black text-foreground flex items-center gap-2">
             <Users className="w-4 h-4 text-primary" />
             실시간 고도 현황
           </h3>
@@ -141,7 +141,7 @@ export const HighWorkMonitoring: React.FC = () => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                   >
-                    <Card className="bg-card border-white/5 group hover:border-primary/20 transition-all rounded-3xl overflow-hidden shadow-lg">
+                    <Card className="bg-card border-border group hover:border-primary/20 transition-all rounded-3xl overflow-hidden shadow-lg">
                       <CardContent className="p-5 flex items-center justify-between">
                         <div className="flex items-center gap-4 min-w-0">
                           <div className={cn("w-14 h-14 rounded-2xl flex flex-col items-center justify-center shrink-0", risk.bg)}>
@@ -149,7 +149,7 @@ export const HighWorkMonitoring: React.FC = () => {
                             <span className={cn("text-[9px] font-black uppercase text-center leading-none", risk.color)}>{risk.label}</span>
                           </div>
                           <div className="min-w-0">
-                            <h4 className="text-base font-black text-white tracking-tight truncate">
+                            <h4 className="text-base font-black text-foreground tracking-tight truncate">
                               {worker.displayName} <span className="text-[10px] text-muted-foreground font-bold ml-1">{worker.employeeId}</span>
                             </h4>
                             <p className="text-[10px] font-bold text-muted-foreground uppercase opacity-60">
@@ -162,7 +162,7 @@ export const HighWorkMonitoring: React.FC = () => {
                           {worker.isFalling || worker.hasImpacted ? (
                             <div className="flex flex-col items-end">
                                <Badge className="bg-red-600 text-white border-none animate-bounce mb-1">긴급 상황</Badge>
-                               <p className="text-[8px] font-black text-white/60 uppercase tracking-widest bg-red-600 px-2 py-0.5 rounded-full">
+                               <p className="text-[8px] font-black text-rose-500 uppercase tracking-widest bg-rose-500/10 px-2 py-0.5 rounded-full">
                                  {worker.isFalling ? '추락 신호' : '강한 충격'}
                                </p>
                             </div>
@@ -195,12 +195,12 @@ export const HighWorkMonitoring: React.FC = () => {
             </AnimatePresence>
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center p-20 bg-white/5 rounded-[40px] border border-dashed border-white/10 gap-4 text-center">
-            <div className="w-16 h-16 bg-white/5 rounded-3xl flex items-center justify-center text-muted-foreground mb-2">
+          <div className="flex flex-col items-center justify-center p-20 bg-muted/30 rounded-[40px] border border-dashed border-border gap-4 text-center">
+            <div className="w-16 h-16 bg-muted rounded-3xl flex items-center justify-center text-muted-foreground mb-2">
                <Users className="w-8 h-8 opacity-20" />
             </div>
             <div>
-              <p className="text-sm font-black text-white/40 tracking-tight">상부 작업 인원이 없습니다</p>
+              <p className="text-sm font-black text-muted-foreground/40 tracking-tight">상부 작업 인원이 없습니다</p>
               <p className="text-[10px] text-muted-foreground font-bold leading-relaxed">
                 현재 지상 0.5m 이상에서 감지된<br />작동 중인 기기가 없습니다.
               </p>

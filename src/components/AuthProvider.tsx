@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, onSnapshot, setDoc, getDoc, updateDoc, query, where, limit, getDocs, collection, deleteDoc } from 'firebase/firestore';
-import { auth, db } from '@/src/firebase';
-import { UserProfile, Role } from '@/src/types';
+import { auth, db } from '../firebase';
+import { UserProfile, Role } from '../types';
 import { toast } from 'sonner';
 import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
 
@@ -99,10 +99,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const isX66626 = 
                   emailPrefix === 'x66626' ||
                   employeeId.trim().toLowerCase().includes('x66626') || 
-                  currentProfile.employeeId?.trim().toLowerCase().includes('x66626') || 
-                  currentProfile.displayName?.toLowerCase().includes('x66626') ||
+                  currentProfile.employeeId?.trim()?.toLowerCase()?.includes('x66626') || 
+                  currentProfile.displayName?.toLowerCase()?.includes('x66626') ||
                   email.toLowerCase().includes('x66626') ||
-                  firebaseUser.displayName?.toLowerCase().includes('x66626');
+                  firebaseUser.displayName?.toLowerCase()?.includes('x66626');
 
                 if (isCEOEmail && currentProfile.role !== 'CEO') {
                   await updateDoc(doc(db, 'users', firebaseUser.uid), { role: 'CEO' as Role }).catch(() => {});

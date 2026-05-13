@@ -284,11 +284,11 @@ const PayslipManagement: React.FC = () => {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 pb-4">
+    <div className="p-6 max-w-7xl mx-auto space-y-6 text-foreground">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">급여명세서 관리</h1>
-          <p className="text-gray-500 text-sm">엑셀 파일을 업로드하여 급여 정보를 일괄 등록합니다.</p>
+          <h1 className="text-2xl font-bold text-foreground">급여명세서 관리</h1>
+          <p className="text-muted-foreground text-sm">엑셀 파일을 업로드하여 급여 정보를 일괄 등록합니다.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -296,11 +296,11 @@ const PayslipManagement: React.FC = () => {
             type="month"
             value={month}
             onChange={(e) => setMonth(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            className="px-3 py-2 border border-border rounded-lg bg-card text-foreground focus:ring-2 focus:ring-primary outline-none"
           />
           <button
             onClick={downloadTemplate}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-lg transition-colors"
           >
             <Download className="w-4 h-4" />
             양식 다운로드
@@ -323,7 +323,7 @@ const PayslipManagement: React.FC = () => {
             <div className="flex gap-2">
               <button
                 onClick={() => setParsedData([])}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="px-4 py-2 border border-border text-foreground rounded-lg hover:bg-muted transition-colors"
               >
                 취소
               </button>
@@ -358,11 +358,11 @@ const PayslipManagement: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-20 bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl">
-          <FileSpreadsheet className="w-16 h-16 text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900">데이터가 없습니다</h3>
-          <p className="text-gray-500 mb-6">위 버튼을 눌러 급여 엑셀 파일을 업로드해 주세요.</p>
-          <div className="p-4 bg-blue-50 text-blue-800 rounded-lg max-w-md text-sm leading-relaxed">
+        <div className="flex flex-col items-center justify-center py-20 bg-muted/30 border-2 border-dashed border-border rounded-xl">
+          <FileSpreadsheet className="w-16 h-16 text-muted-foreground/40 mb-4" />
+          <h3 className="text-lg font-medium text-foreground">데이터가 없습니다</h3>
+          <p className="text-muted-foreground mb-6">위 버튼을 눌러 급여 엑셀 파일을 업로드해 주세요.</p>
+          <div className="p-4 bg-primary/10 text-primary rounded-lg max-w-md text-sm leading-relaxed border border-primary/20">
             <p className="font-bold mb-1">💡 팁:</p>
             <p>1. 사번 또는 성명을 기준으로 사용자를 자동으로 찾습니다.</p>
             <p>2. 사번이 일치하지 않을 경우 '사용자 미매칭'으로 표시됩니다.</p>

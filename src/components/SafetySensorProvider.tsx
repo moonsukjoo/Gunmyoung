@@ -26,7 +26,8 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [thresholds, setThresholds] = useState({
     impact: 45.0,
     fall: 3.0,
-    duration: 150
+    duration: 150,
+    sosTimeout: 15
   });
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -57,7 +58,8 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
           setThresholds({
             impact: data.impactThreshold || 45.0,
             fall: data.fallThreshold || 3.0,
-            duration: data.fallDuration || 150
+            duration: data.fallDuration || 150,
+            sosTimeout: data.sosTimeout || 15
           });
         }
       });
@@ -69,7 +71,7 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
     if (isAlertingRef.current) return;
     isAlertingRef.current = true;
     setAlertType(type);
-    setCountdown(15);
+    setCountdown(thresholds.sosTimeout);
     
     if (audioRef.current) {
       audioRef.current.play().catch(e => console.error("Audio play failed", e));
@@ -143,12 +145,18 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
     if (isMonitoring) return;
 
     try {
-      // Request permission if needed (some browsers/platforms)
-      if ((DeviceMotionEvent as any).requestPermission) {
-        const response = await (DeviceMotionEvent as any).requestPermission();
-        if (response !== 'granted') {
-          toast.error('센서 권한이 거부되었습니다.');
-          return;
+      // Request permission only if it exists AND we are in a context that might allow it
+      // Note: This ideally should be triggered by a user click, not useEffect
+      if (typeof DeviceMotionEvent !== 'undefined' && (DeviceMotionEvent as any).requestPermission) {
+        try {
+          const response = await (DeviceMotionEvent as any).requestPermission();
+          if (response !== 'granted') {
+            console.warn('Sensor permission denied by user');
+            return;
+          }
+        } catch (permError) {
+          console.warn('DeviceMotionEvent.requestPermission failed (likely needs user gesture):', permError);
+          return; // Exit silently to avoid crashing
         }
       }
 
@@ -176,14 +184,16 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }
       };
 
-      // Primary: Capacitor Motion (for native)
+      // Primary: Capacitor Motion (for native) - safely check availability
       try {
-        await Motion.addListener('accel', (event) => {
-          const { x, y, z } = event.accelerationIncludingGravity;
-          processMotion(x, y, z);
-        });
+        if (Motion && typeof Motion.addListener === 'function') {
+          await Motion.addListener('accel', (event) => {
+            const { x, y, z } = event.accelerationIncludingGravity;
+            processMotion(x, y, z);
+          });
+        }
       } catch (e) {
-        console.warn("Capacitor Motion failed, falling back to web devicemotion");
+        console.warn("Capacitor Motion listener failed:", e);
       }
 
       // Secondary: Web DeviceMotion (for preview/browser)
@@ -194,20 +204,24 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
       };
 
       window.addEventListener('devicemotion', handleWebMotion);
-      (window as any)._safetySensorCleanup = () => {
+      const cleanup = () => {
         window.removeEventListener('devicemotion', handleWebMotion);
       };
+      (window as any)._safetySensorCleanup = cleanup;
 
       setIsMonitoring(true);
-      toast.success(`안전 모니터링 시작 (감도: ${thresholds.impact.toFixed(0)}m/s²)`);
     } catch (err) {
-      console.error("Monitoring failed", err);
-      toast.error('센서 모니터링을 시작할 수 없습니다.');
+      console.error("Monitoring failed deep:", err);
     }
   };
 
   const stopMonitoring = () => {
-    Motion.removeAllListeners();
+    try {
+      if (Motion && typeof Motion.removeAllListeners === 'function') {
+        Motion.removeAllListeners();
+      }
+    } catch (e) {}
+    
     if ((window as any)._safetySensorCleanup) {
       (window as any)._safetySensorCleanup();
       delete (window as any)._safetySensorCleanup;
@@ -215,10 +229,11 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setIsMonitoring(false);
   };
 
-  // Automatically start monitoring if profile exists and it's a worker role
+  // Automatically start monitoring if profile exists
+  // BUT we don't block on errors here anymore
   useEffect(() => {
      if (profile && !isMonitoring) {
-        startMonitoring();
+        startMonitoring().catch(e => console.error("Auto-start monitoring failed:", e));
      }
   }, [profile]);
 
@@ -247,7 +262,7 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
               <h1 className="text-4xl font-black text-white mb-4 tracking-tighter">
                 {alertType === 'FALL' ? '추락 감지!' : '강한 충격 감지!'}
               </h1>
-              <p className="text-white/80 text-lg font-bold mb-12">
+              <p className="text-white text-lg font-bold mb-12">
                 몸 상태는 괜찮으신가요?<br />
                 {countdown}초 후에 자동으로 긴급 SOS를 발송합니다.
               </p>
@@ -265,7 +280,7 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 <Button 
                   variant="outline" 
                   size="lg" 
-                  className="w-full h-16 rounded-[2rem] border-white/20 bg-red-700 text-white hover:bg-red-800 text-lg font-bold gap-3"
+                  className="w-full h-16 rounded-[2rem] border-white/40 bg-red-700 text-white hover:bg-red-800 text-lg font-bold gap-3"
                   onClick={sendEmergencySOS}
                 >
                   <AlertTriangle className="w-6 h-6" />

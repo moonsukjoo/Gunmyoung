@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/src/components/AuthProvider';
-import { db, handleFirestoreError, OperationType } from '@/src/firebase';
+import { useAuth } from '@/components/AuthProvider';
+import { db, handleFirestoreError, OperationType } from '@/firebase';
 import { 
   collection, 
   query, 
@@ -10,9 +10,10 @@ import {
   updateDoc, 
   addDoc, 
   getDoc,
-  where
+  where,
+  getDocs
 } from 'firebase/firestore';
-import { LeaveRequest, UserProfile } from '@/src/types';
+import { LeaveRequest, UserProfile } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -33,8 +34,8 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 
-import { GlowLoading } from '@/src/components/GlowLoading';
-import { exportToExcel, exportToPDF } from '@/src/lib/exportUtils';
+import { GlowLoading } from '@/components/GlowLoading';
+import { exportToExcel, exportToPDF } from '@/lib/exportUtils';
 
 export const LeaveManagement: React.FC = () => {
   const { profile } = useAuth();
@@ -79,6 +80,26 @@ export const LeaveManagement: React.FC = () => {
         isRead: false,
         createdAt: new Date().toISOString()
       });
+
+      // Final Report to Clerk, GM, and GA
+      const finalsQuery = query(
+        collection(db, 'users'),
+        where('role', 'in', ['CLERK', 'GENERAL_MANAGER', 'GENERAL_AFFAIRS'])
+      );
+      const finalsSnapshot = await getDocs(finalsQuery);
+      for (const fDoc of finalsSnapshot.docs) {
+        if (fDoc.id === profile.uid) continue;
+        await addDoc(collection(db, 'notifications'), {
+          uid: fDoc.id,
+          title: '📋 연차 승인 최종 보고',
+          message: `${request.displayName}님의 연차(${request.startDate})가 최종 승인되었습니다.`,
+          type: 'SYSTEM',
+          isRead: false,
+          createdAt: new Date().toISOString(),
+          fromUid: profile.uid,
+          fromName: profile.displayName
+        });
+      }
 
       toast.success('승인 완료');
     } catch (e) {
@@ -181,39 +202,39 @@ export const LeaveManagement: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-24 px-1">
-      <header className="py-6 flex justify-between items-end">
+      <header className="py-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-black tracking-tight text-white leading-tight">연차/휴가 통합 관리</h2>
-          <p className="text-muted-foreground font-bold">사원들의 휴가 신청을 검토하고 연차를 관리하세요</p>
+          <h2 className="text-2xl font-black tracking-tight text-foreground leading-tight">연차/휴가 통합 관리</h2>
+          <p className="text-xs font-bold text-muted-foreground">사원들의 휴가 신청을 검토하고 연차를 관리하세요</p>
         </div>
         <div className="flex gap-2">
           <Button 
             variant="outline" 
             size="sm"
             onClick={handleExportExcel}
-            className="h-10 rounded-xl bg-white/5 border-white/10 text-white font-black text-[10px] gap-2"
+            className="h-10 rounded-xl bg-muted border-border text-foreground font-black text-[10px] gap-2 hover:bg-muted/80"
           >
-            <Download className="w-3.5 h-3.5 text-emerald-400" /> EXCEL
+            <Download className="w-3.5 h-3.5 text-emerald-500" /> EXCEL
           </Button>
           <Button 
             variant="outline" 
             size="sm"
             onClick={handleExportPDF}
-            className="h-10 rounded-xl bg-white/5 border-white/10 text-white font-black text-[10px] gap-2"
+            className="h-10 rounded-xl bg-muted border-border text-foreground font-black text-[10px] gap-2 hover:bg-muted/80"
           >
-            <FileText className="w-3.5 h-3.5 text-rose-400" /> PDF
+            <FileText className="w-3.5 h-3.5 text-rose-500" /> PDF
           </Button>
         </div>
       </header>
 
-      <div className="flex p-1 bg-white/5 rounded-2xl gap-1">
+      <div className="flex p-1 bg-muted/50 rounded-2xl gap-1">
         {(['PENDING', 'HISTORY', 'EMPLOYEES'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={cn(
               "flex-1 h-12 rounded-xl text-xs font-black transition-all",
-              activeTab === tab ? "bg-white text-black shadow-lg" : "text-muted-foreground hover:text-white"
+              activeTab === tab ? "bg-card text-foreground shadow-lg" : "text-muted-foreground/60 hover:text-muted-foreground/90"
             )}
           >
             {tab === 'PENDING' ? `승인대기 (${pendingRequests.length})` : tab === 'HISTORY' ? '처리내역' : '연차조정'}
@@ -225,7 +246,7 @@ export const LeaveManagement: React.FC = () => {
         {activeTab === 'PENDING' && (
           pendingRequests.length > 0 ? (
             pendingRequests.map(req => (
-              <Card key={req.id} className="bg-card border-white/5 rounded-2xl overflow-hidden">
+              <Card key={req.id} className="bg-card border-border rounded-2xl overflow-hidden border shadow-none">
                 <CardContent className="p-6 space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -233,16 +254,16 @@ export const LeaveManagement: React.FC = () => {
                          {req.displayName?.charAt(0) || '사'}
                        </div>
                        <div>
-                         <p className="text-sm font-black text-white">{req.displayName}</p>
+                         <p className="text-sm font-black text-foreground">{req.displayName}</p>
                          <p className="text-[10px] text-muted-foreground font-bold">{req.employeeId || 'ID 미지정'}</p>
                        </div>
                     </div>
-                    <Badge className="bg-white/5 text-muted-foreground border-none px-2 py-0.5 rounded-lg text-[10px] font-black">
+                    <Badge className="bg-muted text-muted-foreground border-none px-2 py-0.5 rounded-lg text-[10px] font-black shadow-none">
                       {req.type === 'ANNUAL' ? '연차' : '반차'}
                     </Badge>
                   </div>
 
-                  <div className="bg-white/5 p-4 rounded-xl space-y-2">
+                  <div className="bg-muted/50 p-4 rounded-xl space-y-2 border border-border/50">
                     <div className="flex items-center gap-2 text-primary">
                       <CalendarDays className="w-4 h-4" />
                       <span className="text-sm font-black tracking-tight">
@@ -255,13 +276,13 @@ export const LeaveManagement: React.FC = () => {
                   <div className="grid grid-cols-2 gap-2 pt-2">
                     <Button 
                       variant="ghost" 
-                      className="bg-white/5 hover:bg-red-500/20 text-red-500 font-black h-12 rounded-xl border border-white/5"
+                      className="bg-muted hover:bg-destructive/10 text-destructive font-black h-12 rounded-xl border border-border shadow-none"
                       onClick={() => handleReject(req)}
                     >
                       <XCircle className="w-4 h-4 mr-2" /> 반려
                     </Button>
                     <Button 
-                      className="bg-primary text-white hover:bg-primary/90 font-black h-12 rounded-xl"
+                      className="bg-primary text-primary-foreground hover:bg-primary/90 font-black h-12 rounded-xl shadow-lg shadow-primary/20"
                       onClick={() => handleApprove(req)}
                     >
                       <CheckCircle2 className="w-4 h-4 mr-2" /> 승인
@@ -281,7 +302,7 @@ export const LeaveManagement: React.FC = () => {
         {activeTab === 'HISTORY' && (
           <div className="space-y-3">
             {historyRequests.map(req => (
-              <div key={req.id} className="bg-card p-5 rounded-2xl border border-white/5 flex items-center justify-between group">
+              <div key={req.id} className="bg-card p-5 rounded-2xl border border-border flex items-center justify-between group shadow-none">
                 <div className="flex items-center gap-4 overflow-hidden">
                   <div className={cn(
                     "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
@@ -291,7 +312,7 @@ export const LeaveManagement: React.FC = () => {
                   </div>
                   <div className="overflow-hidden">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-black text-white truncate">{req.displayName}</span>
+                      <span className="text-sm font-black text-foreground truncate">{req.displayName}</span>
                       <span className="text-[10px] text-muted-foreground font-bold">{req.startDate}</span>
                     </div>
                     <p className="text-[10px] text-muted-foreground font-bold truncate opacity-60">
@@ -313,33 +334,33 @@ export const LeaveManagement: React.FC = () => {
         {activeTab === 'EMPLOYEES' && (
           <div className="space-y-4">
              <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/30" />
                 <Input 
                   placeholder="사원 검색..." 
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
-                  className="bg-white/5 border-none h-14 pl-12 rounded-2xl text-white font-bold" 
+                  className="bg-muted border-border h-14 pl-12 rounded-2xl text-foreground font-bold border" 
                 />
              </div>
 
              <div className="space-y-3">
                 {filteredUsers.map(user => (
-                  <Card key={user.uid} className="bg-card border-white/5 rounded-2xl overflow-hidden">
+                  <Card key={user.uid} className="bg-card border-border rounded-2xl overflow-hidden border shadow-none">
                     <CardContent className="p-5 flex items-center justify-between">
                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-white/5 text-muted-foreground rounded-xl flex items-center justify-center font-black">
+                          <div className="w-10 h-10 bg-muted text-muted-foreground rounded-xl flex items-center justify-center font-black">
                             {user.displayName.charAt(0)}
                           </div>
                           <div>
-                            <p className="text-sm font-black text-white">{user.displayName}</p>
+                            <p className="text-sm font-black text-foreground">{user.displayName}</p>
                             <p className="text-[10px] text-muted-foreground font-bold">{user.employeeId || 'ID 없음'}</p>
                           </div>
                        </div>
                        
                        <div className="flex items-center gap-4">
                           <div className="text-right">
-                             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">잔여 연차</p>
-                             <p className="text-lg font-black text-white">{user.annualLeaveBalance || 0}일</p>
+                             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest leading-none mb-1">잔여 연차</p>
+                             <p className="text-lg font-black text-foreground">{user.annualLeaveBalance || 0}일</p>
                           </div>
                           <div className="flex gap-1">
                              <button 

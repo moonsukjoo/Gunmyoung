@@ -141,7 +141,7 @@ const HealthManagement: React.FC = () => {
               <div className="p-2 bg-emerald-500/10 rounded-xl">
                 <HeartPulse className="w-5 h-5 text-emerald-500" />
               </div>
-              <h2 className="text-xl font-black text-white">보건관리 (이상무)</h2>
+              <h2 className="text-xl font-black text-foreground">보건관리 (이상무)</h2>
             </div>
             {canWrite && (
               <Button 
@@ -156,10 +156,10 @@ const HealthManagement: React.FC = () => {
 
         {/* Search */}
         <div className="relative group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 group-focus-within:text-emerald-500 transition-colors" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/30 group-focus-within:text-emerald-500 transition-colors" />
           <Input 
             placeholder="팀명, 성명, 상태 검색..." 
-            className="h-12 pl-10 bg-white/5 border-white/5 rounded-2xl text-sm font-bold text-white focus:border-emerald-500/50 transition-all"
+            className="h-12 pl-10 bg-muted border-border rounded-2xl text-sm font-bold text-foreground focus:border-emerald-500/50 transition-all"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -170,7 +170,7 @@ const HealthManagement: React.FC = () => {
           {loading ? (
             <div className="py-20 text-center">
               <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-              <p className="text-white/30 font-bold text-sm">보고 내역을 불러오는 중...</p>
+              <p className="text-muted-foreground font-bold text-sm">보고 내역을 불러오는 중...</p>
             </div>
           ) : filteredReports.length > 0 ? (
             filteredReports.map((report, idx) => (
@@ -179,7 +179,7 @@ const HealthManagement: React.FC = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.05 }}
-                className="bg-white/5 border border-white/5 rounded-[2rem] p-5 relative overflow-hidden"
+                className="bg-card border border-border rounded-[2rem] p-5 relative overflow-hidden"
               >
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex items-center gap-3">
@@ -187,8 +187,8 @@ const HealthManagement: React.FC = () => {
                       {report.authorName.charAt(0)}
                     </div>
                     <div>
-                      <h4 className="text-sm font-black text-white">{report.authorName}</h4>
-                      <p className="text-[10px] font-bold text-white/40">{report.teamName || '소속 미지정'}</p>
+                      <h4 className="text-sm font-black text-foreground">{report.authorName}</h4>
+                      <p className="text-[10px] font-bold text-muted-foreground/40">{report.teamName || '소속 미지정'}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -197,7 +197,7 @@ const HealthManagement: React.FC = () => {
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          className="w-8 h-8 rounded-lg text-white/40 hover:text-white hover:bg-white/10"
+                          className="w-8 h-8 rounded-lg text-muted-foreground/40 hover:text-foreground hover:bg-muted"
                           onClick={() => {
                             setEditingReport(report);
                             setIsEditOpen(true);
@@ -208,7 +208,7 @@ const HealthManagement: React.FC = () => {
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          className="w-8 h-8 rounded-lg text-white/40 hover:text-rose-500 hover:bg-rose-500/10"
+                          className="w-8 h-8 rounded-lg text-muted-foreground/40 hover:text-rose-500 hover:bg-rose-500/10"
                           onClick={() => handleDeleteReport(report.id)}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -222,19 +222,19 @@ const HealthManagement: React.FC = () => {
                 </div>
 
                 {report.content && (
-                  <div className="bg-black/20 rounded-2xl p-4 mb-4">
-                    <p className="text-xs text-white/70 font-medium leading-relaxed">
+                  <div className="bg-muted/50 rounded-2xl p-4 mb-4">
+                    <p className="text-xs text-foreground/70 font-medium leading-relaxed">
                       {report.content}
                     </p>
                   </div>
                 )}
 
-                <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                  <div className="flex items-center gap-1.5 text-white/30">
+                <div className="flex items-center justify-between pt-4 border-t border-border">
+                  <div className="flex items-center gap-1.5 text-muted-foreground/30">
                     <Calendar className="w-3 h-3" />
                     <span className="text-[10px] font-bold">{report.date}</span>
                   </div>
-                  <div className="flex items-center gap-1.5 text-white/30">
+                  <div className="flex items-center gap-1.5 text-muted-foreground/30">
                     <Clock className="w-3 h-3" />
                     <span className="text-[10px] font-bold">
                       {report.createdAt ? format(new Date(report.createdAt), 'HH:mm') : '-'}
@@ -244,16 +244,16 @@ const HealthManagement: React.FC = () => {
               </motion.div>
             ))
           ) : (
-            <div className="py-20 text-center bg-white/5 rounded-[2.5rem] border border-dashed border-white/10">
-              <AlertCircle className="w-10 h-10 text-white/10 mx-auto mb-4" />
-              <p className="text-white/40 font-bold">최근 보고 내역이 없습니다.</p>
+            <div className="py-20 text-center bg-card rounded-[2.5rem] border border-dashed border-border">
+              <AlertCircle className="w-10 h-10 text-muted-foreground/10 mx-auto mb-4" />
+              <p className="text-muted-foreground font-bold">최근 보고 내역이 없습니다.</p>
             </div>
           )}
         </div>
 
       {/* Write Dialog */}
       <Dialog open={isWriteOpen} onOpenChange={setIsWriteOpen}>
-        <DialogContent className="bg-slate-900 border-white/10 rounded-[2.5rem] text-white">
+        <DialogContent className="bg-card border border-border rounded-[2.5rem] text-foreground">
           <DialogHeader>
             <DialogTitle className="text-xl font-black flex items-center gap-2">
               <HeartPulse className="w-5 h-5 text-emerald-500" />
@@ -262,27 +262,27 @@ const HealthManagement: React.FC = () => {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">현재 상태 (기본: 이상무)</label>
+              <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">현재 상태 (기본: 이상무)</label>
               <Input 
                 value={newReport.status}
                 onChange={(e) => setNewReport({ ...newReport, status: e.target.value })}
-                className="bg-white/5 border-white/10 rounded-xl h-12 font-bold"
+                className="bg-muted border-border rounded-xl h-12 font-bold text-foreground"
                 placeholder="상태를 입력하세요 (예: 이상무, 특이사항 발생 등)"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">상세 내용 (선택사항)</label>
+              <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">상세 내용 (선택사항)</label>
               <Textarea 
                 value={newReport.content}
                 onChange={(e) => setNewReport({ ...newReport, content: e.target.value })}
-                className="bg-white/5 border-white/10 rounded-xl min-h-[120px] font-bold resize-none"
+                className="bg-muted border-border rounded-xl min-h-[120px] font-bold resize-none text-foreground"
                 placeholder="전달할 특이사항이나 상세 내용을 입력하세요..."
               />
             </div>
             
             <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 flex gap-3">
               <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
-              <p className="text-[11px] font-bold text-emerald-100 leading-relaxed">
+              <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-100 leading-relaxed">
                 팀장/직장 보고 권한으로 제출됩니다. 등록된 보고는 안전관리자 및 경영진이 실시간으로 확인합니다.
               </p>
             </div>
@@ -305,9 +305,8 @@ const HealthManagement: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Dialog */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="bg-slate-900 border-white/10 rounded-[2.5rem] text-white">
+        <DialogContent className="bg-card border border-border rounded-[2.5rem] text-foreground">
           <DialogHeader>
             <DialogTitle className="text-xl font-black flex items-center gap-2">
               <Edit className="w-5 h-5 text-emerald-500" />
@@ -317,19 +316,19 @@ const HealthManagement: React.FC = () => {
           {editingReport && (
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">현재 상태</label>
+                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">현재 상태</label>
                 <Input 
                   value={editingReport.status}
                   onChange={(e) => setEditingReport({ ...editingReport, status: e.target.value })}
-                  className="bg-white/5 border-white/10 rounded-xl h-12 font-bold"
+                  className="bg-muted border-border rounded-xl h-12 font-bold text-foreground"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">상세 내용</label>
+                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">상세 내용</label>
                 <Textarea 
                   value={editingReport.content}
                   onChange={(e) => setEditingReport({ ...editingReport, content: e.target.value })}
-                  className="bg-white/5 border-white/10 rounded-xl min-h-[120px] font-bold resize-none"
+                  className="bg-muted border-border rounded-xl min-h-[120px] font-bold resize-none text-foreground"
                 />
               </div>
             </div>

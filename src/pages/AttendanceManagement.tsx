@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { db, handleFirestoreError, OperationType } from '@/src/firebase';
+import { db, handleFirestoreError, OperationType } from '@/firebase';
 import { 
   collection, 
   query, 
@@ -10,7 +10,7 @@ import {
   orderBy,
   deleteDoc
 } from 'firebase/firestore';
-import { UserProfile, Attendance } from '@/src/types';
+import { UserProfile, Attendance } from '@/types';
 import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { 
@@ -39,10 +39,10 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { calculateAttendanceHours } from '@/src/lib/attendance';
-import { exportToExcel, exportToPDF } from '@/src/lib/exportUtils';
+import { calculateAttendanceHours } from '@/lib/attendance';
+import { exportToExcel, exportToPDF } from '@/lib/exportUtils';
 
-import { GlowLoading } from '@/src/components/GlowLoading';
+import { GlowLoading } from '@/components/GlowLoading';
 
 export const AttendanceManagement: React.FC = () => {
   const navigate = useNavigate();
@@ -210,7 +210,7 @@ export const AttendanceManagement: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background pb-24 selection:bg-blue-500/30">
-      <header className="p-6 sticky top-0 bg-background/80 backdrop-blur-md z-[60] space-y-4 border-b border-white/5 relative">
+      <header className="p-6 sticky top-0 bg-background/80 backdrop-blur-md z-[60] space-y-4 border-b border-border relative">
         {/* Colorful Glow Accent */}
         <div className="absolute -top-24 -left-20 w-64 h-64 bg-blue-600/10 rounded-full blur-[80px] pointer-events-none" />
         
@@ -219,25 +219,25 @@ export const AttendanceManagement: React.FC = () => {
             variant="ghost" 
             size="icon" 
             onClick={() => navigate('/admin')}
-            className="text-white h-10 w-10 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all hover:scale-105 active:scale-95"
+            className="text-foreground h-10 w-10 rounded-2xl bg-muted border border-border hover:bg-muted/80 transition-all hover:scale-105 active:scale-95"
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
             <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] mb-0.5">Core Administration</p>
-            <h1 className="text-2xl font-black text-white tracking-tight leading-none">근태 통합 관리</h1>
+            <h1 className="text-2xl font-black text-foreground tracking-tight leading-none">근태 통합 관리</h1>
           </div>
         </div>
 
         <div className="flex flex-col gap-3">
           <div className="flex gap-2 relative">
              <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/40" />
                 <Input 
                   placeholder="대상자 성명을 검색하세요" 
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="pl-10 h-11 bg-white/[0.03] border-none text-sm font-bold rounded-2xl placeholder:text-white/10"
+                  className="pl-10 h-11 bg-muted border-none text-sm font-bold rounded-2xl placeholder:text-muted-foreground/30 text-foreground"
                 />
                 
                 <AnimatePresence>
@@ -246,12 +246,12 @@ export const AttendanceManagement: React.FC = () => {
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
-                      className="absolute top-full left-0 right-0 mt-3 bg-[#1c1c1e] border-2 border-blue-500/30 rounded-3xl shadow-[0_30px_60px_rgba(0,0,0,0.8)] z-[999] overflow-hidden max-h-96 overflow-y-auto backdrop-blur-xl w-[calc(100vw-3rem)] sm:w-full"
+                      className="absolute top-full left-0 right-0 mt-3 bg-card border-2 border-primary/30 rounded-3xl shadow-[0_30px_60px_rgba(0,0,0,0.8)] z-[999] overflow-hidden max-h-96 overflow-y-auto backdrop-blur-xl w-[calc(100vw-3rem)] sm:w-full"
                     >
-                      <div className="p-4 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
-                        <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest pl-2">검사 결과 ({filteredUsers.length}명)</p>
-                        <Button variant="ghost" size="sm" onClick={() => setSearch('')} className="h-6 w-6 p-0 rounded-full hover:bg-white/10">
-                          <X className="w-3 h-3 text-white/40" />
+                      <div className="p-4 border-b border-border bg-muted/30 flex items-center justify-between">
+                        <p className="text-[10px] font-black text-primary uppercase tracking-widest pl-2">검사 결과 ({filteredUsers.length}명)</p>
+                        <Button variant="ghost" size="sm" onClick={() => setSearch('')} className="h-6 w-6 p-0 rounded-full hover:bg-muted/20">
+                          <X className="w-3 h-3 text-muted-foreground/40" />
                         </Button>
                       </div>
                       <div className="py-2">
@@ -262,19 +262,19 @@ export const AttendanceManagement: React.FC = () => {
                               setSelectedUser(user);
                               setSearch('');
                             }}
-                            className="w-full px-6 py-4 flex items-center justify-between hover:bg-blue-500/10 transition-colors border-b border-white/5 last:border-none group text-left"
+                            className="w-full px-6 py-4 flex items-center justify-between hover:bg-primary/10 transition-colors border-b border-border last:border-none group text-left"
                           >
                             <div className="flex items-center gap-4">
-                              <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center font-black text-blue-500 group-hover:bg-blue-500 group-hover:text-white transition-all">
+                              <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center font-black text-primary group-hover:bg-primary group-hover:text-white transition-all text-xs">
                                 {user.displayName?.[0] || '?'}
                               </div>
                               <div>
-                                <p className="text-base font-black text-white group-hover:text-blue-400 transition-colors">{user.displayName}</p>
-                                <p className="text-[10px] font-bold text-white/30 uppercase tracking-tighter">{user.position} | {user.departmentName}</p>
+                                <p className="text-base font-black text-foreground group-hover:text-primary transition-colors leading-none mb-1">{user.displayName}</p>
+                                <p className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-tighter leading-none">{user.position} | {user.departmentName}</p>
                               </div>
                             </div>
-                            <div className="bg-white/5 p-2 rounded-lg group-hover:bg-blue-500/20 group-hover:translate-x-1 transition-all">
-                              <ChevronRight className="w-4 h-4 text-white/20 group-hover:text-blue-500" />
+                            <div className="bg-muted p-2 rounded-lg group-hover:bg-primary/20 group-hover:translate-x-1 transition-all">
+                              <ChevronRight className="w-4 h-4 text-muted-foreground/20 group-hover:text-primary" />
                             </div>
                           </button>
                         ))}
@@ -298,8 +298,7 @@ export const AttendanceManagement: React.FC = () => {
                type="month" 
                value={month}
                onChange={(e) => setMonth(e.target.value)}
-               className="w-32 h-11 bg-white/[0.03] border-none text-[10px] font-black text-white rounded-2xl text-center px-0 appearance-none shrink-0"
-               style={{ colorScheme: 'dark' }}
+               className="w-32 h-11 bg-muted border-none text-[10px] font-black text-foreground rounded-2xl text-center px-0 appearance-none shrink-0"
              />
           </div>
 
@@ -309,7 +308,7 @@ export const AttendanceManagement: React.FC = () => {
                 variant="outline" 
                 size="sm"
                 onClick={handleExportExcel}
-                className="flex-1 h-10 rounded-2xl bg-white/[0.03] border-white/5 text-white/60 font-black text-[10px] gap-2 hover:bg-white/[0.06] hover:text-white"
+                className="flex-1 h-10 rounded-2xl bg-muted border-border text-muted-foreground/60 font-black text-[10px] gap-2 hover:bg-muted/80 hover:text-foreground"
               >
                 <Download className="w-3.5 h-3.5 text-emerald-500/60" />
                 EXCEL 보고서
@@ -318,7 +317,7 @@ export const AttendanceManagement: React.FC = () => {
                 variant="outline" 
                 size="sm"
                 onClick={handleExportPDF}
-                className="flex-1 h-10 rounded-2xl bg-white/[0.03] border-white/5 text-white/60 font-black text-[10px] gap-2 hover:bg-white/[0.06] hover:text-white"
+                className="flex-1 h-10 rounded-2xl bg-muted border-border text-muted-foreground/60 font-black text-[10px] gap-2 hover:bg-muted/80 hover:text-foreground"
               >
                 <FileText className="w-3.5 h-3.5 text-rose-500/60" />
                 PDF 리포트
@@ -333,24 +332,24 @@ export const AttendanceManagement: React.FC = () => {
           <>
             {/* Stats */}
             <div className="grid grid-cols-2 gap-3">
-               <Card className="bg-white/[0.03] border-white/5 rounded-3xl p-5 overflow-hidden relative border-none shadow-none group hover:bg-white/[0.05] transition-all">
+               <Card className="bg-card border-border rounded-3xl p-5 overflow-hidden relative border shadow-none group hover:bg-muted/50 transition-all">
                   <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-110 transition-transform">
-                    <Clock className="w-12 h-12 text-blue-500" />
+                    <Clock className="w-12 h-12 text-primary" />
                   </div>
                   <div className="relative z-10">
-                    <p className="text-[10px] font-black text-blue-400 mb-1 uppercase tracking-widest">이달의 기본 근무</p>
-                    <p className="text-3xl font-black text-white leading-none tracking-tighter">
+                    <p className="text-[10px] font-black text-primary mb-1 uppercase tracking-widest">이달의 기본 근무</p>
+                    <p className="text-3xl font-black text-foreground leading-none tracking-tighter">
                       {stats.total.toFixed(0)} 
-                      <span className="text-sm font-bold text-white/20 ml-1 uppercase">hrs</span>
+                      <span className="text-sm font-bold text-muted-foreground/30 ml-1 uppercase">hrs</span>
                     </p>
                   </div>
                </Card>
-               <Card className="bg-white/[0.03] border-white/5 rounded-3xl p-5 overflow-hidden relative border-none shadow-none group hover:bg-white/[0.05] transition-all">
+               <Card className="bg-card border-border rounded-3xl p-5 overflow-hidden relative border shadow-none group hover:bg-muted/50 transition-all">
                   <div className="absolute top-0 right-0 p-3 opacity-15 group-hover:scale-110 transition-transform">
                     <TrendingUp className="w-12 h-12 text-blue-500" />
                   </div>
                   <div className="relative z-10">
-                    <p className="text-[10px] font-black text-emerald-400 mb-1 uppercase tracking-widest">이달의 연장 근무</p>
+                    <p className="text-[10px] font-black text-emerald-500 mb-1 uppercase tracking-widest">이달의 연장 근무</p>
                     <p className="text-3xl font-black text-blue-500 leading-none tracking-tighter">
                       {stats.ot.toFixed(0)} 
                       <span className="text-sm font-bold text-blue-500/20 ml-1 uppercase">hrs</span>
@@ -361,10 +360,10 @@ export const AttendanceManagement: React.FC = () => {
 
             <div className="space-y-3">
               <div className="flex items-center justify-between px-1">
-                <h3 className="text-[10px] font-black text-white/40 flex items-center gap-2 uppercase tracking-widest leading-none">
+                <h3 className="text-[10px] font-black text-muted-foreground/40 flex items-center gap-2 uppercase tracking-widest leading-none">
                    출퇴근 기록 목록
                 </h3>
-                <Badge className="bg-white/5 text-white/30 border-none font-black text-[9px] h-5 px-2">
+                <Badge className="bg-muted text-muted-foreground border-none font-black text-[9px] h-5 px-2">
                   {attendanceData.length} 건
                 </Badge>
               </div>
@@ -372,19 +371,19 @@ export const AttendanceManagement: React.FC = () => {
               {loading ? (
                 <div className="py-20 flex flex-col items-center justify-center gap-4">
                   <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                  <p className="text-[10px] font-black text-white/20 uppercase tracking-widest">기록 로딩 중...</p>
+                  <p className="text-[10px] font-black text-muted-foreground/30 uppercase tracking-widest">기록 로딩 중...</p>
                 </div>
               ) : attendanceData.length > 0 ? (
-                <div className="grid grid-cols-1 gap-2">
+                <div className="grid grid-cols-1 gap-2 text-foreground">
                   {attendanceData.map((att) => (
-                    <Card key={att.id} className="bg-white/[0.03] border-white/5 rounded-2xl overflow-hidden border-none shadow-none transition-all hover:bg-white/[0.05]">
+                    <Card key={att.id} className="bg-card border-border rounded-2xl overflow-hidden border shadow-none transition-all hover:bg-muted/50">
                       <div className="p-4">
                         <div className="flex justify-between items-start mb-3">
                           <div>
-                            <p className="text-sm font-black text-white leading-tight">{format(parseISO(att.date), 'MM.dd (EEEE)', { locale: ko })}</p>
+                            <p className="text-sm font-black text-foreground leading-tight">{format(parseISO(att.date), 'MM.dd (EEEE)', { locale: ko })}</p>
                             <div className="flex gap-3 mt-1.5">
-                              <span className="text-[10px] font-bold text-white/30 flex items-center gap-1"><LogIn className="w-3 h-3" /> {att.clockIn ? format(new Date(att.clockIn), 'HH:mm') : '-'}</span>
-                              <span className="text-[10px] font-bold text-white/30 flex items-center gap-1"><LogOut className="w-3 h-3" /> {att.clockOut ? format(new Date(att.clockOut), 'HH:mm') : '-'}</span>
+                              <span className="text-[10px] font-bold text-muted-foreground/40 flex items-center gap-1"><LogIn className="w-3 h-3" /> {att.clockIn ? format(new Date(att.clockIn), 'HH:mm') : '-'}</span>
+                              <span className="text-[10px] font-bold text-muted-foreground/40 flex items-center gap-1"><LogOut className="w-3 h-3" /> {att.clockOut ? format(new Date(att.clockOut), 'HH:mm') : '-'}</span>
                             </div>
                           </div>
                           {editingId === att.id ? (
@@ -397,61 +396,59 @@ export const AttendanceManagement: React.FC = () => {
                               </Button>
                             </div>
                           ) : (
-                            <Button size="icon" variant="ghost" onClick={() => startEditing(att)} className="text-white/20 bg-white/5 w-8 h-8 rounded-xl hover:text-white hover:bg-white/10 transition-all">
+                            <Button size="icon" variant="ghost" onClick={() => startEditing(att)} className="text-muted-foreground/40 bg-muted/50 w-8 h-8 rounded-xl hover:text-foreground hover:bg-muted transition-all">
                               <Edit2 className="w-3.5 h-3.5" />
                             </Button>
                           )}
                         </div>
 
                         {editingId === att.id ? (
-                          <div className="space-y-3 pt-3 border-t border-white/5">
+                          <div className="space-y-3 pt-3 border-t border-border">
                             <div className="grid grid-cols-2 gap-2">
                               <div className="space-y-1">
-                                <label className="text-[9px] font-black text-white/20 uppercase tracking-tighter ml-1">출근 시간</label>
+                                <label className="text-[9px] font-black text-muted-foreground uppercase tracking-tighter ml-1">출근 시간</label>
                                 <Input 
                                   type="datetime-local" 
                                   value={editForm.clockIn}
                                   onChange={(e) => setEditForm({...editForm, clockIn: e.target.value})}
-                                  className="h-9 bg-white/5 border-none text-[10px] font-black rounded-xl"
-                                  style={{ colorScheme: 'dark' }}
+                                  className="h-9 bg-muted border-border text-[10px] font-black rounded-xl text-foreground"
                                 />
                               </div>
                               <div className="space-y-1">
-                                <label className="text-[9px] font-black text-white/20 uppercase tracking-tighter ml-1">퇴근 시간</label>
+                                <label className="text-[9px] font-black text-muted-foreground uppercase tracking-tighter ml-1">퇴근 시간</label>
                                 <Input 
                                   type="datetime-local" 
                                   value={editForm.clockOut}
                                   onChange={(e) => setEditForm({...editForm, clockOut: e.target.value})}
-                                  className="h-9 bg-white/5 border-none text-[10px] font-black rounded-xl"
-                                  style={{ colorScheme: 'dark' }}
+                                  className="h-9 bg-muted border-border text-[10px] font-black rounded-xl text-foreground"
                                 />
                               </div>
                             </div>
                             <div className="grid grid-cols-2 gap-2">
                               <div className="space-y-1">
-                                <label className="text-[9px] font-black text-white/20 uppercase tracking-tighter ml-1">기본 근무 (h)</label>
+                                <label className="text-[9px] font-black text-muted-foreground uppercase tracking-tighter ml-1">기본 근무 (h)</label>
                                 <Input 
                                   type="number" 
                                   step="0.1"
                                   value={editForm.workHours}
                                   onChange={(e) => setEditForm({...editForm, workHours: e.target.value})}
-                                  className="h-9 bg-white/5 border-none text-[10px] font-black rounded-xl"
+                                  className="h-9 bg-muted border-border text-[10px] font-black rounded-xl text-foreground"
                                 />
                               </div>
                               <div className="space-y-1">
-                                <label className="text-[9px] font-black text-white/20 uppercase tracking-tighter ml-1">연장 근무 (h)</label>
+                                <label className="text-[9px] font-black text-muted-foreground uppercase tracking-tighter ml-1">연장 근무 (h)</label>
                                 <Input 
                                   type="number" 
                                   step="0.1"
                                   value={editForm.overtimeHours}
                                   onChange={(e) => setEditForm({...editForm, overtimeHours: e.target.value})}
-                                  className="h-9 bg-white/5 border-none text-[10px] font-black rounded-xl"
+                                  className="h-9 bg-muted border-border text-[10px] font-black rounded-xl text-foreground"
                                 />
                               </div>
                             </div>
                             <Button 
                               variant="outline" 
-                              className="w-full h-9 bg-blue-600/10 border-blue-500/20 text-blue-500 text-[10px] font-black gap-1 rounded-xl"
+                              className="w-full h-9 bg-primary/10 border-primary/20 text-primary text-[10px] font-black gap-1 rounded-xl"
                               onClick={handleRecalculate}
                             >
                               <Calculator className="w-3.5 h-3.5" /> 시간 자동 계산
@@ -459,13 +456,13 @@ export const AttendanceManagement: React.FC = () => {
                           </div>
                         ) : (
                           <div className="flex gap-2">
-                            <div className="flex-1 bg-white/5 rounded-xl p-2.5 text-center">
-                              <p className="text-[8px] font-black text-white/20 uppercase mb-0.5 tracking-widest leading-none">기본 근무</p>
-                              <p className="text-sm font-black text-white leading-none">{att.workHours?.toFixed(1) || '0.0'}h</p>
+                            <div className="flex-1 bg-muted rounded-xl p-2.5 text-center">
+                              <p className="text-[8px] font-black text-muted-foreground uppercase mb-0.5 tracking-widest leading-none">기본 근무</p>
+                              <p className="text-sm font-black text-foreground leading-none">{att.workHours?.toFixed(1) || '0.0'}h</p>
                             </div>
-                            <div className="flex-1 bg-white/5 rounded-xl p-2.5 text-center border-l border-blue-500/20">
-                              <p className="text-[8px] font-black text-blue-500/40 uppercase mb-0.5 tracking-widest leading-none">연장 근무</p>
-                              <p className="text-sm font-black text-blue-500 leading-none">{att.overtimeHours?.toFixed(1) || '0.0'}h</p>
+                            <div className="flex-1 bg-muted rounded-xl p-2.5 text-center border-l border-primary/20">
+                              <p className="text-[8px] font-black text-primary/60 uppercase mb-0.5 tracking-widest leading-none">연장 근무</p>
+                              <p className="text-sm font-black text-primary leading-none">{att.overtimeHours?.toFixed(1) || '0.0'}h</p>
                             </div>
                           </div>
                         )}
@@ -474,21 +471,21 @@ export const AttendanceManagement: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <div className="py-20 flex flex-col items-center justify-center gap-4 bg-white/[0.03] rounded-3xl border border-dashed border-white/10">
-                  <AlertCircle className="w-8 h-8 text-white/10" />
-                  <p className="text-[10px] font-black text-white/20 uppercase tracking-widest">기록이 없습니다</p>
+                <div className="py-20 flex flex-col items-center justify-center gap-4 bg-muted/30 rounded-3xl border border-dashed border-border px-6">
+                  <AlertCircle className="w-8 h-8 text-muted-foreground/20" />
+                  <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest text-center">선택한 기간의 출퇴근 기록이 발견되지 않았습니다</p>
                 </div>
               )}
             </div>
           </>
         ) : search.length === 0 && (
-          <div className="py-24 flex flex-col items-center justify-center gap-4 bg-white/[0.02] rounded-[3rem] border border-dashed border-white/5">
-            <div className="w-16 h-16 bg-white/5 rounded-[2rem] flex items-center justify-center text-white/10">
+          <div className="py-24 flex flex-col items-center justify-center gap-4 bg-muted/20 rounded-[3rem] border border-dashed border-border">
+            <div className="w-16 h-16 bg-muted rounded-[2rem] flex items-center justify-center text-muted-foreground/30">
               <Users className="w-8 h-8" />
             </div>
             <div className="text-center">
-              <p className="text-base font-black text-white mb-2 leading-none">사용자를 선택해주세요</p>
-              <p className="text-[10px] font-bold text-white/20 uppercase tracking-widest">관리할 직원을 목록에서 선택하세요</p>
+              <p className="text-base font-black text-foreground mb-2 leading-none">사용자를 선택해주세요</p>
+              <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest">관리할 직원을 목록에서 선택하세요</p>
             </div>
           </div>
         )}

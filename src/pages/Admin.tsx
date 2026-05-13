@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from '@/src/components/AuthProvider';
+import { useAuth } from '@/components/AuthProvider';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +14,7 @@ import {
   DialogFooter
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { SHIP_PARTS } from '@/src/services/shipService';
+import { SHIP_PARTS } from '@/services/shipService';
 import { 
   Users, 
   ShieldCheck, 
@@ -45,9 +45,9 @@ import {
   Target,
   Anchor
 } from 'lucide-react';
-import { db } from '@/src/firebase';
+import { db } from '@/firebase';
 import { collection, query, onSnapshot, updateDoc, doc, setDoc, getDocs, where } from 'firebase/firestore';
-import { UserProfile } from '@/src/types';
+import { UserProfile } from '@/types';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Link, useNavigate } from 'react-router-dom';
@@ -73,9 +73,10 @@ const PERMISSIONS = [
   { id: 'emergency_rollcall', label: '비상 대피 롤콜 권한', icon: AlertTriangle },
   { id: 'health_mgmt', label: '보건관리(이상무) 보고 권한', icon: Activity },
   { id: 'report_mgmt', label: '통합 보고서 관리 권한', icon: FileBarChart },
+  { id: 'team_work_log_approve', label: '팀원 작업일지 승인 권한', icon: CheckCircle2 },
 ];
 
-import { GlowLoading } from '@/src/components/GlowLoading';
+import { GlowLoading } from '@/components/GlowLoading';
 
 import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
 
@@ -88,16 +89,19 @@ export const Admin: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [isShipSettingsOpen, setIsShipSettingsOpen] = useState(false);
   const [isBannerSettingsOpen, setIsBannerSettingsOpen] = useState(false);
-  const [isSnailSettingsOpen, setIsSnailSettingsOpen] = useState(false);
+  const [isShipRaceSettingsOpen, setIsShipRaceSettingsOpen] = useState(false);
+  const [isSnailRaceSettingsOpen, setIsSnailRaceSettingsOpen] = useState(false);
   const [isFishingSettingsOpen, setIsFishingSettingsOpen] = useState(false);
   const [isRouletteSettingsOpen, setIsRouletteSettingsOpen] = useState(false);
   const [isPermissionSettingsOpen, setIsPermissionSettingsOpen] = useState(false);
   const [isSafetySensorSettingsOpen, setIsSafetySensorSettingsOpen] = useState(false);
+  const [isSafetyTimeoutSettingsOpen, setIsSafetyTimeoutSettingsOpen] = useState(false);
   const [isEmergencyOpen, setIsEmergencyOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<'hr' | 'safety' | 'system'>('hr');
 
-  const [snailProbs, setSnailProbs] = useState<number[]>([1, 1, 1]);
+  const [shipRaceProbs, setShipRaceProbs] = useState<number[]>([1, 1, 1, 1, 1]);
+  const [snailRaceProbs, setSnailRaceProbs] = useState<number[]>([1, 1, 1, 1, 1]);
   const [fishingSettings, setFishingSettings] = useState([
     { id: 'small', name: '작은 물고기', multiplier: 2, probability: 0.5, icon: '🐟' },
     { id: 'medium', name: '큰 물고기', multiplier: 5, probability: 0.3, icon: '🐠' },
@@ -108,12 +112,12 @@ export const Admin: React.FC = () => {
   const [rouletteProbs, setRouletteProbs] = useState<number[]>([0.35, 0.3, 0.2, 0.1, 0.03, 0.02]);
 
   const isExcludedRole = profile && (
-    ['EMPLOYEE', 'TEAM_LEADER', 'WORKER'].includes(profile.role?.toUpperCase() || '') || 
-    ['조장', '반장', '사원'].includes(profile.position?.trim() || '') ||
-    profile.employeeId?.trim().toLowerCase().includes('x66626') ||
-    profile.displayName?.toLowerCase().includes('x66626') ||
-    profile.email?.toLowerCase().includes('x66626') ||
-    user?.email?.toLowerCase().includes('x66626') ||
+    ['EMPLOYEE', 'WORKER'].includes(profile.role?.toUpperCase() || '') || 
+    (['조장', '반장', '사원'].includes(profile.position?.trim() || '') && profile.role !== 'TEAM_LEADER') ||
+    profile.employeeId?.trim()?.toLowerCase()?.includes('x66626') ||
+    profile.displayName?.toLowerCase()?.includes('x66626') ||
+    profile.email?.toLowerCase()?.includes('x66626') ||
+    user?.email?.toLowerCase()?.includes('x66626') ||
     user?.email?.split('@')[0]?.toLowerCase() === 'x66626' ||
     (user?.email && user.email.toLowerCase().startsWith('x66626@')) ||
     (user?.displayName && user.displayName.toLowerCase().includes('x66626'))
@@ -124,10 +128,11 @@ export const Admin: React.FC = () => {
     disabledParts: [] as string[]
   });
   const [safetySensorSettings, setSafetySensorSettings] = useState({
-    sensitivityLevel: 3, // Default moved to 3 for better robustness
+    sensitivityLevel: 3,
     impactThreshold: 90.0,
     fallThreshold: 2.5,
-    fallDuration: 250
+    fallDuration: 250,
+    sosTimeout: 15
   });
   const [bannerText, setBannerText] = useState('안전한 하루가 되세요');
   const [evacuationStatus, setEvacuationStatus] = useState<any>(null);
@@ -192,10 +197,11 @@ export const Admin: React.FC = () => {
       handleFirestoreError(error, OperationType.GET, 'settings/banner');
     });
 
-    const unsubSnail = onSnapshot(doc(db, 'settings', 'entertainment'), (snap) => {
+    const unsubShipRace = onSnapshot(doc(db, 'settings', 'entertainment'), (snap) => {
        if (snap.exists()) {
           const data = snap.data();
-          setSnailProbs(data.snailProbabilities || [1, 1, 1]);
+          setShipRaceProbs(data.shipRaceProbabilities || [1, 1, 1, 1, 1]);
+          setSnailRaceProbs(data.snailRaceProbabilities || [1, 1, 1, 1, 1]);
           if (data.fishingSettings) {
             setFishingSettings(data.fishingSettings);
           } else if (data.fishingProbabilities) {
@@ -219,7 +225,8 @@ export const Admin: React.FC = () => {
           sensitivityLevel: data.sensitivityLevel || 2,
           impactThreshold: data.impactThreshold || 40.0,
           fallThreshold: data.fallThreshold || 3.0,
-          fallDuration: data.fallDuration || 150
+          fallDuration: data.fallDuration || 150,
+          sosTimeout: data.sosTimeout || 15
         });
       }
     }, (error) => {
@@ -228,7 +235,7 @@ export const Admin: React.FC = () => {
 
     return () => {
       unsubBanner();
-      unsubSnail();
+      unsubShipRace();
       unsubSafetySensors();
     };
   }, [profile]);
@@ -269,6 +276,7 @@ export const Admin: React.FC = () => {
       { to: '/accidents', label: '사고즉보 관리', icon: ShieldAlert, permission: 'accident_mgmt', color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
       { to: '/health-mgmt', label: '보건관리 보고', icon: Activity, permission: 'health_mgmt', color: 'text-pink-400', bgColor: 'bg-pink-500/20' },
       { to: '/enclosed-monitoring', label: '밀폐공간 관제', icon: Radio, permission: 'admin', color: 'text-rose-300', bgColor: 'bg-rose-500/20' },
+      { onClick: () => setIsSafetyTimeoutSettingsOpen(true), label: '충격 SOS 대기 설정', icon: Clock, permission: 'admin', color: 'text-rose-400', bgColor: 'bg-rose-500/20' },
       { to: '/training-mgmt', label: '교육/평가 관리', icon: HardHat, permission: 'training_mgmt', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
       { to: '/safety-score', label: '안전지수 설정', icon: ShieldCheck, permission: 'safety_score_admin', color: 'text-emerald-400', bgColor: 'bg-emerald-500/20' },
     ],
@@ -277,7 +285,8 @@ export const Admin: React.FC = () => {
       { to: '/notifications', label: '공지사항 관리', icon: Megaphone, permission: 'notice_mgmt', color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
       { onClick: () => setIsBannerSettingsOpen(true), label: '배너 문구 설정', icon: Megaphone, permission: 'admin', color: 'text-violet-400', bgColor: 'bg-violet-500/20' },
       { to: '/coupons', label: '포상/룰렛 관리', icon: Trophy, permission: 'praise_coupon', color: 'text-amber-400', bgColor: 'bg-amber-500/20' },
-      { onClick: () => setIsSnailSettingsOpen(true), label: '건명 달팽이 확률 설정', icon: Radio, permission: 'admin', color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
+      { onClick: () => setIsShipRaceSettingsOpen(true), label: '조선소 레이싱 확률 설정', icon: Radio, permission: 'admin', color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
+      { onClick: () => setIsSnailRaceSettingsOpen(true), label: '달팽이 레이스 확률 설정', icon: Radio, permission: 'admin', color: 'text-emerald-400', bgColor: 'bg-emerald-500/20' },
       { onClick: () => setIsFishingSettingsOpen(true), label: '건명 낚시 확률 설정', icon: Anchor, permission: 'admin', color: 'text-cyan-400', bgColor: 'bg-cyan-500/20' },
       { onClick: () => setIsRouletteSettingsOpen(true), label: '건명 룰렛 확률 설정', icon: Target, permission: 'admin', color: 'text-rose-400', bgColor: 'bg-rose-500/20' },
       { onClick: () => setIsSafetySensorSettingsOpen(true), label: '충격 감지 감도 설정', icon: ShieldAlert, permission: 'admin', color: 'text-red-400', bgColor: 'bg-red-500/20' },
@@ -288,7 +297,6 @@ export const Admin: React.FC = () => {
 
   const renderLink = (link: any, idx: number) => {
     if (isExcludedRole) {
-      // Specifically hide these as requested if they are in the excluded roles
       if (link.label === '공지사항 관리' || link.label === '사고즉보 관리' || link.label === '나의 안전지수/랭킹 조회') {
         return null;
       }
@@ -301,14 +309,14 @@ export const Admin: React.FC = () => {
     if (!isAllowed) return null;
 
     const Content = (
-      <div className="bg-white/[0.03] p-4 rounded-3xl border border-white/5 flex items-center gap-4 active:scale-95 transition-all w-full text-left hover:bg-white/[0.06] hover:border-white/10 group shadow-lg shadow-black/20">
+      <div className="bg-card p-4 rounded-3xl border border-border flex items-center gap-4 active:scale-95 transition-all w-full text-left hover:bg-muted group shadow-sm">
         <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110", link.bgColor || "bg-primary/10")}>
           <link.icon className={cn("w-6 h-6", link.color || "text-primary")} />
         </div>
         <div className="flex flex-col min-w-0">
-          <span className="text-sm font-black text-white leading-tight truncate">{link.label}</span>
+          <span className="text-sm font-black text-foreground leading-tight truncate">{link.label}</span>
         </div>
-        <div className="ml-auto w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/20 group-hover:text-white/60 transition-colors">
+        <div className="ml-auto w-8 h-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground/20 group-hover:text-muted-foreground/60 transition-colors">
           <ChevronRight className="w-4 h-4" />
         </div>
       </div>
@@ -338,14 +346,14 @@ export const Admin: React.FC = () => {
   );
 
   return (
-    <div className="space-y-8 pb-24 px-1">
+    <div className="space-y-8 pb-24 px-1 text-foreground">
       <header className="py-6">
-        <h2 className="text-3xl font-black tracking-tight text-white leading-tight">관리자 시스템</h2>
+        <h2 className="text-3xl font-black tracking-tight text-foreground leading-tight">관리자 시스템</h2>
         <p className="text-muted-foreground font-bold">건명기업 시스템의 코어 설정을 제어합니다</p>
       </header>
 
       {/* Category Tabs - Grid for fixed size */}
-      <div className="grid grid-cols-3 gap-1 bg-white/5 p-1.5 rounded-3xl border border-white/5 mx-1">
+      <div className="grid grid-cols-3 gap-1 bg-muted p-1.5 rounded-3xl border border-border mx-1">
         {[
           { id: 'hr', label: '인사/기획', icon: Users, color: 'text-blue-500' },
           { id: 'safety', label: '안전/관제', icon: HardHat, color: 'text-rose-500' },
@@ -357,11 +365,11 @@ export const Admin: React.FC = () => {
             className={cn(
               "flex-1 min-w-[100px] flex items-center justify-center gap-2 py-3.5 rounded-2xl transition-all duration-500",
               activeCategory === tab.id 
-                ? "bg-white/10 text-white shadow-2xl shadow-black/40 scale-[1.02] border border-white/10" 
-                : "text-white/30 hover:text-white/60"
+                ? "bg-card text-foreground shadow-md scale-[1.02] border border-border" 
+                : "text-muted-foreground/60 hover:text-muted-foreground/90"
             )}
           >
-            <tab.icon className={cn("w-4 h-4", activeCategory === tab.id ? tab.color : "text-white/20")} />
+            <tab.icon className={cn("w-4 h-4", activeCategory === tab.id ? tab.color : "text-muted-foreground/60")} />
             <span className="text-[11px] font-black uppercase tracking-widest">{tab.label}</span>
           </button>
         ))}
@@ -381,7 +389,7 @@ export const Admin: React.FC = () => {
       </motion.div>
 
       <Dialog open={isSafetySensorSettingsOpen} onOpenChange={setIsSafetySensorSettingsOpen}>
-        <DialogContent className="bg-card border-none rounded-3xl text-white max-w-sm p-6 overflow-hidden flex flex-col">
+        <DialogContent className="bg-card border border-border rounded-3xl text-foreground max-w-sm p-6 overflow-hidden flex flex-col shadow-2xl">
           <DialogHeader>
             <DialogTitle className="font-black text-xl">긴급 충격 감지 감도 설정</DialogTitle>
             <DialogDescription className="text-xs font-bold text-muted-foreground">
@@ -389,42 +397,42 @@ export const Admin: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6 py-6 border-y border-white/5 my-4">
+          <div className="space-y-6 py-6 border-y border-border my-4">
             <div className="space-y-4">
               <div className="flex justify-between items-end">
                 <Label className="text-[10px] font-black text-primary uppercase tracking-widest">감도 단계</Label>
-                <span className="text-xl font-black text-white">{safetySensorSettings.sensitivityLevel}단계</span>
+                <span className="text-xl font-black text-foreground">{safetySensorSettings.sensitivityLevel}단계</span>
               </div>
               
-              <div className="grid grid-cols-5 gap-1.5">
-                {[1, 2, 3, 4, 5].map((level) => (
+              <div className="grid grid-cols-4 gap-1.5">
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((level) => (
                   <button
                     key={level}
                     onClick={() => {
-                      // Define thresholds for each level
-                      // User requested specific logic:
-                      // Level 1: 1m fall / impact (Sensitive)
-                      // Level 2: 2.5m fall / impact
                       const thresholds = [
-                        { impact: 35.0, fall: 3.5, duration: 120 }, // 1단계: 1m 추락 및 일상 충격 (매우 예민)
-                        { impact: 65.0, fall: 3.0, duration: 180 }, // 2단계: 2.5m 추락 및 강한 충격 (민감)
-                        { impact: 90.0, fall: 2.5, duration: 250 }, // 3단계: 고소 추락 및 심각한 충격 (보통)
-                        { impact: 130.0, fall: 2.0, duration: 350 }, // 4단계: 기계적 충격 (둔감)
-                        { impact: 180.0, fall: 1.5, duration: 500 }  // 5단계: 측정 한계 수준 (매우 둔감)
+                        { impact: 35.0, fall: 3.5, duration: 120, sos: 15 }, 
+                        { impact: 65.0, fall: 3.0, duration: 180, sos: 15 }, 
+                        { impact: 95.0, fall: 2.5, duration: 250, sos: 15 }, 
+                        { impact: 135.0, fall: 2.2, duration: 300, sos: 15 }, 
+                        { impact: 185.0, fall: 2.0, duration: 350, sos: 15 },
+                        { impact: 245.0, fall: 1.8, duration: 400, sos: 15 },
+                        { impact: 315.0, fall: 1.6, duration: 450, sos: 15 },
+                        { impact: 400.0, fall: 1.5, duration: 500, sos: 15 }
                       ];
                       const selected = thresholds[level - 1];
                       setSafetySensorSettings({
                         sensitivityLevel: level,
                         impactThreshold: selected.impact,
                         fallThreshold: selected.fall,
-                        fallDuration: selected.duration
+                        fallDuration: selected.duration,
+                        sosTimeout: safetySensorSettings.sosTimeout || selected.sos
                       });
                     }}
                     className={cn(
                       "h-12 rounded-xl text-sm font-black transition-all",
                       safetySensorSettings.sensitivityLevel === level
-                        ? "bg-primary text-white shadow-lg shadow-primary/20"
-                        : "bg-white/5 text-white/40 hover:bg-white/10"
+                        ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
+                        : "bg-muted text-foreground hover:bg-muted/80"
                     )}
                   >
                     {level}
@@ -432,18 +440,22 @@ export const Admin: React.FC = () => {
                 ))}
               </div>
 
-              <div className="p-4 bg-white/5 rounded-2xl space-y-3">
+              <div className="p-4 bg-muted rounded-2xl space-y-3">
                 <div className="flex justify-between items-center text-[10px]">
                   <span className="font-black text-muted-foreground uppercase">관리 기준 (시뮬레이션)</span>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-xs font-black text-white">
-                    {safetySensorSettings.sensitivityLevel === 1 && "1단계: 약 1미터 높이에서의 추락이나 일상적인 부딪힘"}
-                    {safetySensorSettings.sensitivityLevel === 2 && "2단계: 약 2.5미터 높이에서의 추락이나 상당히 강한 충격"}
-                    {safetySensorSettings.sensitivityLevel === 3 && "3단계: 고소 작업 중 추락이나 장비 충돌 수준의 충격"}
-                    {safetySensorSettings.sensitivityLevel === 4 && "4단계: 매우 강한 기계적 충격 또는 사고 상황"}
-                    {safetySensorSettings.sensitivityLevel === 5 && "5단계: 차량 전복이나 극심한 파손 상황 전용 (가장 낮음)"}
+                  <p className="text-xs font-black text-foreground">
+                    {safetySensorSettings.sensitivityLevel === 1 && "1단계: 매우 민감 (일상적인 일시적 부딪힘도 감지 가능)"}
+                    {safetySensorSettings.sensitivityLevel === 2 && "2단계: 민감 (약 1m 높이에서의 가벼운 추락/충격)"}
+                    {safetySensorSettings.sensitivityLevel === 3 && "3단계: 보통 (일상적인 작업 중 발생 가능한 충격)"}
+                    {safetySensorSettings.sensitivityLevel === 4 && "4단계: 약간 둔감 (강한 기계적 접촉이나 추락 상황)"}
+                    {safetySensorSettings.sensitivityLevel === 5 && "5단계: 둔감 (강한 장비 충돌 수준의 충격)"}
+                    {safetySensorSettings.sensitivityLevel === 6 && "6단계: 매우 둔감 (차량 접촉 사고 수준의 극심한 충격)"}
+                    {safetySensorSettings.sensitivityLevel === 7 && "7단계: 극도로 둔감 (기계적 파손이 동반되는 수준의 충격)"}
+                    {safetySensorSettings.sensitivityLevel === 8 && "8단계: 최소 민감도 (특수 산업 현장/극심한 사고 전용)"}
                   </p>
+
                   <p className="text-[10px] font-bold text-muted-foreground leading-relaxed italic">
                     * 설정값: 충격 가속도 {safetySensorSettings.impactThreshold.toFixed(1)}m/s², 추락 판정 {safetySensorSettings.fallDuration}ms
                   </p>
@@ -451,7 +463,7 @@ export const Admin: React.FC = () => {
               </div>
             </div>
 
-            <p className="text-[10px] font-bold text-red-400 text-center italic">
+            <p className="text-[10px] font-bold text-red-500 text-center italic">
               * 설정 시 모든 사용자의 충격 감지 기준이 실시간으로 변경됩니다.
             </p>
           </div>
@@ -459,13 +471,13 @@ export const Admin: React.FC = () => {
           <div className="flex gap-2">
             <Button 
               variant="outline" 
-              className="flex-1 h-12 rounded-2xl border-white/10 text-white font-black"
+              className="flex-1 h-12 rounded-2xl border-border text-foreground font-black"
               onClick={() => setIsSafetySensorSettingsOpen(false)}
             >
               취소
             </Button>
             <Button 
-              className="flex-1 h-12 bg-primary text-white font-black rounded-2xl shadow-lg shadow-primary/20"
+              className="flex-1 h-12 bg-primary text-primary-foreground font-black rounded-2xl shadow-lg shadow-primary/20 hover:bg-primary/90"
               onClick={async () => {
                 try {
                   await setDoc(doc(db, 'settings', 'safety_sensors'), {
@@ -486,8 +498,87 @@ export const Admin: React.FC = () => {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={isSafetyTimeoutSettingsOpen} onOpenChange={setIsSafetyTimeoutSettingsOpen}>
+        <DialogContent className="bg-card border border-border rounded-[32px] text-foreground max-w-sm w-[95%] p-8 overflow-hidden flex flex-col shadow-2xl">
+          <DialogHeader className="space-y-3">
+            <DialogTitle className="font-black text-2xl text-rose-500 tracking-tight">SOS 대기 시간</DialogTitle>
+            <DialogDescription className="text-sm font-bold text-muted-foreground leading-relaxed">
+              위험 감지 후 긴급 SOS가 자동 발송되기 전까지의 대기 시간을 설정합니다.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-10 py-10 my-4">
+            <div className="space-y-8">
+              <div className="flex justify-between items-baseline">
+                <Label className="text-xs font-black text-rose-500 uppercase tracking-widest">대기 시간</Label>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-5xl font-black text-foreground tabular-nums">{safetySensorSettings.sosTimeout}</span>
+                  <span className="text-xl font-bold text-muted-foreground">초</span>
+                </div>
+              </div>
+              
+              <div className="px-1">
+                <input 
+                  type="range"
+                  min="5"
+                  max="120"
+                  step="5"
+                  value={safetySensorSettings.sosTimeout}
+                  onChange={(e) => setSafetySensorSettings(prev => ({ ...prev, sosTimeout: parseInt(e.target.value) }))}
+                  className="w-full accent-rose-500 h-2.5 bg-muted rounded-full appearance-none cursor-pointer"
+                />
+                <div className="flex justify-between text-[10px] font-black text-muted-foreground mt-4 opacity-40">
+                  <span>5초</span>
+                  <span>60초</span>
+                  <span>120초</span>
+                </div>
+              </div>
+
+              <div className="p-6 bg-rose-50/50 light-theme:bg-rose-50 rounded-3xl border border-rose-100 flex gap-4">
+                <ShieldAlert className="w-6 h-6 text-rose-500 shrink-0" />
+                <div className="space-y-1.5">
+                  <p className="text-xs font-black text-rose-600">작동 원리</p>
+                  <p className="text-[11px] font-bold text-foreground/70 leading-relaxed">
+                    위험 감지 시 즉시 경보가 울립니다. 대기 시간 내에 <span className="text-foreground font-black">'괜찮아요'</span> 버튼을 누르지 않으면 관리자에게 위치 정보와 함께 즉시 알림이 발송됩니다.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <Button 
+              variant="outline" 
+              className="flex-1 h-14 rounded-2xl border-border text-foreground font-black hover:bg-muted"
+              onClick={() => setIsSafetyTimeoutSettingsOpen(false)}
+            >
+              취소
+            </Button>
+            <Button 
+              className="flex-1 h-14 bg-rose-500 text-white font-black rounded-2xl shadow-xl shadow-rose-200 hover:bg-rose-600 transition-all active:scale-95"
+              onClick={async () => {
+                try {
+                  await setDoc(doc(db, 'settings', 'safety_sensors'), {
+                    sosTimeout: safetySensorSettings.sosTimeout,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: profile?.uid
+                  }, { merge: true });
+                  toast.success('SOS 대기 시간 설정이 완료되었습니다.');
+                  setIsSafetyTimeoutSettingsOpen(false);
+                } catch (e) {
+                  toast.error('설정 저장 중 오류가 발생했습니다.');
+                }
+              }}
+            >
+              전체 적용
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+
       <Dialog open={isShipSettingsOpen} onOpenChange={setIsShipSettingsOpen}>
-        <DialogContent className="bg-card border-none rounded-3xl text-white max-w-md overflow-y-auto max-h-[85vh] p-6 focus:outline-none">
+        <DialogContent className="bg-card border border-border rounded-3xl text-foreground max-w-md overflow-y-auto max-h-[85vh] p-6 focus:outline-none shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-black">함선 파츠 확률 설정</DialogTitle>
             <DialogDescription className="text-xs font-bold text-muted-foreground mt-1">
@@ -495,11 +586,11 @@ export const Admin: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6 py-6 border-y border-white/5 my-4">
+          <div className="space-y-6 py-6 border-y border-border my-4">
             <div className="space-y-4">
               <div className="flex justify-between items-end">
                 <Label className="text-[10px] font-black text-primary uppercase tracking-widest">기본 지급 확률</Label>
-                <span className="text-xl font-black text-white">{(shipSettings.probability * 100).toFixed(0)}%</span>
+                <span className="text-xl font-black text-foreground">{(shipSettings.probability * 100).toFixed(0)}%</span>
               </div>
               <input 
                 type="range" 
@@ -508,7 +599,7 @@ export const Admin: React.FC = () => {
                 step="0.05" 
                 value={shipSettings.probability} 
                 onChange={e => setShipSettings(prev => ({ ...prev, probability: parseFloat(e.target.value) }))}
-                className="w-full h-2 bg-white/10 rounded-full appearance-none accent-primary" 
+                className="w-full h-2 bg-muted rounded-full appearance-none accent-primary" 
               />
               <p className="text-[10px] font-bold text-muted-foreground text-center italic">
                 * 100% 설정 시 모든 활동 완료 시 확정적으로 지급됩니다.
@@ -533,7 +624,7 @@ export const Admin: React.FC = () => {
                         "flex items-center gap-3 p-3 rounded-xl border transition-all text-left",
                         isDisabled 
                           ? "bg-red-500/5 border-red-500/20 text-red-500 grayscale" 
-                          : "bg-white/5 border-white/5 text-white"
+                          : "bg-background border-border text-foreground"
                       )}
                     >
                       <div className={cn(
@@ -558,13 +649,13 @@ export const Admin: React.FC = () => {
           <div className="flex gap-2">
             <Button 
               variant="outline" 
-              className="flex-1 h-14 rounded-2xl border-white/10 text-white font-black"
+              className="flex-1 h-14 rounded-2xl border-border text-foreground font-black"
               onClick={() => setIsShipSettingsOpen(false)}
             >
               취소
             </Button>
             <Button 
-              className="flex-1 h-14 bg-primary text-white font-black rounded-2xl shadow-lg shadow-primary/20"
+              className="flex-1 h-14 bg-primary text-primary-foreground font-black rounded-2xl shadow-lg shadow-primary/20"
               onClick={async () => {
                 try {
                   await setDoc(doc(db, 'settings', 'shipParts'), {
@@ -587,17 +678,17 @@ export const Admin: React.FC = () => {
       </Dialog>
 
       <Dialog open={isFishingSettingsOpen} onOpenChange={setIsFishingSettingsOpen}>
-        <DialogContent className="bg-card border-none rounded-3xl text-white max-w-sm p-6 overflow-hidden flex flex-col">
+        <DialogContent className="bg-card border border-border rounded-3xl text-foreground max-w-sm p-6 overflow-hidden flex flex-col shadow-2xl">
           <DialogHeader>
-            <DialogTitle className="font-black text-xl">건명 낚시 (OVERHAUL) 설정</DialogTitle>
-            <DialogDescription className="text-xs font-bold text-muted-foreground">
+            <DialogTitle className="font-black text-xl text-foreground">건명 낚시 (OVERHAUL) 설정</DialogTitle>
+            <DialogDescription className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
               물고기 종류별 이름, 배당률(Multiplier), 출현 확률을 관리합니다.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4 border-y border-white/5 my-4 overflow-y-auto max-h-[60vh]">
+          <div className="space-y-4 py-4 border-y border-border my-4 overflow-y-auto max-h-[60vh]">
             {fishingSettings.map((fish, index) => (
-              <div key={fish.id} className="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-3">
+              <div key={fish.id} className="p-4 bg-muted/30 rounded-2xl border border-border space-y-3 shadow-sm">
                  <div className="flex justify-between items-center">
                     <div className="flex items-center gap-2">
                        <span className="text-xl">{fish.icon}</span>
@@ -608,11 +699,11 @@ export const Admin: React.FC = () => {
                            updated[index].name = e.target.value;
                            setFishingSettings(updated);
                          }}
-                         className="h-8 bg-transparent border-none font-black text-sm p-0 w-32 focus-visible:ring-0"
+                         className="h-8 bg-transparent border-none font-black text-sm p-0 w-32 focus-visible:ring-0 text-foreground"
                        />
                     </div>
                     <div className="flex items-center gap-1">
-                       <span className="text-[10px] font-black text-muted-foreground">배당</span>
+                       <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">배당</span>
                        <Input 
                          type="number" 
                          value={fish.multiplier}
@@ -621,16 +712,16 @@ export const Admin: React.FC = () => {
                            updated[index].multiplier = parseFloat(e.target.value) || 0;
                            setFishingSettings(updated);
                          }}
-                         className="h-8 w-16 bg-white/5 border-none font-black text-right text-emerald-400"
+                         className="h-8 w-16 bg-muted border-none font-black text-right text-emerald-500"
                        />
-                       <span className="text-[10px] font-black">x</span>
+                       <span className="text-[10px] font-black text-foreground">x</span>
                     </div>
                  </div>
 
                  <div className="space-y-1">
-                    <div className="flex justify-between text-[10px] font-black uppercase">
+                    <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
                        <span className="text-primary">확률</span>
-                       <span>{(fish.probability * 100).toFixed(1)}%</span>
+                       <span className="text-foreground">{(fish.probability * 100).toFixed(1)}%</span>
                     </div>
                     <input 
                       type="range"
@@ -643,14 +734,14 @@ export const Admin: React.FC = () => {
                         updated[index].probability = parseFloat(e.target.value);
                         setFishingSettings(updated);
                       }}
-                      className="w-full h-1.5 bg-white/10 rounded-full appearance-none accent-primary"
+                      className="w-full h-1.5 bg-muted rounded-full appearance-none accent-primary"
                     />
                  </div>
               </div>
             ))}
 
             <div className="p-4 bg-primary/10 border border-primary/20 rounded-2xl">
-               <p className="text-[10px] font-black text-primary text-center uppercase">
+               <p className="text-[10px] font-black text-primary text-center uppercase tracking-widest leading-relaxed">
                   확률 합계: {fishingSettings.reduce((a, b) => a + b.probability, 0).toFixed(2)} (1.0 권장)
                </p>
             </div>
@@ -659,13 +750,13 @@ export const Admin: React.FC = () => {
           <div className="flex gap-2">
             <Button 
               variant="outline" 
-              className="flex-1 h-12 rounded-2xl border-white/10 text-white font-black"
+              className="flex-1 h-12 rounded-2xl border-border text-foreground font-black hover:bg-muted"
               onClick={() => setIsFishingSettingsOpen(false)}
             >
               취소
             </Button>
             <Button 
-              className="flex-1 h-12 bg-primary text-white font-black rounded-2xl shadow-lg shadow-primary/20"
+              className="flex-1 h-12 bg-primary text-primary-foreground font-black rounded-2xl shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all"
               onClick={async () => {
                 try {
                   await setDoc(doc(db, 'settings', 'entertainment'), { 
@@ -687,15 +778,15 @@ export const Admin: React.FC = () => {
       </Dialog>
 
       <Dialog open={isRouletteSettingsOpen} onOpenChange={setIsRouletteSettingsOpen}>
-        <DialogContent className="bg-card border-none rounded-3xl text-white max-w-sm p-6 overflow-hidden flex flex-col">
+        <DialogContent className="bg-card border border-border rounded-3xl text-foreground max-w-sm p-6 overflow-hidden flex flex-col shadow-2xl">
           <DialogHeader>
-            <DialogTitle className="font-black text-xl">건명 룰렛 확률 설정</DialogTitle>
-            <DialogDescription className="text-xs font-bold text-muted-foreground">
+            <DialogTitle className="font-black text-xl text-foreground">건명 룰렛 확률 설정</DialogTitle>
+            <DialogDescription className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
               룰렛 각 칸의 당첨 확률을 실시간으로 조절합니다.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4 border-y border-white/5 my-4 overflow-y-auto max-h-[60vh]">
+          <div className="space-y-4 py-4 border-y border-border my-4 overflow-y-auto max-h-[60vh]">
             {[
               { label: '꽝 (0배)', index: 0 },
               { label: '1배 당첨', index: 1 },
@@ -705,9 +796,9 @@ export const Admin: React.FC = () => {
               { label: '10배 당첨', index: 5 }
             ].map((item) => (
               <div key={item.index} className="space-y-2">
-                <div className="flex justify-between items-center text-[10px] font-black text-rose-400 uppercase">
+                <div className="flex justify-between items-center text-[10px] font-black text-rose-500 uppercase tracking-widest">
                    <span>{item.label}</span>
-                   <span>{(rouletteProbs[item.index] * 100).toFixed(1)}%</span>
+                   <span className="text-foreground">{(rouletteProbs[item.index] * 100).toFixed(1)}%</span>
                 </div>
                 <input 
                   type="range"
@@ -720,13 +811,13 @@ export const Admin: React.FC = () => {
                     updated[item.index] = parseFloat(e.target.value);
                     setRouletteProbs(updated);
                   }}
-                  className="w-full accent-rose-500 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer"
+                  className="w-full accent-rose-500 h-1.5 bg-muted rounded-lg appearance-none cursor-pointer"
                 />
               </div>
             ))}
 
             <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
-               <p className="text-[10px] font-black text-emerald-400 text-center uppercase">
+               <p className="text-[10px] font-black text-emerald-600 text-center uppercase tracking-widest">
                   확률 합계: {rouletteProbs.reduce((a, b) => a + b, 0).toFixed(2)} (1.0 권장)
                </p>
             </div>
@@ -735,13 +826,13 @@ export const Admin: React.FC = () => {
           <div className="flex gap-2">
             <Button 
               variant="outline" 
-              className="flex-1 h-12 rounded-2xl border-white/10 text-white font-black"
+              className="flex-1 h-12 rounded-2xl border-border text-foreground font-black hover:bg-muted"
               onClick={() => setIsRouletteSettingsOpen(false)}
             >
               취소
             </Button>
             <Button 
-              className="flex-1 h-12 bg-rose-500 text-white font-black rounded-2xl shadow-lg shadow-rose-500/20"
+              className="flex-1 h-12 bg-rose-500 text-white font-black rounded-2xl shadow-lg shadow-rose-500/20 hover:bg-rose-600 transition-all"
               onClick={async () => {
                 try {
                   await setDoc(doc(db, 'settings', 'entertainment'), { 
@@ -762,14 +853,14 @@ export const Admin: React.FC = () => {
         </DialogContent>
       </Dialog>
       
-      <Dialog open={isSnailSettingsOpen} onOpenChange={setIsSnailSettingsOpen}>
-        <DialogContent className="bg-card border-none rounded-3xl text-white max-w-sm">
-           <DialogHeader><DialogTitle className="font-black text-xl">달팽이 레이스 확률</DialogTitle></DialogHeader>
+      <Dialog open={isShipRaceSettingsOpen} onOpenChange={setIsShipRaceSettingsOpen}>
+        <DialogContent className="bg-card border border-border rounded-3xl text-foreground max-w-sm p-6 shadow-2xl">
+           <DialogHeader><DialogTitle className="font-black text-xl text-foreground">조선소 레이싱 확률 설정</DialogTitle></DialogHeader>
            <div className="space-y-4 py-4">
-              {snailProbs.map((p, i) => (
-                <div key={i} className="flex flex-col gap-2 p-4 bg-white/5 rounded-2xl border border-white/5">
-                   <div className="flex justify-between items-center text-[10px] font-black uppercase text-muted-foreground">
-                      <span>{i+1}번 달팽이 (스피드 계수)</span>
+              {shipRaceProbs.map((p, i) => (
+                <div key={i} className="flex flex-col gap-2 p-4 bg-muted/30 rounded-2xl border border-border">
+                   <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                      <span>{['컨테이너', 'LNG선', '유조선', '벌크선', '화학선'][i]} (스피드 계수)</span>
                       <span className="text-primary">{p.toFixed(1)}x</span>
                    </div>
                    <input 
@@ -779,11 +870,58 @@ export const Admin: React.FC = () => {
                      step="0.1" 
                      value={p} 
                      onChange={e => {
-                        const updated = [...snailProbs]; 
+                        const updated = [...shipRaceProbs]; 
                         updated[i] = parseFloat(e.target.value); 
-                        setSnailProbs(updated);
+                        setShipRaceProbs(updated);
                      }} 
-                     className="w-full h-2 bg-white/10 rounded-full appearance-none accent-primary" 
+                     className="w-full h-2 bg-muted rounded-full appearance-none accent-primary" 
+                   />
+                </div>
+              ))}
+              <p className="text-[10px] font-bold text-muted-foreground text-center italic">
+                * 계수가 높을수록 해당 선박이 승리할 확률이 높아집니다.
+              </p>
+           </div>
+           <Button className="w-full h-14 bg-primary text-primary-foreground font-black rounded-2xl shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all" onClick={async () => {
+             try {
+               await setDoc(doc(db, 'settings', 'entertainment'), { 
+                 shipRaceProbabilities: shipRaceProbs,
+                 updatedAt: new Date().toISOString(),
+                 updatedBy: profile?.uid
+               }, { merge: true });
+               toast.success('조선소 레이싱 설정이 저장되었습니다.');
+               setIsShipRaceSettingsOpen(false);
+             } catch (e) {
+               toast.error('설정 저장 중 오류가 발생했습니다.');
+             }
+           }}>
+              설정 저장
+           </Button>
+        </DialogContent>
+      </Dialog>
+
+       <Dialog open={isSnailRaceSettingsOpen} onOpenChange={setIsSnailRaceSettingsOpen}>
+        <DialogContent className="bg-card border border-border rounded-3xl text-foreground max-w-sm p-6 shadow-2xl">
+           <DialogHeader><DialogTitle className="font-black text-xl text-foreground">달팽이 레이스 확률 설정</DialogTitle></DialogHeader>
+           <div className="space-y-4 py-4">
+              {snailRaceProbs.map((p, i) => (
+                <div key={i} className="flex flex-col gap-2 p-4 bg-muted/30 rounded-2xl border border-border">
+                   <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                      <span>달팽이 {i + 1} (스피드 계수)</span>
+                      <span className="text-primary">{p.toFixed(1)}x</span>
+                   </div>
+                   <input 
+                     type="range" 
+                     min="0.5" 
+                     max="3" 
+                     step="0.1" 
+                     value={p} 
+                     onChange={e => {
+                        const updated = [...snailRaceProbs]; 
+                        updated[i] = parseFloat(e.target.value); 
+                        setSnailRaceProbs(updated);
+                     }} 
+                     className="w-full h-2 bg-muted rounded-full appearance-none accent-primary" 
                    />
                 </div>
               ))}
@@ -791,37 +929,39 @@ export const Admin: React.FC = () => {
                 * 계수가 높을수록 해당 달팽이가 승리할 확률이 높아집니다.
               </p>
            </div>
-           <Button className="w-full h-14 bg-primary text-white font-black rounded-2xl shadow-lg shadow-primary/20" onClick={async () => {
+           <Button className="w-full h-14 bg-primary text-primary-foreground font-black rounded-2xl shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all" onClick={async () => {
              try {
                await setDoc(doc(db, 'settings', 'entertainment'), { 
-                 snailProbabilities: snailProbs,
+                 snailRaceProbabilities: snailRaceProbs,
                  updatedAt: new Date().toISOString(),
                  updatedBy: profile?.uid
                }, { merge: true });
-               toast.success('달팽이 확률 설정이 저장되었습니다.'); 
-               setIsSnailSettingsOpen(false);
+               toast.success('달팽이 레이스 설정이 저장되었습니다.');
+               setIsSnailRaceSettingsOpen(false);
              } catch (e) {
-               toast.error('저장 중 오류가 발생했습니다.');
+               toast.error('설정 저장 중 오류가 발생했습니다.');
              }
-           }}>설정 저장</Button>
+           }}>
+              설정 저장
+           </Button>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isBannerSettingsOpen} onOpenChange={setIsBannerSettingsOpen}>
-        <DialogContent className="bg-card border-none rounded-3xl text-white max-w-sm">
-           <DialogHeader><DialogTitle className="font-black">메인 배너 관리</DialogTitle></DialogHeader>
+        <DialogContent className="bg-card border border-border rounded-3xl text-foreground max-w-sm p-6 shadow-2xl">
+           <DialogHeader><DialogTitle className="font-black text-foreground">메인 배너 관리</DialogTitle></DialogHeader>
            <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">배너 문구</Label>
                 <Input 
                   value={bannerText} 
                   onChange={(e) => setBannerText(e.target.value)}
-                  className="bg-white/5 border-none h-12 rounded-xl text-white font-bold"
+                  className="bg-muted border border-border h-12 rounded-xl text-foreground font-bold"
                   placeholder="예: 안전한 하루가 되세요"
                 />
               </div>
            </div>
-           <Button className="w-full h-14 bg-primary text-white font-black rounded-2xl" onClick={async () => {
+           <Button className="w-full h-14 bg-primary text-primary-foreground font-black rounded-2xl shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all" onClick={async () => {
              await setDoc(doc(db, 'settings', 'banner'), { 
                text: bannerText,
                updatedAt: new Date().toISOString(),
@@ -834,16 +974,16 @@ export const Admin: React.FC = () => {
       </Dialog>
 
       <Dialog open={isPermissionSettingsOpen} onOpenChange={setIsPermissionSettingsOpen}>
-        <DialogContent className="bg-card border-none rounded-3xl text-white max-w-md p-0 overflow-hidden flex flex-col max-h-[80vh]">
+        <DialogContent className="bg-card border border-border rounded-3xl text-foreground max-w-md p-0 overflow-hidden flex flex-col max-h-[80vh] shadow-2xl">
            <div className="p-8 pb-4">
-              <DialogTitle className="font-black mb-4">권한 관리</DialogTitle>
+              <DialogTitle className="font-black mb-4 text-foreground">권한 관리</DialogTitle>
               <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/40" />
                 <Input 
                   placeholder="사용자 검색..." 
                   value={searchTerm} 
                   onChange={e => setSearchTerm(e.target.value)} 
-                  className="bg-white/5 border-none h-12 pl-11 rounded-xl" 
+                  className="bg-muted border border-border h-12 pl-11 rounded-xl text-foreground" 
                 />
               </div>
            </div>
@@ -852,73 +992,74 @@ export const Admin: React.FC = () => {
                 const activeUser = selectedUser ? users.find(u => u.uid === selectedUser.uid) || selectedUser : null;
                 
                 if (activeUser) {
-                  return (
-                    <div className="space-y-4">
-                       <div className="bg-white/5 p-4 rounded-2xl flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                             <div className="w-10 h-10 bg-primary/20 text-primary rounded-xl flex items-center justify-center font-black">
-                               {activeUser.displayName.charAt(0)}
-                             </div>
-                             <div>
-                               <p className="font-black text-sm">{activeUser.displayName}</p>
-                               <p className="text-[10px] text-muted-foreground">{activeUser.employeeId}</p>
-                             </div>
-                          </div>
-                          <Button variant="ghost" className="text-xs text-muted-foreground" onClick={() => setSelectedUser(null)}>변경</Button>
-                       </div>
-                       <div className="space-y-2">
-                          {PERMISSIONS.map(p => {
-                            const isGranted = activeUser.permissions?.includes(p.id);
-                            return (
-                              <div key={p.id} className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
-                                 <div className="flex items-center gap-3">
-                                   <p.icon className="w-4 h-4 text-primary" />
-                                   <span className="text-xs font-bold">{p.label}</span>
-                                 </div>
-                                 <div 
-                                   className={cn(
-                                     "w-10 h-5 rounded-full p-1 cursor-pointer transition-all duration-200", 
-                                     isGranted ? "bg-primary" : "bg-white/10"
-                                   )} 
-                                   onClick={() => handleTogglePermission(activeUser.uid, p.id)}
-                                 >
-                                    <div className={cn(
-                                      "w-3 h-3 bg-white rounded-full transition-transform duration-200", 
-                                      isGranted ? "translate-x-5" : "translate-x-0"
-                                    )} />
-                                 </div>
+                   return (
+                     <div className="space-y-4">
+                        <div className="bg-muted/50 p-4 rounded-2xl flex items-center justify-between border border-border">
+                           <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-primary/20 text-primary rounded-xl flex items-center justify-center font-black">
+                                {activeUser.displayName.charAt(0)}
                               </div>
-                            );
-                          })}
-                       </div>
-                    </div>
-                  );
+                              <div>
+                                <p className="font-black text-sm text-foreground">{activeUser.displayName}</p>
+                                <p className="text-[10px] text-muted-foreground">{activeUser.employeeId}</p>
+                              </div>
+                           </div>
+                           <Button variant="ghost" className="text-xs text-muted-foreground hover:bg-muted" onClick={() => setSelectedUser(null)}>변경</Button>
+                        </div>
+                        <div className="space-y-2">
+                           {PERMISSIONS.map(p => {
+                             const isGranted = activeUser.permissions?.includes(p.id);
+                             return (
+                               <div key={p.id} className="flex items-center justify-between p-4 bg-muted/30 rounded-xl border border-border shadow-sm">
+                                  <div className="flex items-center gap-3">
+                                    <p.icon className="w-4 h-4 text-primary" />
+                                    <span className="text-xs font-bold text-foreground">{p.label}</span>
+                                  </div>
+                                  <div 
+                                    className={cn(
+                                      "w-10 h-5 rounded-full p-1 cursor-pointer transition-all duration-200", 
+                                      isGranted ? "bg-primary" : "bg-muted"
+                                    )} 
+                                    onClick={() => handleTogglePermission(activeUser.uid, p.id)}
+                                  >
+                                     <div className={cn(
+                                       "w-3 h-3 bg-white rounded-full transition-transform duration-200", 
+                                       isGranted ? "translate-x-5" : "translate-x-0"
+                                     )} />
+                                  </div>
+                               </div>
+                             );
+                           })}
+                        </div>
+                     </div>
+                   );
                 }
 
                 return filteredUsers.slice(0, 10).map(u => (
                   <div 
                     key={u.uid} 
-                    className="bg-white/5 p-4 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-white/10 active:scale-95 transition-all" 
+                    className="bg-muted/30 p-4 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-muted/60 active:scale-95 transition-all border border-border shadow-sm" 
                     onClick={() => setSelectedUser(u)}
                   >
                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center font-black text-sm text-muted-foreground">
+                        <div className="w-10 h-10 bg-muted rounded-xl flex items-center justify-center font-black text-sm text-muted-foreground border border-border">
                           {u.displayName.charAt(0)}
                         </div>
                         <div>
-                          <p className="font-black text-sm">{u.displayName}</p>
+                          <p className="font-black text-sm text-foreground">{u.displayName}</p>
                           <p className="text-[10px] text-muted-foreground">{u.employeeId}</p>
                         </div>
                      </div>
-                     <ChevronRight className="w-4 h-4 text-white/20" />
+                     <ChevronRight className="w-4 h-4 text-muted-foreground/30" />
                   </div>
                 ));
               })()}
            </div>
         </DialogContent>
       </Dialog>
+
       <Dialog open={isEmergencyOpen} onOpenChange={setIsEmergencyOpen}>
-        <DialogContent className="bg-card border-none rounded-3xl text-white max-w-lg p-0 overflow-hidden flex flex-col max-h-[90vh]">
+        <DialogContent className="bg-card border border-border rounded-3xl text-foreground max-w-lg p-0 overflow-hidden flex flex-col max-h-[90vh] shadow-2xl">
           <div className="p-8 pb-4">
             <DialogHeader>
               <div className="flex items-center gap-3 mb-2">
@@ -926,8 +1067,8 @@ export const Admin: React.FC = () => {
                   <AlertTriangle className="w-6 h-6" />
                 </div>
                 <div>
-                  <DialogTitle className="font-black text-xl">비상 대피 실시간 인원 파악</DialogTitle>
-                  <DialogDescription className="font-bold">현장 인원들의 안전을 실시간으로 확인합니다.</DialogDescription>
+                  <DialogTitle className="font-black text-xl text-foreground">비상 대피 실시간 인원 파악</DialogTitle>
+                  <DialogDescription className="font-bold text-muted-foreground">현장 인원들의 안전을 실시간으로 확인합니다.</DialogDescription>
                 </div>
               </div>
             </DialogHeader>
@@ -936,22 +1077,21 @@ export const Admin: React.FC = () => {
           <div className="flex-1 overflow-y-auto p-8 pt-0 space-y-6">
             {evacuationStatus?.isActive ? (
               <div className="space-y-6">
-                {/* Real-time Stats */}
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-white/5 p-6 rounded-2xl border border-white/5 text-center flex flex-col items-center justify-center">
+                  <div className="bg-muted/50 p-6 rounded-2xl border border-border text-center flex flex-col items-center justify-center shadow-inner">
                     <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-2">출근 인원 대비</p>
                     <div className="relative">
-                      <p className="text-4xl font-black text-blue-500">{evacuationCheckins.length}</p>
-                      <p className="text-[10px] font-bold text-blue-500/40 absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                      <p className="text-4xl font-black text-blue-600">{evacuationCheckins.length}</p>
+                      <p className="text-[10px] font-bold text-blue-600/40 absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap">
                         / {evacuationStatus.totalClockedIn || '-'} 명
                       </p>
                     </div>
                   </div>
-                  <div className="bg-white/5 p-6 rounded-2xl border border-white/5 text-center flex flex-col items-center justify-center">
+                  <div className="bg-muted/50 p-6 rounded-2xl border border-border text-center flex flex-col items-center justify-center shadow-inner">
                     <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-2">전체 인원 대비</p>
                     <div className="relative">
-                      <p className="text-4xl font-black text-emerald-500">{evacuationCheckins.length}</p>
-                      <p className="text-[10px] font-bold text-emerald-500/40 absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                      <p className="text-4xl font-black text-emerald-600">{evacuationCheckins.length}</p>
+                      <p className="text-[10px] font-bold text-emerald-600/40 absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap">
                         / {evacuationStatus.totalWorkers || users.length} 명
                       </p>
                     </div>
@@ -960,8 +1100,7 @@ export const Admin: React.FC = () => {
 
                 <div className="pt-4 space-y-2">
                   <p className="text-[10px] font-black text-red-600/60 uppercase tracking-widest px-1">미확인 인원: {Math.max(0, (evacuationStatus.totalWorkers || users.length) - evacuationCheckins.length)}명</p>
-                  {/* Progress Bar */}
-                  <div className="bg-white/5 h-4 rounded-full overflow-hidden">
+                  <div className="bg-muted h-4 rounded-full overflow-hidden border border-border shadow-inner">
                     <motion.div 
                       initial={{ width: 0 }}
                       animate={{ width: `${(evacuationCheckins.length / (evacuationStatus.totalWorkers || users.length)) * 100}%` }}
@@ -971,7 +1110,7 @@ export const Admin: React.FC = () => {
                 </div>
 
                 <div className="space-y-3">
-                  <h4 className="text-sm font-black text-white px-1">미확인 인원 명단</h4>
+                  <h4 className="text-sm font-black text-foreground px-1">미확인 인원 명단</h4>
                   <div className="grid grid-cols-1 gap-2">
                     {users
                       .filter(u => !evacuationCheckins.some(c => c.uid === u.uid))
@@ -995,13 +1134,13 @@ export const Admin: React.FC = () => {
                 <div className="flex gap-3 pt-4">
                   <Button 
                     variant="outline" 
-                    className="flex-1 h-14 rounded-2xl border-white/10 text-white font-black"
+                    className="flex-1 h-14 rounded-2xl border-border text-foreground font-black hover:bg-muted"
                     onClick={() => setIsEmergencyOpen(false)}
                   >
                     닫기
                   </Button>
                   <Button 
-                    className="flex-1 h-14 rounded-2xl bg-slate-900 text-white font-black border border-white/5"
+                    className="flex-1 h-14 rounded-2xl bg-slate-900 text-white font-black border border-white/5 hover:bg-slate-800 transition-all opacity-80 hover:opacity-100"
                     onClick={async () => {
                       if (window.confirm('대피 상황을 종료하시겠습니까?')) {
                         const now = new Date().toISOString();
@@ -1034,17 +1173,17 @@ export const Admin: React.FC = () => {
             ) : (
               <div className="space-y-6 pt-4">
                 <div className="flex justify-between items-center px-1">
-                  <p className="text-sm font-black text-white">최근 대피 이력</p>
+                  <p className="text-sm font-black text-foreground">최근 대피 이력</p>
                   <Button 
                     variant="ghost" 
-                    className="text-xs text-primary font-black p-0 h-auto"
+                    className="text-xs text-primary font-black p-0 h-auto hover:bg-transparent"
                     onClick={() => navigate('/admin/evacuation-history')}
                   >
                    전체 보기 <ChevronRight className="w-3 h-3 ml-1" />
                   </Button>
                 </div>
 
-                <div className="p-6 bg-red-600/10 rounded-3xl border border-red-600/20 text-center space-y-2">
+                <div className="p-6 bg-red-600/10 rounded-3xl border border-red-600/20 text-center space-y-2 shadow-inner">
                   <p className="text-sm font-black text-red-600">현재 활성화된 대피령이 없습니다.</p>
                   <p className="text-xs font-bold text-red-400">비상 상황 발생 시 아래 버튼을 눌러 대피령을 발동하세요.</p>
                 </div>
@@ -1053,19 +1192,18 @@ export const Admin: React.FC = () => {
                   <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest px-1">대피 공지 사유</Label>
                   <Input 
                     placeholder="예: 제3도크 화재 발생, 즉시 대피 바랍니다."
-                    className="bg-white/5 border-none h-14 rounded-2xl font-bold"
+                    className="bg-muted border border-border h-14 rounded-2xl font-bold text-foreground"
                     id="emergency-reason"
                   />
                 </div>
 
                 <Button 
-                  className="w-full h-16 bg-red-600 hover:bg-red-700 text-white font-black rounded-2xl text-lg shadow-xl shadow-red-600/20"
+                  className="w-full h-16 bg-red-600 hover:bg-red-700 text-white font-black rounded-2xl text-lg shadow-xl shadow-red-600/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
                   onClick={async () => {
                     const reason = (document.getElementById('emergency-reason') as HTMLInputElement)?.value || '긴급 상황이 발생했습니다.';
                     const id = new Date().getTime().toString();
                     const now = new Date().toISOString();
                     
-                    // Count clocked in workers
                     const today = new Date().toISOString().split('T')[0];
                     const attSnap = await getDocs(query(collection(db, 'attendance'), where('date', '==', today)));
                     const clockedInCount = attSnap.docs.filter(doc => !doc.data().clockOut).length;
@@ -1078,7 +1216,7 @@ export const Admin: React.FC = () => {
                       activatedByName: profile?.displayName,
                       reason,
                       totalWorkers: users.length,
-                      totalClockedIn: clockedInCount || users.length, // Fallback to total if 0
+                      totalClockedIn: clockedInCount || users.length, 
                       confirmedCount: 0
                     };
 

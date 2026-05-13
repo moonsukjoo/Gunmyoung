@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
-import { auth, googleProvider, db } from '@/src/firebase';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { auth, db } from '@/firebase';
 import { collection, query, where, getDocs, updateDoc, doc, limit } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { User, Chrome, RefreshCw, KeyRound, Lock } from 'lucide-react';
+import { User, RefreshCw, KeyRound, Lock } from 'lucide-react';
 import { toast } from 'sonner';
-import { PinKeypad } from '@/src/components/PinKeypad';
-import { CompanyLogo } from '@/src/components/CompanyLogo';
+import { PinKeypad } from '@/components/PinKeypad';
+import { CompanyLogo } from '@/components/CompanyLogo';
 import { cn } from '@/lib/utils';
 import { UserProfile } from '../types';
 
@@ -20,7 +20,6 @@ export const Login: React.FC = () => {
   const [employeeId, setEmployeeId] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isRememberId, setIsRememberId] = useState(false);
   
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
@@ -108,15 +107,6 @@ export const Login: React.FC = () => {
     }
   }, []);
 
-  const handleGoogleLogin = async () => {
-    setIsGoogleLoading(true);
-    try {
-      await signInWithPopup(auth, googleProvider);
-      toast.success('로그인 성공');
-      navigate('/');
-    } catch (e) { toast.error('로그인 실패'); } finally { setIsGoogleLoading(false); }
-  };
-
   const handleLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (isLoading) return;
@@ -178,7 +168,7 @@ export const Login: React.FC = () => {
             <CompanyLogo className="w-full h-full" />
           </div>
           <div className="text-center space-y-2">
-            <h2 className="text-2xl font-black text-white">
+            <h2 className="text-2xl font-black text-foreground">
               {isRememberedMode ? `${rememberedName}님,` : "반갑습니다,"}
             </h2>
             <p className="text-muted-foreground font-bold text-sm">
@@ -188,7 +178,7 @@ export const Login: React.FC = () => {
           
           <div className="flex gap-3 h-4 items-center">
             {[...Array(6)].map((_, i) => (
-              <div key={i} className={cn("w-2.5 h-2.5 rounded-full transition-all duration-300", password.length > i ? "bg-primary scale-125 shadow-[0_0_10px_#3182f6]" : "bg-white/10")} />
+              <div key={i} className={cn("w-2.5 h-2.5 rounded-full transition-all duration-300", password.length > i ? "bg-primary scale-125 shadow-[0_0_10px_#3182f6]" : "bg-foreground/20")} />
             ))}
             {password.length > 6 && <span className="text-[10px] font-black text-primary">+{password.length - 6}</span>}
           </div>
@@ -197,24 +187,24 @@ export const Login: React.FC = () => {
         <div className="space-y-4 px-2">
           {!isRememberedMode && (
             <div className="relative">
-              <User className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+              <User className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/40" />
               <Input 
                 placeholder="사원번호 입력" 
                 value={employeeId} 
                 onChange={e => setEmployeeId(e.target.value)} 
-                className="h-16 pl-14 bg-card border-none rounded-2xl text-lg font-black text-white placeholder:text-muted-foreground/30 focus:ring-1 focus:ring-primary/50 transition-all"
+                className="h-16 pl-14 bg-card border-none rounded-2xl text-lg font-black text-foreground placeholder:text-muted-foreground focus:ring-1 focus:ring-primary/50 transition-all"
               />
             </div>
           )}
 
           <div className="relative">
-            <Lock className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+            <Lock className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/40" />
             <Input 
               type="password"
               placeholder="비밀번호 입력" 
               value={password} 
               onChange={e => setPassword(e.target.value)} 
-              className="h-16 pl-14 bg-card border-none rounded-2xl text-lg font-black text-white placeholder:text-muted-foreground/30 focus:ring-1 focus:ring-primary/50 transition-all"
+              className="h-16 pl-14 bg-card border-none rounded-2xl text-lg font-black text-foreground placeholder:text-muted-foreground focus:ring-1 focus:ring-primary/50 transition-all"
             />
           </div>
           
@@ -225,9 +215,11 @@ export const Login: React.FC = () => {
             </div>
             
             <Dialog open={isForgotPasswordOpen} onOpenChange={setIsForgotPasswordOpen}>
-              <DialogTrigger asChild>
-                <button type="button" className="text-xs font-black text-primary hover:underline">비밀번호 찾기</button>
-              </DialogTrigger>
+              <DialogTrigger
+                render={
+                  <button type="button" className="text-xs font-black text-primary hover:underline">비밀번호 찾기</button>
+                }
+              />
               <DialogContent className="bg-card border-none rounded-[2rem] shadow-2xl max-w-sm w-[90%] p-8 overflow-hidden text-white">
                 <DialogHeader className="items-center text-center space-y-4">
                   <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center">
@@ -301,27 +293,15 @@ export const Login: React.FC = () => {
                 setPassword('');
                 setEmployeeId(''); // Also clear employeeId when switching
               }} 
-              className="text-xs font-black text-white/20 uppercase tracking-widest text-center w-full hover:text-white transition-colors py-4"
+              className="text-xs font-black text-foreground/40 uppercase tracking-widest text-center w-full hover:text-foreground transition-colors py-4"
             >
               다른 계정으로 로그인
             </button>
           )}
-
-          {!isRememberedMode && (
-            <>
-              <div className="relative py-2">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/5" /></div>
-                <div className="relative flex justify-center text-[10px] uppercase font-black text-muted-foreground/20"><span className="bg-background px-4">OR</span></div>
-              </div>
-              <Button variant="outline" type="button" onClick={handleGoogleLogin} className="h-16 bg-white/5 border-none text-white font-black rounded-2xl flex items-center justify-center gap-3 active:scale-95 transition-all">
-                <Chrome className="w-6 h-6 text-primary" /> 구글 계정으로 계속하기
-              </Button>
-            </>
-          )}
         </div>
 
         <div className="pt-6 text-center">
-          <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest opacity-20">© 2025 건명기업 HRM</p>
+          <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest opacity-60">© 2026 건명기업 HRM</p>
         </div>
       </div>
     </div>

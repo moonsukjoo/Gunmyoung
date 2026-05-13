@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/src/components/AuthProvider';
+import { useAuth } from '@/components/AuthProvider';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +28,7 @@ import {
   ClipboardList,
   Heart,
   Sparkles,
+  Trophy,
   User as UserIcon,
   FileBox,
   CheckCircle2,
@@ -37,9 +38,9 @@ import {
   FileBarChart,
   Utensils
 } from 'lucide-react';
-import { db } from '@/src/firebase';
+import { db } from '@/firebase';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, limit, orderBy, getDocs, Timestamp } from 'firebase/firestore';
-import { Attendance, Notice, Role, AccidentCase, LeaveRequest, Task, UserProfile } from '@/src/types';
+import { Attendance, Notice, Role, AccidentCase, LeaveRequest, Task, UserProfile } from '@/types';
 import { format, startOfMonth, subMonths, differenceInDays } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -55,9 +56,9 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { grantRandomShipPart } from '@/src/services/shipService';
-import { sendPushNotification, requestNotificationPermission } from '@/src/services/notificationService';
-import { calculateAttendanceHours } from '@/src/lib/attendance';
+import { grantRandomShipPart } from '@/services/shipService';
+import { sendPushNotification, requestNotificationPermission } from '@/services/notificationService';
+import { calculateAttendanceHours } from '@/lib/attendance';
 
 import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
 
@@ -95,12 +96,12 @@ export const Dashboard: React.FC = () => {
   });
   const [pendingTrainings, setPendingTrainings] = useState(0);
 
-  // Specific restrictions as requested: Hide for 조장, 반장, 사원, 팀장
+  // Specific restrictions as requested: Hide for 조장, 반장, 사원
   const isExcludedRole = profile && (
-    ['EMPLOYEE', 'TEAM_LEADER', 'WORKER'].includes(profile.role?.toUpperCase() || '') || 
-    ['조장', '반장', '사원'].includes(profile.position?.trim() || '') ||
-    profile.employeeId?.trim().toLowerCase().includes('x66626') ||
-    profile.displayName?.toLowerCase().includes('x66626') ||
+    ['EMPLOYEE', 'WORKER'].includes(profile.role?.toUpperCase() || '') || 
+    (['조장', '반장', '사원'].includes(profile.position?.trim() || '') && profile.role !== 'TEAM_LEADER') ||
+    profile.employeeId?.trim()?.toLowerCase()?.includes('x66626') ||
+    profile.displayName?.toLowerCase()?.includes('x66626') ||
     profile.email?.toLowerCase().includes('x66626') ||
     user?.email?.toLowerCase().includes('x66626') ||
     user?.email?.split('@')[0]?.toLowerCase() === 'x66626' ||
@@ -109,19 +110,21 @@ export const Dashboard: React.FC = () => {
   );
 
   useEffect(() => {
-    if (profile && profile.employeeId?.trim().toLowerCase() === 'x66626') {
+    if (profile && profile.employeeId?.trim()?.toLowerCase() === 'x66626') {
       console.log("Excluded role detected in Dashboard:", profile.uid, profile.role, profile.employeeId);
     }
   }, [profile]);
 
-  const isManager = profile && !isExcludedRole && (
-    ['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER', 'GENERAL_AFFAIRS'].includes(profile.role) || 
-    profile.permissions?.some(p => ['notice_mgmt', 'employee_mgmt', 'accident_mgmt', 'work_log_mgmt', 'attendance_mgmt', 'training_mgmt', 'admin'].includes(p))
+  const isManager = profile && !profile.employeeId?.trim()?.toLowerCase()?.includes('x66626') && (
+    ['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER', 'GENERAL_AFFAIRS', 'TEAM_LEADER'].includes(profile.role) || 
+    profile.permissions?.some(p => ['notice_mgmt', 'employee_mgmt', 'accident_mgmt', 'work_log_mgmt', 'attendance_mgmt', 'training_mgmt', 'admin'].includes(p)) ||
+    (profile.position && ['팀장', '소장', '총무', '직장', '실장', '안전관리자', '대표'].some(p => profile.position?.includes(p)))
   );
 
   const isSupervisor = profile && (
     ['TEAM_LEADER', 'DIRECTOR', 'GENERAL_MANAGER', 'CEO'].includes(profile.role) ||
-    (profile.position && ['팀장', '직장', '소장', '실장'].some(p => profile.position?.includes(p)))
+    (profile.position && ['팀장', '직장', '소장', '실장'].some(p => profile.position?.includes(p))) ||
+    profile.permissions?.includes('team_work_log_approve')
   );
 
   const canReportAccident = profile && (
@@ -597,10 +600,10 @@ export const Dashboard: React.FC = () => {
     <div className="w-full space-y-6 pb-24 px-2 overflow-x-hidden">
       {/* Greeting Header */}
       <div className="py-6 space-y-1">
-        <p className="text-muted-foreground font-black text-sm uppercase tracking-widest">
+        <p className="text-muted-foreground font-black text-xs uppercase tracking-widest">
           {profile?.displayName}님, 반가워요!
         </p>
-        <h1 className="text-2xl font-black text-white tracking-tight leading-tight">
+        <h1 className="text-2xl font-black text-foreground tracking-tight leading-tight">
           {bannerText}
         </h1>
       </div>
@@ -608,18 +611,19 @@ export const Dashboard: React.FC = () => {
       {/* Health Management Quick Action (for Team Leaders/Admins) */}
       {canWriteHealth && (
         <Card 
-          className="bg-emerald-500/5 border-emerald-500/10 rounded-3xl p-5 overflow-hidden relative cursor-pointer active:scale-[0.98] transition-all group hover:bg-emerald-500/10"
+          className="bg-emerald-600 border border-emerald-500/20 rounded-3xl p-5 overflow-hidden relative cursor-pointer active:scale-[0.98] transition-all group hover:bg-emerald-700 shadow-xl shadow-emerald-900/20"
           onClick={() => navigate('/health-mgmt')}
         >
-          <div className="absolute top-0 right-0 p-5 opacity-5 group-hover:opacity-10 transition-opacity">
-            <Activity className="w-16 h-16 text-emerald-500" />
+          <div className="absolute top-0 right-0 p-5 opacity-20 group-hover:opacity-30 transition-opacity">
+            <Activity className="w-16 h-16 text-white" />
           </div>
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-900/20">
+            <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-white shadow-lg">
               <Activity className="w-6 h-6" />
             </div>
             <div>
               <h3 className="text-lg font-black text-white">매일 보건 이상무 보고하기</h3>
+              <p className="text-[10px] font-bold text-white/70 uppercase tracking-widest">실시간 건강 상태 체크</p>
             </div>
           </div>
         </Card>
@@ -631,56 +635,50 @@ export const Dashboard: React.FC = () => {
           {/* Quick Attendance */}
           {!todayAttendance ? (
             <Card 
-              className="bg-blue-600 border-none rounded-3xl p-4 cursor-pointer active:scale-95 transition-all shadow-lg shadow-blue-900/40"
+              className="bg-blue-600 border-none rounded-3xl p-4 cursor-pointer active:scale-95 transition-all shadow-lg shadow-blue-900/20 group hover:bg-blue-700 h-32 flex flex-col justify-between"
               onClick={handleClockIn}
             >
-              <div className="flex flex-col gap-3">
-                <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center text-white">
-                  <Clock className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-black text-white/50 uppercase tracking-tighter">실시간 체크</p>
-                  <h3 className="text-base font-black text-white">출근하기</h3>
-                </div>
+              <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-xl flex items-center justify-center text-white group-hover:scale-110 transition-transform">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-[9px] font-black text-white/60 uppercase tracking-tighter">실시간 체크</p>
+                <h3 className="text-base font-black text-white">출근하기</h3>
               </div>
             </Card>
           ) : !todayAttendance.clockOut ? (
             <Card 
-              className="bg-rose-600 border-none rounded-3xl p-4 cursor-pointer active:scale-95 transition-all shadow-lg shadow-rose-900/40"
+              className="bg-rose-600 border-none rounded-3xl p-4 cursor-pointer active:scale-95 transition-all shadow-lg shadow-rose-900/20 group hover:bg-rose-700 h-32 flex flex-col justify-between"
               onClick={handleClockOut}
             >
-              <div className="flex flex-col gap-3">
-                <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center text-white">
-                  <Clock className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-white">퇴근하기</h3>
-                </div>
+              <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-xl flex items-center justify-center text-white group-hover:scale-110 transition-transform">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-[9px] font-black text-white/60 uppercase tracking-tighter">근무 종료</p>
+                <h3 className="text-base font-black text-white">퇴근하기</h3>
               </div>
             </Card>
           ) : (
-            <Card className="bg-[#222] border border-white/5 rounded-3xl p-4 opacity-50">
-               <div className="flex flex-col gap-3">
-                  <div className="w-10 h-10 bg-white/5 rounded-2xl flex items-center justify-center text-white/10">
-                    <CheckCircle className="w-5 h-5" />
-                  </div>
-                  <h3 className="text-sm font-black text-white/30 leading-tight">오늘 근무<br/>종료됨</h3>
+            <Card className="bg-muted border border-border rounded-3xl p-4 opacity-50 shadow-inner h-32 flex flex-col justify-between">
+               <div className="w-10 h-10 bg-background/50 rounded-xl flex items-center justify-center text-muted-foreground">
+                 <CheckCircle className="w-5 h-5" />
                </div>
+               <h3 className="text-sm font-black text-muted-foreground leading-tight">오늘 근무<br/>종료됨</h3>
             </Card>
           )}
 
           {/* Personal Work Log */}
           <Card 
-            className="bg-emerald-600/10 border-emerald-600/20 rounded-3xl p-4 cursor-pointer hover:bg-emerald-600/20 transition-all group"
+            className="bg-[#122b2b] border-none rounded-3xl p-4 cursor-pointer hover:bg-[#1a3a3a] transition-all group shadow-lg shadow-black/20 h-32 flex flex-col justify-between"
             onClick={() => navigate('/personal-work-log')}
           >
-            <div className="flex flex-col gap-3">
-              <div className="w-10 h-10 bg-emerald-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-900/20">
-                <ClipboardList className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-black text-white">작업일지</h3>
-              </div>
+            <div className="w-10 h-10 bg-emerald-500/20 backdrop-blur-md rounded-xl flex items-center justify-center text-emerald-400 shadow-sm group-hover:scale-110 transition-transform">
+              <ClipboardList className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[9px] font-black text-emerald-400/40 uppercase tracking-tighter">기록 관리</p>
+              <h3 className="text-base font-black text-white">작업일지</h3>
             </div>
           </Card>
         </div>
@@ -689,43 +687,71 @@ export const Dashboard: React.FC = () => {
         <div className="grid grid-cols-2 gap-3">
           {/* Meal Request */}
           <Card 
-            className="bg-amber-600/10 border-amber-600/20 rounded-3xl p-4 cursor-pointer hover:bg-amber-600/20 transition-all group"
+            className="bg-[#2b1b12] border-none rounded-3xl p-4 cursor-pointer hover:bg-[#3a2a1a] transition-all group shadow-lg shadow-black/20 h-32 flex flex-col justify-between"
             onClick={() => navigate('/meal-request')}
           >
-            <div className="flex flex-col gap-3">
-              <div className="w-10 h-10 bg-amber-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-amber-900/20">
-                <FileBox className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-black text-white">식사신청</h3>
-              </div>
+            <div className="w-10 h-10 bg-orange-500/20 backdrop-blur-md rounded-xl flex items-center justify-center text-orange-400 shadow-sm group-hover:scale-110 transition-transform">
+              <Utensils className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[9px] font-black text-orange-400/40 uppercase tracking-tighter">현장 식사</p>
+              <h3 className="text-base font-black text-white">식사신청</h3>
             </div>
           </Card>
 
           {/* Training */}
           <Card 
-            className="bg-purple-600/10 border-purple-600/20 rounded-3xl p-4 cursor-pointer hover:bg-purple-600/20 transition-all group"
+            className="bg-[#1b122b] border-none rounded-3xl p-4 cursor-pointer hover:bg-[#2a1a3a] transition-all group shadow-lg shadow-black/20 h-32 flex flex-col justify-between"
             onClick={() => navigate('/training')}
           >
-            <div className="flex flex-col gap-3">
-              <div className="w-10 h-10 bg-purple-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-purple-900/20">
-                <BookOpen className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-black text-white">교육센터</h3>
-              </div>
+            <div className="w-10 h-10 bg-purple-500/20 backdrop-blur-md rounded-xl flex items-center justify-center text-purple-400 shadow-sm group-hover:scale-110 transition-transform">
+              <BookOpen className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[9px] font-black text-purple-400/40 uppercase tracking-tighter">온라인 교육</p>
+              <h3 className="text-base font-black text-white">교육센터</h3>
             </div>
           </Card>
         </div>
+
+        {/* Safety Ranking Link - Moved here as requested */}
+        {profile && !['사원', '조장'].includes(profile.position?.trim() || '') && (
+          <Card 
+            className="bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-500/10 rounded-3xl p-5 cursor-pointer active:scale-[0.98] transition-all group hover:bg-amber-500/20 relative overflow-hidden"
+            onClick={() => navigate('/safety-leaderboard')}
+          >
+            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Trophy className="w-20 h-20 text-amber-500" />
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-amber-500/20 rounded-2xl flex items-center justify-center text-amber-600 shadow-lg group-hover:scale-110 transition-transform">
+                <Trophy className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-foreground">안전 지수 랭킹 확인</h3>
+                <div className="flex items-center gap-2">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">누가 가장 안전할까요?</p>
+                  <div className="flex -space-x-2">
+                     {[1, 2, 3].map(i => (
+                       <div key={i} className="w-4 h-4 rounded-full border-2 border-background bg-muted text-[8px] flex items-center justify-center font-black">
+                         {i}
+                       </div>
+                     ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
       </div>
 
       {/* Management & Admin Hub */}
       {(isSupervisor || isManager || canManageMeal) && (
-        <div className="space-y-4 pt-4 border-t border-white/5">
+        <div className="space-y-4 pt-4 border-t border-border">
           <div className="flex items-center justify-between px-2">
-            <div className="flex items-center gap-2 bg-white/5 px-3 py-1 rounded-full border border-white/5">
+            <div className="flex items-center gap-2 bg-muted px-3 py-1 rounded-full border border-border">
               <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-              <span className="text-[9px] font-black text-white/60 uppercase">시스템 활성</span>
+              <span className="text-[9px] font-black text-muted-foreground/80 uppercase">시스템 활성</span>
             </div>
           </div>
 
@@ -733,14 +759,14 @@ export const Dashboard: React.FC = () => {
           <div className="grid grid-cols-1 gap-2">
             {isSupervisor && (
               <Card 
-                className="bg-emerald-600/10 border border-emerald-500/20 rounded-3xl p-4 flex items-center gap-4 group cursor-pointer hover:bg-emerald-600/15 transition-all shadow-lg shadow-black/20" 
+                className="bg-emerald-600/10 border border-emerald-500/20 rounded-3xl p-4 flex items-center gap-4 group cursor-pointer hover:bg-emerald-600/15 transition-all shadow-lg" 
                 onClick={() => navigate('/work-log-mgmt')}
               >
                 <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-white shadow-lg shrink-0">
                   <CheckCircle2 className="w-6 h-6" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-sm font-black text-white text-left leading-tight">팀원 작업일지 승인</h3>
+                  <h3 className="text-sm font-black text-foreground text-left leading-tight">팀원 작업일지 승인</h3>
                 </div>
                 <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
                   <ChevronRight className="w-4 h-4" />
@@ -750,14 +776,14 @@ export const Dashboard: React.FC = () => {
 
             {canManageMeal && (
               <Card 
-                className="bg-blue-600/10 border border-blue-500/20 rounded-3xl p-4 flex items-center gap-4 group cursor-pointer hover:bg-blue-600/15 transition-all shadow-lg shadow-black/20" 
+                className="bg-blue-600/10 border border-blue-500/20 rounded-3xl p-4 flex items-center gap-4 group cursor-pointer hover:bg-blue-600/15 transition-all shadow-lg" 
                 onClick={() => navigate('/meal-mgmt')}
               >
                 <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shrink-0">
                   <Utensils className="w-6 h-6" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-sm font-black text-white text-left leading-tight">급식·간식 신청 관리</h3>
+                  <h3 className="text-sm font-black text-foreground text-left leading-tight">식사·간식 신청 관리</h3>
                 </div>
                 <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500">
                   <ChevronRight className="w-4 h-4" />
@@ -769,46 +795,46 @@ export const Dashboard: React.FC = () => {
       {/* Quick Actions Grid for Managers */}
       {isManager && (
         <div className="space-y-3">
-          <h4 className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] px-1">관리자 빠른 작업</h4>
+          <h4 className="text-[10px] font-black text-muted-foreground/60 uppercase tracking-[0.2em] px-1">관리자 빠른 작업</h4>
           <div className="grid grid-cols-2 gap-3">
             <button 
               onClick={() => setIsNoticeDialogOpen(true)}
-              className="flex flex-col items-center justify-center gap-3 p-5 bg-white/5 border border-white/5 rounded-[2rem] hover:bg-white/10 active:scale-95 transition-all group"
+              className="flex flex-col items-center justify-center gap-3 p-5 bg-card border border-border rounded-[2rem] hover:bg-muted active:scale-95 transition-all group"
             >
-              <div className="w-10 h-10 bg-indigo-600/20 rounded-xl flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
+              <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
                 <Megaphone className="w-5 h-5" />
               </div>
-              <span className="text-[11px] font-black text-white/70">공지 등록</span>
+              <span className="text-[11px] font-black text-foreground/90">공지 등록</span>
             </button>
 
             <button 
               onClick={() => navigate('/accidents')}
-              className="flex flex-col items-center justify-center gap-3 p-5 bg-white/5 border border-white/5 rounded-[2rem] hover:bg-white/10 active:scale-95 transition-all group"
+              className="flex flex-col items-center justify-center gap-3 p-5 bg-card border border-border rounded-[2rem] hover:bg-muted active:scale-95 transition-all group"
             >
-              <div className="w-10 h-10 bg-rose-600/20 rounded-xl flex items-center justify-center text-rose-400 group-hover:scale-110 transition-transform">
+              <div className="w-10 h-10 bg-destructive/10 rounded-xl flex items-center justify-center text-destructive group-hover:scale-110 transition-transform">
                 <ShieldAlert className="w-5 h-5" />
               </div>
-              <span className="text-[11px] font-black text-white/70">사고 사례</span>
+              <span className="text-[11px] font-black text-foreground/90">사고 사례 등록</span>
             </button>
 
             <button 
               onClick={fetchTeamAttendance}
-              className="flex flex-col items-center justify-center gap-3 p-5 bg-white/5 border border-white/5 rounded-[2rem] hover:bg-white/10 active:scale-95 transition-all group"
+              className="flex flex-col items-center justify-center gap-3 p-5 bg-card border border-border rounded-[2rem] hover:bg-muted active:scale-95 transition-all group"
             >
-              <div className="w-10 h-10 bg-amber-600/20 rounded-xl flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform">
+              <div className="w-10 h-10 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform">
                 <Users className="w-5 h-5" />
               </div>
-              <span className="text-[11px] font-black text-white/70">출근 현황</span>
+              <span className="text-[11px] font-black text-foreground/90">출근 현황</span>
             </button>
             
             <button 
               onClick={() => navigate('/admin/reports')}
-              className="flex flex-col items-center justify-center gap-3 p-5 bg-blue-600/10 border border-blue-500/20 rounded-[2rem] hover:bg-blue-600/20 active:scale-95 transition-all group"
+              className="flex flex-col items-center justify-center gap-3 p-5 bg-accent/10 border border-accent/20 rounded-[2rem] hover:bg-accent/20 active:scale-95 transition-all group"
             >
-              <div className="w-10 h-10 bg-blue-600/20 rounded-xl flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
+              <div className="w-10 h-10 bg-accent/20 rounded-xl flex items-center justify-center text-accent group-hover:scale-110 transition-transform">
                 <FileBarChart className="w-5 h-5" />
               </div>
-              <span className="text-[11px] font-black text-blue-400">통합 보고서</span>
+              <span className="text-[11px] font-black text-foreground/80">통합 보고서</span>
             </button>
           </div>
         </div>
@@ -820,65 +846,65 @@ export const Dashboard: React.FC = () => {
       {/* Quick Links Panel (Consolidated Secondary Features) */}
       <div className="grid grid-cols-4 sm:grid-cols-4 gap-2">
         <Card 
-          className="bg-card border-none rounded-2xl p-3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-white/5 transition-all text-center"
+          className="bg-card border border-border rounded-2xl p-3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-muted transition-all text-center"
           onClick={() => navigate('/praise-feed')}
         >
           <div className="w-8 h-8 bg-pink-500/10 rounded-xl flex items-center justify-center text-pink-500">
             <Heart className="w-4 h-4 fill-pink-500" />
           </div>
-          <span className="text-[10px] font-black text-white/60">칭찬합시다</span>
+          <span className="text-[10px] font-black text-muted-foreground/70">칭찬합시다</span>
         </Card>
 
         <Card 
-          className="bg-card border-none rounded-2xl p-3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-white/5 transition-all text-center"
+          className="bg-card border border-border rounded-2xl p-3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-muted transition-all text-center"
           onClick={() => navigate('/safety-score')}
         >
           <div className="w-8 h-8 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-500">
             <ShieldCheck className="w-4 h-4" />
           </div>
-          <span className="text-[10px] font-black text-white/60">안전점수</span>
+          <span className="text-[10px] font-black text-muted-foreground/70">안전점수</span>
         </Card>
 
         <Card 
-          className="bg-card border-none rounded-2xl p-3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-white/5 transition-all text-center"
+          className="bg-card border border-border rounded-2xl p-3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-muted transition-all text-center"
           onClick={() => navigate('/ship-assembly')}
         >
           <div className="w-8 h-8 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-500">
             <Ship className="w-4 h-4" />
           </div>
-          <span className="text-[10px] font-black text-white/60">선박게임</span>
+          <span className="text-[10px] font-black text-muted-foreground/70">선박게임</span>
         </Card>
 
         <Card 
-          className="bg-card border-none rounded-2xl p-3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-white/5 transition-all text-center"
+          className="bg-card border border-border rounded-2xl p-3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-muted transition-all text-center"
           onClick={() => navigate('/accidents')}
         >
           <div className="w-8 h-8 bg-rose-500/10 rounded-xl flex items-center justify-center text-rose-500">
             <AlertTriangle className="w-4 h-4" />
           </div>
-          <span className="text-[10px] font-black text-white/60">사고사례</span>
+          <span className="text-[10px] font-black text-muted-foreground/70">사고사례</span>
         </Card>
       </div>
 
       {/* Footer Navigation Tabs */}
-      <div className="bg-white/5 p-2 rounded-[2rem] flex justify-between gap-1 mt-4">
-        <Button variant="ghost" className="flex-1 rounded-2xl text-[10px] font-black text-white/40 hover:text-white" onClick={() => navigate('/notices')}>공지사항</Button>
-        <div className="w-px h-4 bg-white/10 self-center" />
-        <Button variant="ghost" className="flex-1 rounded-2xl text-[10px] font-black text-white/40 hover:text-white" onClick={() => navigate('/accidents')}>사고사례</Button>
-        <div className="w-px h-4 bg-white/10 self-center" />
-        <Button variant="ghost" className="flex-1 rounded-2xl text-[10px] font-black text-white/40 hover:text-white" onClick={() => navigate('/leave')}>연차신청</Button>
+      <div className="bg-muted border border-border p-2 rounded-[2rem] flex justify-between gap-1 mt-4">
+        <Button variant="ghost" className="flex-1 rounded-2xl text-[10px] font-black text-muted-foreground/80 hover:text-foreground" onClick={() => navigate('/notices')}>공지사항</Button>
+        <div className="w-px h-4 bg-border self-center" />
+        <Button variant="ghost" className="flex-1 rounded-2xl text-[10px] font-black text-muted-foreground/80 hover:text-foreground" onClick={() => navigate('/accidents')}>사고사례</Button>
+        <div className="w-px h-4 bg-border self-center" />
+        <Button variant="ghost" className="flex-1 rounded-2xl text-[10px] font-black text-muted-foreground/80 hover:text-foreground" onClick={() => navigate('/leave')}>연차신청</Button>
       </div>
 
       {/* Dialogs */}
       <Dialog open={isPresenceDialogOpen} onOpenChange={setIsPresenceDialogOpen}>
-        <DialogContent className="bg-[#1c1c1e] border-white/10 rounded-[2.5rem] shadow-2xl max-w-lg w-[95%] p-0 overflow-hidden flex flex-col max-h-[90dvh] text-white">
-          <DialogHeader className="p-8 pb-6 bg-white/5 border-b border-white/10 shrink-0">
+        <DialogContent className="bg-card border border-border rounded-[2.5rem] shadow-2xl max-w-lg w-[95%] p-0 overflow-hidden flex flex-col max-h-[90dvh] text-foreground">
+          <DialogHeader className="p-8 pb-6 bg-muted/50 border-b border-border shrink-0">
             <div className="flex items-center gap-4">
               {selectedTeamIndex !== null && (
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className="w-10 h-10 rounded-xl bg-white/5 text-white/40"
+                  className="w-10 h-10 rounded-xl bg-muted text-muted-foreground/60 hover:text-foreground"
                   onClick={() => setSelectedTeamIndex(null)}
                 >
                   <ChevronRight className="w-5 h-5 rotate-180" />
@@ -888,10 +914,10 @@ export const Dashboard: React.FC = () => {
                 <Users className="w-6 h-6 text-primary" />
               </div>
               <div>
-                <DialogTitle className="text-2xl font-black tracking-tighter text-white">
+                <DialogTitle className="text-2xl font-black tracking-tighter text-foreground">
                   {selectedTeamIndex !== null ? teamAttendance[selectedTeamIndex].teamName : '실시간 출근 현황'}
                 </DialogTitle>
-                <DialogDescription className="text-white/40 font-bold">
+                <DialogDescription className="text-muted-foreground/60 font-bold">
                   {selectedTeamIndex !== null ? '상세 인원 및 현황을 확인합니다.' : '팀별 현황을 선택하여 상세 내용을 확인합니다.'}
                 </DialogDescription>
               </div>
@@ -904,7 +930,7 @@ export const Dashboard: React.FC = () => {
                 {teamAttendance.map((team, idx) => (
                   <button 
                     key={idx} 
-                    className="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all active:scale-[0.98] text-left"
+                    className="flex items-center justify-between p-5 bg-card rounded-2xl border border-border hover:bg-muted transition-all active:scale-[0.98] text-left"
                     onClick={() => setSelectedTeamIndex(idx)}
                   >
                     <div className="flex items-center gap-4">
@@ -912,13 +938,13 @@ export const Dashboard: React.FC = () => {
                         <Building2 className="w-5 h-5" />
                       </div>
                       <div>
-                        <h3 className="text-lg font-black text-white">{team.teamName}</h3>
-                        <p className="text-xs font-bold text-white/30">총 {team.total}명</p>
+                        <h3 className="text-lg font-black text-foreground">{team.teamName}</h3>
+                        <p className="text-xs font-bold text-muted-foreground/40">총 {team.total}명</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-lg font-black text-primary">{team.present} / {team.total}</span>
-                      <ChevronRight className="w-5 h-5 text-white/20" />
+                      <ChevronRight className="w-5 h-5 text-muted-foreground/30" />
                     </div>
                   </button>
                 ))}
@@ -933,8 +959,8 @@ export const Dashboard: React.FC = () => {
                         <div className="flex items-center gap-3">
                           <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                           <div>
-                            <span className="text-sm font-black text-white">{person.name}</span>
-                            <span className="ml-2 text-[10px] font-bold text-white/30">{person.position}</span>
+                            <span className="text-sm font-black text-foreground">{person.name}</span>
+                            <span className="ml-2 text-[10px] font-bold text-muted-foreground/40">{person.position}</span>
                           </div>
                         </div>
                         <span className="text-[10px] font-black text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-md">
@@ -943,7 +969,7 @@ export const Dashboard: React.FC = () => {
                       </div>
                     ))}
                     {teamAttendance[selectedTeamIndex].presentList.length === 0 && (
-                      <p className="py-4 text-center text-white/20 font-bold text-xs">출근 인원이 없습니다.</p>
+                      <p className="py-4 text-center text-muted-foreground/30 font-bold text-xs">출근 인원이 없습니다.</p>
                     )}
                   </div>
                 </div>
@@ -956,8 +982,8 @@ export const Dashboard: React.FC = () => {
                         <div className="flex items-center gap-3 opacity-50">
                           <XCircle className="w-4 h-4 text-red-500" />
                           <div>
-                            <span className="text-sm font-black text-white">{person.name}</span>
-                            <span className="ml-2 text-[10px] font-bold text-white/30">{person.position}</span>
+                            <span className="text-sm font-black text-foreground">{person.name}</span>
+                            <span className="ml-2 text-[10px] font-bold text-muted-foreground/40">{person.position}</span>
                           </div>
                         </div>
                         <span className="text-[10px] font-black text-red-500 bg-red-500/10 px-2 py-0.5 rounded-md">
@@ -972,15 +998,15 @@ export const Dashboard: React.FC = () => {
 
             {teamAttendance.length === 0 && (
               <div className="py-20 text-center space-y-4">
-                <Users className="w-16 h-16 mx-auto text-white/5" />
-                <p className="text-white/20 font-black">데이터를 불러오는 중이거나 인원이 없습니다.</p>
+                <Users className="w-16 h-16 mx-auto text-muted-foreground/10" />
+                <p className="text-muted-foreground/30 font-black">데이터를 불러오는 중이거나 인원이 없습니다.</p>
               </div>
             )}
           </div>
 
-          <DialogFooter className="p-8 pt-4 bg-white/5 border-t border-white/10 shrink-0">
+          <DialogFooter className="p-8 pt-4 bg-muted/50 border-t border-border shrink-0">
             <Button 
-              className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl font-black text-white hover:bg-white/10"
+              className="w-full h-14 bg-card border border-border rounded-2xl font-black text-foreground hover:bg-muted"
               onClick={() => setIsPresenceDialogOpen(false)}
             >
               닫기
@@ -990,7 +1016,7 @@ export const Dashboard: React.FC = () => {
       </Dialog>
 
       <Dialog open={isNoticeDialogOpen} onOpenChange={setIsNoticeDialogOpen}>
-        <DialogContent className="bg-card border-white/10 rounded-3xl text-white">
+        <DialogContent className="bg-card border-border rounded-3xl text-foreground">
           <DialogHeader>
             <DialogTitle className="text-xl font-black flex items-center gap-2">
               <Megaphone className="w-5 h-5 text-primary" /> 새 공지사항 등록
@@ -1001,63 +1027,63 @@ export const Dashboard: React.FC = () => {
             <Input 
               value={newNotice.title} 
               onChange={e => setNewNotice({...newNotice, title: e.target.value})}
-              placeholder="제목" className="bg-white/5 border-white/10 text-white rounded-xl h-12" 
+              placeholder="제목" className="bg-muted border-border text-foreground rounded-xl h-12" 
             />
             <Textarea 
               value={newNotice.content}
               onChange={e => setNewNotice({...newNotice, content: e.target.value})}
-              placeholder="내용" className="bg-white/5 border-white/10 text-white rounded-xl min-h-[150px]" 
+              placeholder="내용" className="bg-muted border-border text-foreground rounded-xl min-h-[150px]" 
             />
             <div className="flex items-center gap-4">
                <div className="flex items-center gap-2">
-                  <input type="checkbox" checked={newNotice.isImportant} onChange={e => setNewNotice({...newNotice, isImportant: e.target.checked})} className="rounded bg-white/10 border-white/10" />
+                  <input type="checkbox" checked={newNotice.isImportant} onChange={e => setNewNotice({...newNotice, isImportant: e.target.checked})} className="rounded bg-muted border-border" />
                   <span className="text-xs font-bold">중요 공지</span>
                </div>
                <div className="flex items-center gap-2">
-                  <input type="checkbox" checked={newNotice.shouldNotify} onChange={e => setNewNotice({...newNotice, shouldNotify: e.target.checked})} className="rounded bg-white/10 border-white/10" />
+                  <input type="checkbox" checked={newNotice.shouldNotify} onChange={e => setNewNotice({...newNotice, shouldNotify: e.target.checked})} className="rounded bg-muted border-border" />
                   <span className="text-xs font-bold">푸시 알림</span>
                </div>
             </div>
           </div>
           <DialogFooter>
-            <Button onClick={handleAddNotice} className="w-full bg-primary text-white font-black h-12 rounded-xl">등록하기</Button>
+            <Button onClick={handleAddNotice} className="w-full bg-primary text-primary-foreground font-black h-12 rounded-xl">등록하기</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
       {/* Clock-In Health Dialog */}
       <Dialog open={isClockInHealthDialogOpen} onOpenChange={setIsClockInHealthDialogOpen}>
-        <DialogContent className="bg-[#1a1a1a] border-white/10 text-white max-w-sm rounded-[2.5rem]">
+        <DialogContent className="bg-card border-border text-foreground max-w-sm rounded-[2.5rem]">
           <DialogHeader>
             <DialogTitle className="text-2xl font-black text-center pt-4">오늘의 몸 상태는 어떠신가요?</DialogTitle>
-            <DialogDescription className="text-center text-white/40 font-bold">
+            <DialogDescription className="text-center text-muted-foreground/40 font-bold">
               안전한 업무를 위해 현재 컨디션을 체크해주세요.
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-3 gap-3 py-6">
             <button
                onClick={() => confirmClockIn('GOOD')}
-               className="flex flex-col items-center gap-3 p-4 bg-white/5 hover:bg-emerald-500/20 rounded-3xl border border-white/5 transition-all group"
+               className="flex flex-col items-center gap-3 p-4 bg-muted hover:bg-emerald-500/20 rounded-3xl border border-border transition-all group"
             >
                <span className="text-3xl">😊</span>
-               <span className="text-xs font-black text-white/60 group-hover:text-emerald-500">좋음</span>
+               <span className="text-xs font-black text-muted-foreground/60 group-hover:text-emerald-500">좋음</span>
             </button>
             <button
                onClick={() => confirmClockIn('NORMAL')}
-               className="flex flex-col items-center gap-3 p-4 bg-white/5 hover:bg-amber-500/20 rounded-3xl border border-white/5 transition-all group"
+               className="flex flex-col items-center gap-3 p-4 bg-muted hover:bg-amber-500/20 rounded-3xl border border-border transition-all group"
             >
                <span className="text-3xl">😐</span>
-               <span className="text-xs font-black text-white/60 group-hover:text-amber-500">보통</span>
+               <span className="text-xs font-black text-muted-foreground/60 group-hover:text-amber-500">보통</span>
             </button>
             <button
                onClick={() => confirmClockIn('BAD')}
-               className="flex flex-col items-center gap-3 p-4 bg-white/5 hover:bg-rose-500/20 rounded-3xl border border-white/5 transition-all group"
+               className="flex flex-col items-center gap-3 p-4 bg-muted hover:bg-rose-500/20 rounded-3xl border border-border transition-all group"
             >
                <span className="text-3xl">☹️</span>
-               <span className="text-xs font-black text-white/60 group-hover:text-rose-500">나쁨</span>
+               <span className="text-xs font-black text-muted-foreground/60 group-hover:text-rose-500">나쁨</span>
             </button>
           </div>
           <DialogFooter className="sm:justify-center">
-            <Button variant="ghost" className="text-white/20 hover:text-white" onClick={() => setIsClockInHealthDialogOpen(false)}>
+            <Button variant="ghost" className="text-muted-foreground/20 hover:text-foreground" onClick={() => setIsClockInHealthDialogOpen(false)}>
               나중에 하기
             </Button>
           </DialogFooter>

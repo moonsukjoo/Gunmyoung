@@ -5,33 +5,45 @@
   --font-sans: 'Inter', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
   --font-mono: 'JetBrains Mono', 'Roboto Mono', monospace;
   
-  --color-background: #101113;
-  --color-foreground: #FFFFFF;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
   
   --color-primary: #3182f6;
   --color-primary-foreground: #FFFFFF;
   
-  --color-card: #1c1c1e;
-  --color-card-foreground: #FFFFFF;
-  
-  --color-muted: #2c2c2e;
-  --color-muted-foreground: #8e8e93;
-  
   --color-accent: #3182f6;
   --color-accent-foreground: #FFFFFF;
-  
-  --color-border: #2c2c2e;
+}
 
-  --radius-xl: 1.25rem;
-  --radius-2xl: 1.5rem;
-  --radius-3xl: 2rem;
+:root {
+  --background: #101113;
+  --foreground: #FFFFFF;
+  --card: #1c1c1e;
+  --muted: #2c2c2e;
+  --muted-foreground: #8e8e93;
+  --border: #2c2c2e;
+  --primary: #3182f6;
+  --primary-foreground: #FFFFFF;
+}
+
+.light-theme {
+  --background: #FFFFFF;
+  --foreground: #000000;
+  --card: #F2F4F7;
+  --muted: #F9FAFB;
+  --muted-foreground: #475467;
+  --border: #D0D5DD;
+  --primary: #3182f6;
+  --primary-foreground: #FFFFFF;
 }
 
 @layer base {
   body {
-    @apply bg-background text-foreground font-sans antialiased overflow-x-hidden;
-    background-color: #101113;
-    color: #FFFFFF;
+    @apply bg-background text-foreground font-sans antialiased overflow-x-hidden transition-colors duration-300;
     -webkit-tap-highlight-color: transparent;
     user-select: none;
   }
@@ -42,7 +54,7 @@
 }
 
 .glass {
-  @apply bg-[#1c1c1e]/80 backdrop-blur-xl border-t border-white/5;
+  @apply bg-card/80 backdrop-blur-xl border-t border-border/50;
 }
 
 .no-scrollbar::-webkit-scrollbar {
@@ -54,19 +66,21 @@
   scrollbar-width: none;
 }
 
-/* Custom Scrollbar for dark theme */
+/* Custom Scrollbar */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+::-webkit-scrollbar-thumb { 
+  @apply bg-muted-foreground/20 rounded-full;
+}
 
 /* Elderly Mode */
 html.elderly-mode { font-size: 140%; }
 html.elderly-mode body { font-weight: 700; }
 
 /* DayPicker customization */
-.rdp { --rdp-accent-color: #3182f6; --rdp-background-color: #3182f6; }
+.rdp { --rdp-accent-color: var(--primary); --rdp-background-color: var(--primary); }
 
-/* Toasts customization for dark theme */
+/* Toasts customization */
 .cn-toast {
-  @apply !bg-[#1c1c1e]/95 !backdrop-blur-xl !border-white/10 !text-white !rounded-2xl !shadow-2xl;
+  @apply !bg-card/95 !backdrop-blur-xl !border-border !text-foreground !rounded-2xl !shadow-2xl;
 }

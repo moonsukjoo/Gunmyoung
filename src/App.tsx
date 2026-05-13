@@ -1,71 +1,63 @@
-import React from 'react';
+import React, { useLayoutEffect, Component, ErrorInfo, ReactNode, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './components/AuthProvider';
-import { NotificationHandler } from './components/NotificationHandler';
-import { FontSizeManager } from './components/FontSizeManager';
 import { Layout } from './components/Layout';
-import { Login } from './pages/Login';
-import { Dashboard } from './pages/Dashboard';
-import { EmployeeManagement } from './pages/EmployeeManagement';
-import { Attendance } from './pages/Attendance';
-import { AccidentReport } from './pages/AccidentReport';
-import { Notifications } from './pages/Notifications';
-import { Notices } from './pages/Notices';
-import { Leave } from './pages/Leave';
-import { LeaveManagement } from './pages/LeaveManagement';
-import { Coupons } from './pages/Coupons';
-import { Entertainment } from './pages/Entertainment';
-import { Lotto } from './pages/Lotto';
-import { MyPage } from './pages/MyPage';
-import { Qualification } from './pages/Qualification';
-import { ShipAssembly } from './pages/ShipAssembly';
-import { TrainingManagement } from './pages/TrainingManagement';
-import { TrainingList } from './pages/TrainingList';
-import { SafetyRanking } from './pages/SafetyRanking';
-import { Redemption } from './pages/Redemption';
-import { RedemptionManagement } from './pages/RedemptionManagement';
-import { AttendanceManagement } from './pages/AttendanceManagement';
-import { WorkLog } from './pages/WorkLog';
-import { WorkLogManagement } from './pages/WorkLogManagement';
-import { PersonalWorkLog } from './pages/PersonalWorkLog';
-import { PraiseFeed } from './pages/PraiseFeed';
-import { MealRequest } from './pages/MealRequest';
-import { MealManagement } from './pages/MealManagement';
-import { HighWorkMonitoring } from './pages/HighWorkMonitoring';
-import { Admin } from './pages/Admin';
-import MyPayslip from './pages/MyPayslip';
-import PayslipManagement from './pages/PayslipManagement';
-import PCAdminDashboard from './pages/PCAdminDashboard';
-import PCAdminPersonnel from './pages/PCAdminPersonnel';
-import PCAdminAttendance from './pages/PCAdminAttendance';
-import PCAdminLeave from './pages/PCAdminLeave';
-import PCAdminPayslip from './pages/PCAdminPayslip';
-import PCAdminSafety from './pages/PCAdminSafety';
-import PCAdminNotices from './pages/PCAdminNotices';
-import PCAdminWorkLog from './pages/PCAdminWorkLog';
-import PCAdminTraining from './pages/PCAdminTraining';
-import PCAdminRedemption from './pages/PCAdminRedemption';
-import PCAdminCoupons from './pages/PCAdminCoupons';
-import PCAdminHighWork from './pages/PCAdminHighWork';
-import PCAdminNotifications from './pages/PCAdminNotifications';
-import PCAdminBeacons from './pages/PCAdminBeacons';
-import PCAdminEvacuationHistory from './pages/PCAdminEvacuationHistory';
-import EvacuationHistory from './pages/EvacuationHistory';
-import HealthManagement from './pages/HealthManagement';
-import UnifiedReportCenter from './pages/UnifiedReportCenter';
-import EnclosedSpaceMonitoring from './pages/EnclosedSpaceMonitoring';
-import { Toaster } from '@/components/ui/sonner';
-import { CompanyLogo } from './components/CompanyLogo';
-import { EmergencyOverlay } from './components/EmergencyOverlay';
-import { AltitudeTracker } from './components/AltitudeTracker';
-import { GhostGuardTracker } from './components/GhostGuardTracker';
-import { SafetySensorProvider } from './components/SafetySensorProvider';
-
-import { motion, AnimatePresence } from 'framer-motion';
-
+import { Toaster } from 'sonner';
 import { GlowLoading } from './components/GlowLoading';
-import { doc, onSnapshot, setDoc, updateDoc, addDoc, collection } from 'firebase/firestore';
-import { db } from '@/src/firebase';
+import { AlertCircle } from 'lucide-react';
+
+// Lazy load components to reduce initial bundle size
+const Login = lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
+const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
+const Admin = lazy(() => import('./pages/Admin').then(m => ({ default: m.Admin })));
+const EmployeeManagement = lazy(() => import('./pages/EmployeeManagement').then(m => ({ default: m.EmployeeManagement })));
+const Attendance = lazy(() => import('./pages/Attendance').then(m => ({ default: m.Attendance })));
+const AccidentReport = lazy(() => import('./pages/AccidentReport').then(m => ({ default: m.AccidentReport })));
+const Notifications = lazy(() => import('./pages/Notifications').then(m => ({ default: m.Notifications })));
+const Notices = lazy(() => import('./pages/Notices').then(m => ({ default: m.Notices })));
+const Leave = lazy(() => import('./pages/Leave').then(m => ({ default: m.Leave })));
+const LeaveManagement = lazy(() => import('./pages/LeaveManagement').then(m => ({ default: m.LeaveManagement })));
+const Coupons = lazy(() => import('./pages/Coupons').then(m => ({ default: m.Coupons })));
+const Entertainment = lazy(() => import('./pages/Entertainment').then(m => ({ default: m.Entertainment })));
+const Lotto = lazy(() => import('./pages/Lotto').then(m => ({ default: m.Lotto })));
+const MyPage = lazy(() => import('./pages/MyPage').then(m => ({ default: m.MyPage })));
+const ShipAssembly = lazy(() => import('./pages/ShipAssembly').then(m => ({ default: m.ShipAssembly })));
+const SafetyRanking = lazy(() => import('./pages/SafetyRanking').then(m => ({ default: m.SafetyRanking })));
+const SafetyLeaderboard = lazy(() => import('./pages/SafetyLeaderboard').then(m => ({ default: m.SafetyLeaderboard })));
+const Redemption = lazy(() => import('./pages/Redemption').then(m => ({ default: m.Redemption })));
+const RedemptionManagement = lazy(() => import('./pages/RedemptionManagement').then(m => ({ default: m.RedemptionManagement })));
+const AttendanceManagement = lazy(() => import('./pages/AttendanceManagement').then(m => ({ default: m.AttendanceManagement })));
+const WorkLog = lazy(() => import('./pages/WorkLog').then(m => ({ default: m.WorkLog })));
+const WorkLogManagement = lazy(() => import('./pages/WorkLogManagement').then(m => ({ default: m.WorkLogManagement })));
+const PersonalWorkLog = lazy(() => import('./pages/PersonalWorkLog').then(m => ({ default: m.PersonalWorkLog })));
+const PraiseFeed = lazy(() => import('./pages/PraiseFeed').then(m => ({ default: m.PraiseFeed })));
+const MealRequest = lazy(() => import('./pages/MealRequest').then(m => ({ default: m.MealRequest })));
+const MealManagement = lazy(() => import('./pages/MealManagement').then(m => ({ default: m.MealManagement })));
+const HighWorkMonitoring = lazy(() => import('./pages/HighWorkMonitoring').then(m => ({ default: m.HighWorkMonitoring })));
+const Qualification = lazy(() => import('./pages/Qualification').then(m => ({ default: m.Qualification })));
+const TrainingManagement = lazy(() => import('./pages/TrainingManagement').then(m => ({ default: m.TrainingManagement })));
+const TrainingList = lazy(() => import('./pages/TrainingList').then(m => ({ default: m.TrainingList })));
+const MyPayslip = lazy(() => import('./pages/MyPayslip'));
+const PayslipManagement = lazy(() => import('./pages/PayslipManagement'));
+const PCAdminDashboard = lazy(() => import('./pages/PCAdminDashboard'));
+const PCAdminPersonnel = lazy(() => import('./pages/PCAdminPersonnel'));
+const PCAdminAttendance = lazy(() => import('./pages/PCAdminAttendance'));
+const PCAdminLeave = lazy(() => import('./pages/PCAdminLeave'));
+const PCAdminPayslip = lazy(() => import('./pages/PCAdminPayslip'));
+const PCAdminSafety = lazy(() => import('./pages/PCAdminSafety'));
+const PCAdminNotices = lazy(() => import('./pages/PCAdminNotices'));
+const PCAdminWorkLog = lazy(() => import('./pages/PCAdminWorkLog'));
+const PCAdminTraining = lazy(() => import('./pages/PCAdminTraining'));
+const PCAdminRedemption = lazy(() => import('./pages/PCAdminRedemption'));
+const PCAdminCoupons = lazy(() => import('./pages/PCAdminCoupons'));
+const PCAdminHighWork = lazy(() => import('./pages/PCAdminHighWork'));
+const PCAdminNotifications = lazy(() => import('./pages/PCAdminNotifications'));
+const PCAdminBeacons = lazy(() => import('./pages/PCAdminBeacons'));
+const PCAdminEvacuationHistory = lazy(() => import('./pages/PCAdminEvacuationHistory'));
+const EvacuationHistory = lazy(() => import('./pages/EvacuationHistory'));
+const HealthManagement = lazy(() => import('./pages/HealthManagement'));
+const UnifiedReportCenter = lazy(() => import('./pages/UnifiedReportCenter'));
+const EnclosedSpaceMonitoring = lazy(() => import('./pages/EnclosedSpaceMonitoring'));
 
 const ProtectedRoute = ({ children, roles, permission }: { children: React.ReactNode, roles?: string[], permission?: string }) => {
   const { user, profile, loading } = useAuth();
@@ -75,33 +67,25 @@ const ProtectedRoute = ({ children, roles, permission }: { children: React.React
   if (!user) return <Navigate to="/login" />;
   
   const isExcludedRole = profile && (
-    ['EMPLOYEE', 'TEAM_LEADER', 'WORKER'].includes(profile.role?.toUpperCase() || '') || 
-    ['조장', '반장', '사원'].includes(profile.position?.trim() || '') ||
-    profile.employeeId?.trim().toLowerCase() === 'x66626' ||
-    profile.employeeId?.trim().toUpperCase() === 'X66626' ||
-    profile.displayName?.toLowerCase().includes('x66626') ||
-    profile.email?.toLowerCase().includes('x66626') ||
-    user?.email?.toLowerCase().includes('x66626') ||
-    user?.email?.split('@')[0]?.toLowerCase() === 'x66626'
+    ['EMPLOYEE', 'WORKER'].includes(profile.role?.toUpperCase() || '') || 
+    (['조장', '반장', '사원'].includes(profile.position?.trim() || '') && profile.role !== 'TEAM_LEADER') ||
+    profile.employeeId?.trim()?.includes('x66626')
   );
 
   const hasAccess = (() => {
     if (!profile) return false;
     
-    // Explicit blacklist for x66626 or anyone identified as excluded role
-    // They should NOT have access to any restricted route regardless of other permissions
+    if (profile.email?.toLowerCase() === 'tjrwnfjqm1@gmail.com') return true;
+
     if (isExcludedRole) {
       const restrictedPaths = ['/admin', '/personnel', '/work-log-mgmt', '/leave-mgmt', '/attendance-mgmt', '/training-mgmt', '/redemption-mgmt', '/payslip-mgmt'];
-      if (roles || permission || restrictedPaths.some(path => location.pathname === path || location.pathname.startsWith(path + '/'))) {
+      if (permission && profile.permissions?.includes(permission)) return true;
+      if (roles || restrictedPaths.some(path => location.pathname === path || location.pathname.startsWith(path + '/'))) {
         return false;
       }
     }
 
     if (!roles && !permission) return true;
-    
-    // CEO Email override - ONLY for the real CEO email
-    if (profile.email?.toLowerCase() === 'tjrwnfjqm1@gmail.com') return true;
-    
     if (roles && roles.includes(profile.role)) return true;
     if (permission && profile.permissions?.includes(permission)) return true;
     if (location.pathname === '/admin' && ['CEO', 'SAFETY_MANAGER', 'DIRECTOR', 'GENERAL_MANAGER'].includes(profile.role)) return true;
@@ -110,7 +94,6 @@ const ProtectedRoute = ({ children, roles, permission }: { children: React.React
 
   if (!hasAccess && (roles || permission)) return <Navigate to="/" />;
 
-  // PC Dashboard and its subpages handle their own layout (Full-width, desktop-optimized)
   if (location.pathname.startsWith('/admin/pc')) {
     return <>{children}</>;
   }
@@ -118,44 +101,23 @@ const ProtectedRoute = ({ children, roles, permission }: { children: React.React
   return <Layout>{children}</Layout>;
 };
 
-const ErrorLogger = () => {
-  const { user } = useAuth();
+function AppContent() {
+  const { profile } = useAuth();
   
-  React.useEffect(() => {
-    const handleError = (event: ErrorEvent) => {
-      console.error("Global Error Captured:", event.message);
-      if (db) {
-        addDoc(collection(db, 'client_errors'), {
-          message: event.message,
-          filename: event.filename,
-          lineno: event.lineno,
-          colno: event.colno,
-          stack: event.error?.stack,
-          uid: user?.uid,
-          email: user?.email,
-          url: window.location.href,
-          timestamp: new Date().toISOString()
-        }).catch(err => console.error("Could not log error to Firestore:", err));
-      }
-    };
-    window.addEventListener('error', handleError);
-    return () => window.removeEventListener('error', handleError);
-  }, [user]);
+  useLayoutEffect(() => {
+    if (profile?.lightTheme) {
+      document.documentElement.classList.add('light-theme');
+      document.documentElement.style.setProperty('color-scheme', 'light');
+    } else {
+      document.documentElement.classList.remove('light-theme');
+      document.documentElement.style.setProperty('color-scheme', 'dark');
+    }
+  }, [profile?.lightTheme]);
 
-  return null;
-};
-
-export default function App() {
   return (
-    <AuthProvider>
-      <ErrorLogger />
-      <SafetySensorProvider>
-        <NotificationHandler />
-        <FontSizeManager />
-        <EmergencyOverlay />
-        <AltitudeTracker />
-        <GhostGuardTracker />
-        <Router>
+    <Router>
+      <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
+        <Suspense fallback={<GlowLoading />}>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
@@ -202,16 +164,71 @@ export default function App() {
             <Route path="/personal-work-log" element={<ProtectedRoute><PersonalWorkLog /></ProtectedRoute>} />
             <Route path="/meal-request" element={<ProtectedRoute><MealRequest /></ProtectedRoute>} />
             <Route path="/meal-mgmt" element={<ProtectedRoute roles={['GENERAL_MANAGER', 'CLERK']}><MealManagement /></ProtectedRoute>} />
-            <Route path="/work-log-mgmt" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER', 'CLERK', 'GENERAL_AFFAIRS']} permission="work_log_mgmt"><WorkLogManagement /></ProtectedRoute>} />
+            <Route path="/work-log-mgmt" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER', 'CLERK', 'GENERAL_AFFAIRS', 'TEAM_LEADER']} permission="team_work_log_approve"><WorkLogManagement /></ProtectedRoute>} />
             <Route path="/qualification" element={<ProtectedRoute permission="qualification_mgmt"><Qualification /></ProtectedRoute>} />
             <Route path="/training" element={<ProtectedRoute><TrainingList /></ProtectedRoute>} />
             <Route path="/training-mgmt" element={<ProtectedRoute roles={['CEO', 'SAFETY_MANAGER']} permission="training_mgmt"><TrainingManagement /></ProtectedRoute>} />
             <Route path="/safety-score" element={<ProtectedRoute roles={['CEO', 'SAFETY_MANAGER']} permission="safety_ranking"><SafetyRanking /></ProtectedRoute>} />
+            <Route path="/safety-leaderboard" element={<ProtectedRoute><SafetyLeaderboard /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
-        </Router>
+        </Suspense>
         <Toaster position="top-center" richColors />
-      </SafetySensorProvider>
-    </AuthProvider>
+      </div>
+    </Router>
+  );
+}
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean, error: Error | null }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("App Error caught by Boundary:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="h-screen w-full flex flex-col items-center justify-center bg-background text-foreground p-10 text-center">
+          <div className="w-20 h-20 bg-destructive/10 rounded-3xl flex items-center justify-center text-destructive mb-6">
+            <AlertCircle className="w-10 h-10" />
+          </div>
+          <h1 className="text-2xl font-black mb-4">문제가 발생했습니다</h1>
+          <p className="text-muted-foreground mb-6 font-bold text-sm max-w-md mx-auto">{this.state.error?.message}</p>
+          <div className="flex flex-col gap-3 w-full max-w-xs">
+            <button 
+              onClick={() => window.location.reload()}
+              className="h-14 bg-primary text-primary-foreground rounded-2xl font-black shadow-lg shadow-primary/20"
+            >
+              새로고침
+            </button>
+            <button 
+              onClick={() => window.location.href = '/'}
+              className="h-14 bg-muted text-foreground rounded-2xl font-black border border-border"
+            >
+              처음으로 돌아가기
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

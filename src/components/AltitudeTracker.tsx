@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { useAuth } from '@/src/components/AuthProvider';
-import { db } from '@/src/firebase';
+import { useAuth } from '@/components/AuthProvider';
+import { db } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { toast } from 'sonner';
 
@@ -11,6 +11,10 @@ export const AltitudeTracker: React.FC = () => {
 
   useEffect(() => {
     if (!profile || !profile.uid) return;
+    
+    if (profile?.basePressure === null) {
+      basePressureRef.current = null;
+    }
 
     const checkLunchTime = () => {
       const now = new Date();
@@ -33,7 +37,7 @@ export const AltitudeTracker: React.FC = () => {
       }
 
       const now = Date.now();
-      if (now - lastUpdateRef.current < 30000) return;
+      if (now - lastUpdateRef.current < 10000) return;
 
       const effectiveBase = profile.basePressure || basePressureRef.current;
       const relativeAltitude = (effectiveBase - pressure) * 8.5; 

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { db, handleFirestoreError, OperationType } from '@/src/firebase';
+import { db, handleFirestoreError, OperationType } from '@/firebase';
 import { collection, onSnapshot, addDoc, query, orderBy, getDocs, deleteDoc, doc } from 'firebase/firestore';
-import { AccidentCase } from '@/src/types';
-import { useAuth } from '@/src/components/AuthProvider';
+import { AccidentCase } from '@/types';
+import { useAuth } from '@/components/AuthProvider';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { grantRandomShipPart } from '@/src/services/shipService';
+import { grantRandomShipPart } from '@/services/shipService';
 import { 
   ShieldAlert, 
   Plus, 
@@ -32,7 +32,7 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
-import { GlowLoading } from '@/src/components/GlowLoading';
+import { GlowLoading } from '@/components/GlowLoading';
 
 export const AccidentReport: React.FC = () => {
   const { profile } = useAuth();
@@ -132,12 +132,13 @@ export const AccidentReport: React.FC = () => {
     }
   };
 
-  const isSafetyManager = profile?.role === 'SAFETY_MANAGER' || 
-                          profile?.role === 'CEO' || 
-                          profile?.role === 'DIRECTOR' ||
-                          profile?.permissions?.includes('admin') ||
-                          profile?.permissions?.includes('accident_mgmt') ||
-                          profile?.email === 'tjrwnfjqm1@gmail.com';
+  const isSafetyManager = profile && (
+    ['SAFETY_MANAGER', 'CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'TEAM_LEADER', 'GENERAL_AFFAIRS'].includes(profile.role) || 
+    profile.permissions?.includes('admin') ||
+    profile.permissions?.includes('accident_mgmt') ||
+    (profile.position && ['팀장', '소장', '총무', '직장', '실장', '안전관리자', '대표'].some(p => profile.position?.includes(p))) ||
+    profile.email === 'tjrwnfjqm1@gmail.com'
+  );
 
   const filteredCases = cases.filter(c => 
     c.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -150,7 +151,7 @@ export const AccidentReport: React.FC = () => {
     <div className="space-y-6 pb-24 px-2 overflow-x-hidden">
       <header className="py-6 flex justify-between items-end">
         <div>
-           <h2 className="text-3xl font-black tracking-tight text-white leading-tight">사고 즉보</h2>
+           <h2 className="text-3xl font-black tracking-tight text-foreground leading-tight">사고 즉보</h2>
            <p className="text-muted-foreground font-bold">현장의 위험 요소를 즉시 보고하세요</p>
         </div>
         <div className="flex gap-2">
@@ -161,29 +162,29 @@ export const AccidentReport: React.FC = () => {
               >
                  <Plus className="w-4 h-4" /> 제보
               </DialogTrigger>
-              <DialogContent className="bg-card border-none rounded-3xl text-white max-w-xl p-8 space-y-6 overflow-y-auto max-h-[90vh]">
+              <DialogContent className="bg-card border border-border rounded-3xl text-foreground max-w-xl p-8 space-y-6 overflow-y-auto max-h-[90vh]">
                  <DialogHeader>
-                    <DialogTitle className="text-xl font-black tracking-tight">사고 제보하기</DialogTitle>
+                    <DialogTitle className="text-xl font-black tracking-tight text-foreground">사고 제보하기</DialogTitle>
                  </DialogHeader>
                  <div className="space-y-4">
                     <div className="space-y-2">
-                       <p className="text-[10px] uppercase font-black text-white/40 tracking-widest ml-1">사고명</p>
-                       <Input value={newCase.title} onChange={e => setNewCase({...newCase, title: e.target.value})} className="bg-white/5 border-none h-12 rounded-xl" placeholder="예: 낙하 위험 감지" />
+                       <p className="text-[10px] uppercase font-black text-muted-foreground tracking-widest ml-1">사고명</p>
+                       <Input value={newCase.title} onChange={e => setNewCase({...newCase, title: e.target.value})} className="bg-muted border-none h-12 rounded-xl text-foreground" placeholder="예: 낙하 위험 감지" />
                     </div>
                     <div className="space-y-2">
-                       <p className="text-[10px] uppercase font-black text-white/40 tracking-widest ml-1">발생 장소</p>
+                       <p className="text-[10px] uppercase font-black text-muted-foreground tracking-widest ml-1">발생 장소</p>
                        <div className="relative">
-                          <Input value={newCase.location} onChange={e => setNewCase({...newCase, location: e.target.value})} className="bg-white/5 border-none h-12 rounded-xl pl-10" placeholder="위치 정보" />
-                          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                          <Input value={newCase.location} onChange={e => setNewCase({...newCase, location: e.target.value})} className="bg-muted border-none h-12 rounded-xl pl-10 text-foreground" placeholder="위치 정보" />
+                          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/30" />
                        </div>
                     </div>
                     <div className="space-y-2">
-                       <p className="text-[10px] uppercase font-black text-white/40 tracking-widest ml-1">심각도</p>
+                       <p className="text-[10px] uppercase font-black text-muted-foreground tracking-widest ml-1">심각도</p>
                        <div className="grid grid-cols-3 gap-2">
                           {['LOW', 'MEDIUM', 'HIGH'].map(s => (
                             <button key={s} onClick={() => setNewCase({...newCase, severity: s as any})} className={cn(
                               "h-10 rounded-xl text-[10px] font-black transition-all",
-                              newCase.severity === s ? "bg-red-500 text-white" : "bg-white/5 text-muted-foreground"
+                              newCase.severity === s ? "bg-red-500 text-white shadow-lg shadow-red-500/20" : "bg-muted text-muted-foreground border border-border"
                             )}>
                                {s === 'LOW' ? '아차' : s === 'MEDIUM' ? '경미' : '중대'}
                             </button>
@@ -191,11 +192,11 @@ export const AccidentReport: React.FC = () => {
                        </div>
                     </div>
                     <div className="space-y-2">
-                       <p className="text-[10px] uppercase font-black text-white/40 tracking-widest ml-1">상세 내용</p>
-                       <Textarea value={newCase.description} onChange={e => setNewCase({...newCase, description: e.target.value})} className="bg-white/5 border-none rounded-xl min-h-[100px]" placeholder="상세 설명을 적어주세요" />
+                       <p className="text-[10px] uppercase font-black text-muted-foreground tracking-widest ml-1">상세 내용</p>
+                       <Textarea value={newCase.description} onChange={e => setNewCase({...newCase, description: e.target.value})} className="bg-muted border-none rounded-xl min-h-[100px] text-foreground" placeholder="상세 설명을 적어주세요" />
                     </div>
                  </div>
-                 <Button className="w-full h-14 bg-red-500 hover:bg-red-600 text-white font-black rounded-2xl" onClick={handleAddCase} disabled={loading}>
+                 <Button className="w-full h-14 bg-rose-500 hover:bg-rose-600 text-white font-black rounded-2xl" onClick={handleAddCase} disabled={loading}>
                     {loading ? '등록 중...' : '보고서 제출'}
                  </Button>
               </DialogContent>
@@ -205,18 +206,18 @@ export const AccidentReport: React.FC = () => {
       </header>
 
       <div className="relative">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
-        <Input placeholder="사고 사례 검색..." className="bg-card border border-white/5 h-14 pl-12 rounded-2xl font-bold" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
+        <Input placeholder="사고 사례 검색..." className="bg-card border border-border h-14 pl-12 rounded-2xl font-bold text-foreground placeholder:text-muted-foreground/30" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
       </div>
 
       <div className="grid grid-cols-3 gap-3">
          {['HIGH', 'MEDIUM', 'LOW'].map(s => (
-           <div key={s} className="bg-card p-4 rounded-2xl border border-white/5 flex flex-col items-center gap-1">
+           <div key={s} className="bg-card p-4 rounded-2xl border border-border flex flex-col items-center gap-1">
               <span className={cn("w-1.5 h-1.5 rounded-full mb-1", s === 'HIGH' ? "bg-red-500" : s === 'MEDIUM' ? "bg-orange-500" : "bg-emerald-500")} />
               <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">
                 {s === 'HIGH' ? '중대' : s === 'MEDIUM' ? '경미' : '아차'}
               </span>
-              <span className="text-lg font-black text-white">{cases.filter(c => c.severity === s).length}</span>
+              <span className="text-lg font-black text-foreground">{cases.filter(c => c.severity === s).length}</span>
            </div>
          ))}
       </div>
@@ -225,7 +226,7 @@ export const AccidentReport: React.FC = () => {
          {filteredCases.map(c => (
            <div 
              key={c.id} 
-             className="bg-card p-6 rounded-3xl border border-white/5 space-y-4 active:scale-[0.98] transition-transform cursor-pointer"
+             className="bg-card p-6 rounded-3xl border border-border space-y-4 active:scale-[0.98] transition-transform cursor-pointer"
              onClick={() => setSelectedCase(c)}
            >
               <div className="flex justify-between items-start">
@@ -236,7 +237,7 @@ export const AccidentReport: React.FC = () => {
                     )}>
                       {c.severity === 'HIGH' ? '중대사고' : c.severity === 'MEDIUM' ? '경미사고' : '아차사고'}
                     </Badge>
-                    <h4 className="text-lg font-black text-white leading-tight">{c.title}</h4>
+                    <h4 className="text-lg font-black text-foreground leading-tight">{c.title}</h4>
                  </div>
                  <div className="flex flex-col items-end gap-2">
                    <span className="text-[10px] font-bold text-muted-foreground">{format(new Date(c.date), 'yyyy.MM.dd')}</span>
@@ -244,7 +245,7 @@ export const AccidentReport: React.FC = () => {
                      <Button 
                        variant="ghost" 
                        size="icon" 
-                       className="w-8 h-8 rounded-lg text-white/20 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                       className="w-8 h-8 rounded-lg text-muted-foreground/30 hover:text-red-400 hover:bg-red-400/10 transition-colors"
                        onClick={(e) => {
                          e.stopPropagation();
                          setCaseToDelete(c.id);
@@ -256,7 +257,7 @@ export const AccidentReport: React.FC = () => {
                    )}
                  </div>
               </div>
-              <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground bg-white/5 p-3 rounded-xl">
+              <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground bg-muted p-3 rounded-xl">
                  <MapPin className="w-3.5 h-3.5 opacity-50" />
                  {c.location}
               </div>
@@ -271,13 +272,13 @@ export const AccidentReport: React.FC = () => {
          ))}
       </div>
       <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-        <DialogContent className="bg-card border-none rounded-[2rem] shadow-2xl max-w-sm w-[90%] p-8 overflow-hidden text-white">
+        <DialogContent className="bg-card border-none rounded-[2rem] shadow-2xl max-w-sm w-[90%] p-8 overflow-hidden text-foreground">
           <div className="flex flex-col items-center text-center gap-4">
             <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center">
               <Trash2 className="w-8 h-8 text-red-500" />
             </div>
             <div className="space-y-1">
-              <DialogTitle className="text-xl font-black text-white">사고 사례 삭제</DialogTitle>
+              <DialogTitle className="text-xl font-black text-foreground">사고 사례 삭제</DialogTitle>
               <DialogDescription className="text-muted-foreground font-bold text-xs text-center">
                 이 사고 사례 보고를 정말 삭제하시겠습니까?<br />이 작업은 되돌릴 수 없습니다.
               </DialogDescription>
@@ -285,14 +286,14 @@ export const AccidentReport: React.FC = () => {
           </div>
           <div className="flex flex-col gap-3 pt-6">
             <Button 
-              className="w-full h-14 bg-red-500 hover:bg-red-600 text-white font-black rounded-xl"
+              className="w-full h-14 bg-rose-500 hover:bg-rose-600 text-white font-black rounded-xl"
               onClick={() => caseToDelete && handleDeleteCase(caseToDelete)}
             >
               삭제하기
             </Button>
             <Button 
               variant="ghost"
-              className="w-full h-10 text-white/40 font-black hover:text-white"
+              className="w-full h-10 text-muted-foreground font-black hover:text-foreground"
               onClick={() => setIsDeleteOpen(false)}
             >
               취소
@@ -301,7 +302,7 @@ export const AccidentReport: React.FC = () => {
         </DialogContent>
       </Dialog>
       <Dialog open={!!selectedCase} onOpenChange={(open) => !open && setSelectedCase(null)}>
-        <DialogContent className="bg-card border-none rounded-3xl text-white max-w-xl overflow-y-auto max-h-[90vh] p-0 focus:outline-none">
+        <DialogContent className="bg-card border-none rounded-3xl text-foreground max-w-xl overflow-y-auto max-h-[90vh] p-0 focus:outline-none">
           {selectedCase && (
             <div className="flex flex-col">
               {/* Header Image or Placeholder */}
@@ -333,7 +334,7 @@ export const AccidentReport: React.FC = () => {
                     </Badge>
                     <span className="text-[10px] font-bold text-muted-foreground">{format(new Date(selectedCase.date), 'yyyy.MM.dd')}</span>
                   </div>
-                  <h3 className="text-xl font-black text-white leading-tight">{selectedCase.title}</h3>
+                  <h3 className="text-xl font-black text-foreground leading-tight">{selectedCase.title}</h3>
                   <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
                     <MapPin className="w-3 h-3" />
                     {selectedCase.location}
@@ -342,9 +343,9 @@ export const AccidentReport: React.FC = () => {
 
                 <div className="space-y-4">
                   <div className="space-y-1.5">
-                    <p className="text-[10px] font-black text-white/40 uppercase tracking-widest pl-1">상세 내용</p>
-                    <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                      <p className="text-sm font-bold text-gray-300 leading-relaxed whitespace-pre-wrap">{selectedCase.description}</p>
+                    <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">상세 내용</p>
+                    <div className="bg-muted p-4 rounded-2xl border border-border">
+                      <p className="text-sm font-bold text-foreground leading-relaxed whitespace-pre-wrap">{selectedCase.description}</p>
                     </div>
                   </div>
 
@@ -352,19 +353,19 @@ export const AccidentReport: React.FC = () => {
                     <div className="space-y-1.5">
                       <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest pl-1">후속 조치 및 대책</p>
                       <div className="bg-emerald-500/5 p-4 rounded-2xl border border-emerald-500/10">
-                        <p className="text-sm font-bold text-emerald-400/90 leading-relaxed whitespace-pre-wrap">{selectedCase.measures}</p>
+                        <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400/90 leading-relaxed whitespace-pre-wrap">{selectedCase.measures}</p>
                       </div>
                     </div>
                   )}
 
-                  <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[10px] font-bold text-muted-foreground">
+                  <div className="pt-2 border-t border-border flex items-center justify-between text-[10px] font-bold text-muted-foreground">
                     <span>제보자: {selectedCase.reportedBy}</span>
                     <span>등록일: {format(new Date(selectedCase.createdAt), 'yyyy.MM.dd HH:mm')}</span>
                   </div>
                 </div>
 
                 <Button 
-                  className="w-full h-14 bg-white/5 hover:bg-white/10 text-white font-black rounded-2xl transition-all"
+                  className="w-full h-14 bg-muted hover:bg-muted/80 text-foreground font-black rounded-2xl transition-all"
                   onClick={() => setSelectedCase(null)}
                 >
                   확인 완료

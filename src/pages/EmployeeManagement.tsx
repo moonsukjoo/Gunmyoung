@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { db, handleFirestoreError, OperationType } from '@/src/firebase';
+import { db, handleFirestoreError, OperationType } from '@/firebase';
 import { collection, onSnapshot, updateDoc, doc, addDoc, deleteDoc, query, orderBy, increment } from 'firebase/firestore';
-import { UserProfile, Role, Department, PraiseCoupon, JobRole, UserStatus } from '@/src/types';
-import { useAuth } from '@/src/components/AuthProvider';
+import { UserProfile, Role, Department, PraiseCoupon, JobRole, UserStatus } from '@/types';
+import { useAuth } from '@/components/AuthProvider';
 import { 
   Table, 
   TableBody, 
@@ -87,8 +87,8 @@ const PERMISSIONS = [
   { id: 'unified_report', label: '통합 보고서 관리' },
 ];
 
-import { GlowLoading } from '@/src/components/GlowLoading';
-import { exportToExcel, exportToPDF } from '@/src/lib/exportUtils';
+import { GlowLoading } from '@/components/GlowLoading';
+import { exportToExcel, exportToPDF } from '@/lib/exportUtils';
 
 export const EmployeeManagement: React.FC = () => {
   const { profile } = useAuth();
@@ -685,50 +685,50 @@ export const EmployeeManagement: React.FC = () => {
       <header className="flex flex-col gap-1">
         <div className="flex items-center gap-2">
           <div className="w-2 h-6 bg-primary rounded-full" />
-          <h2 className="text-3xl font-black tracking-tighter text-white">직원 정보 관리</h2>
+          <h2 className="text-3xl font-black tracking-tighter text-foreground">직원 정보 관리</h2>
         </div>
         <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-[0.2em] ml-4">임직원 정보 조회 및 관리 시스템</p>
       </header>
 
       <Tabs defaultValue="users" className="w-full flex flex-col">
-        <TabsList className="flex w-full bg-white/5 p-1.5 rounded-2xl mb-8 h-12 border border-white/5">
-          <TabsTrigger value="users" className="flex-1 flex items-center justify-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-xl data-[state=active]:text-black transition-all text-[10px] font-black h-full uppercase tracking-widest">
+        <TabsList className="flex w-full bg-muted/50 p-1.5 rounded-2xl mb-8 h-12 border border-border">
+          <TabsTrigger value="users" className="flex-1 flex items-center justify-center gap-2 rounded-xl data-[state=active]:bg-card data-[state=active]:shadow-xl data-[state=active]:text-foreground transition-all text-[10px] font-black h-full uppercase tracking-widest text-muted-foreground">
             <UserCog className="w-4 h-4" /> {isHRAdmin ? "임직원 관리" : "직원 주소록"}
           </TabsTrigger>
           {(isHRAdmin || isTeamLeader || canManageLeave) && (
-            <TabsTrigger value="leave" className="flex-1 flex items-center justify-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-xl data-[state=active]:text-black transition-all text-[10px] font-black h-full uppercase tracking-widest">
+            <TabsTrigger value="leave" className="flex-1 flex items-center justify-center gap-2 rounded-xl data-[state=active]:bg-card data-[state=active]:shadow-xl data-[state=active]:text-foreground transition-all text-[10px] font-black h-full uppercase tracking-widest text-muted-foreground">
               <CalendarRange className="w-4 h-4" /> {isHRAdmin || canManageLeave ? "전체 연차 관리" : "팀원 연차 관리"}
             </TabsTrigger>
           )}
           {canManageDept && (
-            <TabsTrigger value="departments" className="flex-1 flex items-center justify-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-xl data-[state=active]:text-black transition-all text-[10px] font-black h-full uppercase tracking-widest">
+            <TabsTrigger value="departments" className="flex-1 flex items-center justify-center gap-2 rounded-xl data-[state=active]:bg-card data-[state=active]:shadow-xl data-[state=active]:text-foreground transition-all text-[10px] font-black h-full uppercase tracking-widest text-muted-foreground">
               <Building2 className="w-4 h-4" /> 부서/팀 설정
             </TabsTrigger>
           )}
         </TabsList>
 
         <TabsContent value="users" className="space-y-6 outline-none">
-          <div className="bg-card rounded-[2rem] shadow-sm border border-white/5 overflow-hidden">
-            <div className="p-4 sm:p-6 bg-white/5 border-b border-white/5 space-y-4">
+          <div className="bg-card rounded-[2rem] shadow-sm border border-border overflow-hidden">
+            <div className="p-4 sm:p-6 bg-muted/20 border-b border-border space-y-4">
               <div className="flex flex-col lg:flex-row gap-4">
                 <div className="relative flex-grow group">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30 group-focus-within:text-primary transition-colors z-10" />
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground/50 group-focus-within:text-primary transition-colors z-10" />
                   <Input 
                     placeholder="직원 이름 또는 사번 검색..." 
-                    className="h-14 pl-12 bg-black/20 border-white/5 focus:border-primary rounded-2xl text-base font-black transition-all text-white placeholder:text-white/20"
+                    className="h-14 pl-12 bg-background/50 border-border focus:border-primary rounded-2xl text-base font-black transition-all text-foreground placeholder:text-muted-foreground/40"
                     onChange={(e) => setSearchTerm(e.target.value.toLowerCase())}
                   />
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
                   <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
-                    <SelectTrigger className="w-full sm:w-[130px] h-12 bg-white/5 border-white/5 rounded-2xl font-black text-xs shadow-sm hover:bg-white/10 transition-colors text-white">
+                    <SelectTrigger className="w-full sm:w-[130px] h-12 bg-background/50 border-border rounded-2xl font-black text-xs shadow-sm hover:bg-muted transition-colors text-foreground">
                       <div className="flex items-center gap-2">
-                        <Filter className="w-3.5 h-3.5 text-white/30" />
+                        <Filter className="w-3.5 h-3.5 text-muted-foreground/50" />
                         <SelectValue />
                       </div>
                     </SelectTrigger>
-                    <SelectContent className="bg-[#1c1c1e] border-white/5 rounded-xl text-white text-left">
+                    <SelectContent className="bg-card border-border rounded-xl text-foreground text-left">
                       <SelectItem value="ALL">전체 상태</SelectItem>
                       <SelectItem value="ACTIVE">재직중</SelectItem>
                       <SelectItem value="ON_LEAVE">휴직중</SelectItem>
@@ -737,13 +737,13 @@ export const EmployeeManagement: React.FC = () => {
                   </Select>
 
                   <Select value={deptFilter} onValueChange={setDeptFilter}>
-                    <SelectTrigger className="w-full sm:w-[160px] h-12 bg-white/5 border-white/5 rounded-2xl font-black text-xs shadow-sm hover:bg-white/10 transition-colors text-white">
+                    <SelectTrigger className="w-full sm:w-[160px] h-12 bg-background/50 border-border rounded-2xl font-black text-xs shadow-sm hover:bg-muted transition-colors text-foreground">
                       <div className="flex items-center gap-2">
-                        <Building2 className="w-3.5 h-3.5 text-white/30" />
+                        <Building2 className="w-3.5 h-3.5 text-muted-foreground/50" />
                         <SelectValue />
                       </div>
                     </SelectTrigger>
-                    <SelectContent className="bg-[#1c1c1e] border-white/5 rounded-xl text-white text-left">
+                    <SelectContent className="bg-card border-border rounded-xl text-foreground text-left">
                       <SelectItem value="ALL">전체 부서</SelectItem>
                       {departments.map(d => (
                         <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
@@ -754,48 +754,50 @@ export const EmployeeManagement: React.FC = () => {
                   <Button 
                     variant="outline" 
                     onClick={exportEmployeesToExcel}
-                    className="h-12 px-4 gap-2 font-black rounded-2xl border-white/10 bg-white/5 text-white hover:bg-white/10 active:scale-95 transition-all text-xs"
+                    className="h-12 px-4 gap-2 font-black rounded-2xl border-border bg-background/50 text-foreground hover:bg-muted active:scale-95 transition-all text-xs"
                   >
-                    <Download className="w-4 h-4 text-emerald-400" /> 엑셀
+                    <Download className="w-4 h-4 text-emerald-500" /> 엑셀
                   </Button>
 
                   <Button 
                     variant="outline" 
                     onClick={exportEmployeesToPDF}
-                    className="h-12 px-4 gap-2 font-black rounded-2xl border-white/10 bg-white/5 text-white hover:bg-white/10 active:scale-95 transition-all text-xs"
+                    className="h-12 px-4 gap-2 font-black rounded-2xl border-border bg-background/50 text-foreground hover:bg-muted active:scale-95 transition-all text-xs"
                   >
-                    <FileText className="w-4 h-4 text-rose-400" /> PDF
+                    <FileText className="w-4 h-4 text-rose-500" /> PDF
                   </Button>
 
                   {isHRAdmin && (
                     <div className="flex gap-2 ml-auto lg:ml-0">
                       <Dialog open={isBulkImportOpen} onOpenChange={setIsBulkImportOpen}>
-                        <DialogTrigger asChild>
-                          <Button variant="outline" className="h-12 px-6 gap-2 font-black rounded-2xl border-primary/20 text-primary hover:bg-primary/10 active:scale-95 transition-all text-sm">
-                            <Plus className="w-4 h-4" /> 일괄 등록
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="bg-card border-white/10 rounded-[2.5rem] shadow-2xl max-w-2xl w-[95%] p-0 overflow-hidden flex flex-col max-h-[90dvh] text-white">
-                          <DialogHeader className="p-8 pb-6 bg-white/5 border-b border-white/10 text-left shrink-0">
+                        <DialogTrigger 
+                          render={
+                            <Button variant="outline" className="h-12 px-6 gap-2 font-black rounded-2xl border-primary/20 text-primary hover:bg-primary/10 active:scale-95 transition-all text-sm">
+                              <Plus className="w-4 h-4" /> 일괄 등록
+                            </Button>
+                          }
+                        />
+                        <DialogContent className="bg-card border-border rounded-[2.5rem] shadow-2xl max-w-2xl w-[95%] p-0 overflow-hidden flex flex-col max-h-[90dvh] text-foreground">
+                          <DialogHeader className="p-8 pb-6 bg-muted/20 border-b border-border text-left shrink-0">
                             <div className="flex items-center gap-4">
                               <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center">
                                 <Users className="w-6 h-6 text-primary" />
                               </div>
                               <div>
-                                <DialogTitle className="text-2xl font-black tracking-tighter text-white">사원 일괄 등록</DialogTitle>
-                                <DialogDescription className="text-white/50 font-bold">마크다운 테이블 형식의 엑셀 데이터를 붙여넣으세요.</DialogDescription>
+                                <DialogTitle className="text-2xl font-black tracking-tighter text-foreground">사원 일괄 등록</DialogTitle>
+                                <DialogDescription className="text-muted-foreground font-bold">마크다운 테이블 형식의 엑셀 데이터를 붙여넣으세요.</DialogDescription>
                               </div>
                             </div>
                           </DialogHeader>
                           
                           <div className="p-8 space-y-4 flex-grow overflow-hidden flex flex-col">
                             <div className="space-y-2 flex-grow flex flex-col">
-                              <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">테이블 데이터 (순번|직종|직위|사번|성명|생년월일|휴대폰|입사년도)</label>
+                              <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">테이블 데이터 (순번|직종|직위|사번|성명|생년월일|휴대폰|입사년도)</label>
                               <textarea
                                 value={bulkImportText}
                                 onChange={(e) => setBulkImportText(e.target.value)}
                                 placeholder="| 1 | 취부 | 사원 | X12345 | 홍길동 | 1990-01 | 01012345678 | 2025.01.01 |"
-                                className="w-full flex-grow bg-white/5 border border-white/10 rounded-2xl p-4 font-mono text-sm focus:outline-none focus:border-primary/50 text-white placeholder:text-white/10 resize-none min-h-[300px]"
+                                className="w-full flex-grow bg-background border border-border rounded-2xl p-4 font-mono text-sm focus:outline-none focus:border-primary/50 text-foreground placeholder:text-muted-foreground/30 resize-none min-h-[300px]"
                               />
                             </div>
                             
@@ -809,11 +811,11 @@ export const EmployeeManagement: React.FC = () => {
                           </div>
 
                           <DialogFooter className="p-8 pt-0 flex gap-3">
-                            <Button variant="ghost" onClick={() => setIsBulkImportOpen(false)} className="flex-1 h-12 font-black rounded-xl text-white">취소</Button>
+                            <Button variant="ghost" onClick={() => setIsBulkImportOpen(false)} className="flex-1 h-12 font-black rounded-xl text-foreground">취소</Button>
                             <Button 
                               onClick={handleBulkImport} 
                               disabled={isImporting || !bulkImportText.trim()}
-                              className="flex-[2] h-12 font-black rounded-xl bg-primary text-white hover:bg-primary/90 disabled:opacity-50"
+                              className="flex-[2] h-12 font-black rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                             >
                               {isImporting ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
                               {isImporting ? '처리 중...' : '가져오기 및 등록'}
@@ -823,20 +825,22 @@ export const EmployeeManagement: React.FC = () => {
                       </Dialog>
 
                       <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
-                        <DialogTrigger asChild>
-                          <Button className="h-12 px-6 gap-2 font-black rounded-2xl shadow-lg shadow-primary/20 hover:shadow-primary/30 active:scale-95 transition-all text-sm bg-primary text-white">
-                            <UserPlus className="w-4 h-4" /> 사원 추가
-                          </Button>
-                        </DialogTrigger>
-                      <DialogContent className="bg-card border-white/10 rounded-[2.5rem] shadow-2xl max-w-lg w-[95%] p-0 overflow-hidden flex flex-col max-h-[90dvh] text-white">
-                        <DialogHeader className="p-8 pb-6 bg-white/5 border-b border-white/10 text-left shrink-0">
+                        <DialogTrigger
+                          render={
+                            <Button className="h-12 px-6 gap-2 font-black rounded-2xl shadow-lg shadow-primary/20 hover:shadow-primary/30 active:scale-95 transition-all text-sm bg-primary text-primary-foreground">
+                              <UserPlus className="w-4 h-4" /> 사원 추가
+                            </Button>
+                          }
+                        />
+                      <DialogContent className="bg-card border-border rounded-[2.5rem] shadow-2xl max-w-lg w-[95%] p-0 overflow-hidden flex flex-col max-h-[90dvh] text-foreground">
+                        <DialogHeader className="p-8 pb-6 bg-muted/20 border-b border-border text-left shrink-0">
                           <div className="flex items-center gap-4">
                             <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center">
                               <UserPlus className="w-6 h-6 text-primary" />
                             </div>
                             <div>
-                              <DialogTitle className="text-2xl font-black tracking-tighter text-white">새 사원 등록</DialogTitle>
-                              <DialogDescription className="text-white/50 font-bold">임직원의 상세 정보를 입력해주세요.</DialogDescription>
+                              <DialogTitle className="text-2xl font-black tracking-tighter text-foreground">새 사원 등록</DialogTitle>
+                              <DialogDescription className="text-muted-foreground font-bold">임직원의 상세 정보를 입력해주세요.</DialogDescription>
                             </div>
                           </div>
                         </DialogHeader>
@@ -847,72 +851,72 @@ export const EmployeeManagement: React.FC = () => {
                             <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-2 px-1">기본 인적사항</h4>
                             <div className="grid grid-cols-2 gap-4">
                               <div className="space-y-2">
-                                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">이름 *</label>
+                                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">이름 *</label>
                                 <div className="relative">
-                                  <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                                  <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/30" />
                                   <Input 
                                     value={newUser.displayName}
                                     onChange={(e) => setNewUser({...newUser, displayName: e.target.value})}
                                     placeholder="성함 입력"
-                                    className="h-12 pl-12 bg-white/5 border-white/10 rounded-xl font-bold text-white placeholder:text-white/20"
+                                    className="h-12 pl-12 bg-background border-border rounded-xl font-bold text-foreground placeholder:text-muted-foreground/30"
                                   />
                                 </div>
                               </div>
                               <div className="space-y-2">
-                                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">사원번호 *</label>
+                                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">사원번호 *</label>
                                 <div className="relative">
-                                  <Badge className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20 p-0 flex items-center justify-center bg-transparent border-none">ID</Badge>
+                                  <Badge className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/30 p-0 flex items-center justify-center bg-transparent border-none">ID</Badge>
                                   <Input 
                                     value={newUser.employeeId}
                                     onChange={(e) => setNewUser({...newUser, employeeId: e.target.value.toUpperCase()})}
                                     placeholder="X12345"
-                                    className="h-12 pl-12 bg-white/5 border-white/10 rounded-xl font-bold text-white placeholder:text-white/20"
+                                    className="h-12 pl-12 bg-background border-border rounded-xl font-bold text-foreground placeholder:text-muted-foreground/30"
                                   />
                                 </div>
                               </div>
                             </div>
-
+ 
                             <div className="grid grid-cols-2 gap-4">
                               <div className="space-y-2">
-                                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">생년월일 *</label>
+                                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">생년월일 *</label>
                                 <div className="relative">
-                                  <CalendarRange className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                                  <CalendarRange className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/30" />
                                   <Input 
                                     placeholder="860330 (6자리)"
                                     value={newUser.birthDate}
                                     onChange={(e) => setNewUser({...newUser, birthDate: e.target.value})}
-                                    className="h-12 pl-12 bg-white/5 border-white/10 rounded-xl font-bold text-white placeholder:text-white/20"
+                                    className="h-12 pl-12 bg-muted border-border rounded-xl font-bold text-foreground placeholder:text-muted-foreground/30"
                                   />
                                 </div>
                               </div>
                               <div className="space-y-2">
-                                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">연락처</label>
+                                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">연락처</label>
                                 <Input 
                                   value={newUser.phoneNumber}
                                   onChange={(e) => setNewUser({...newUser, phoneNumber: e.target.value})}
                                   placeholder="010-0000-0000"
-                                  className="h-12 bg-white/5 border-white/10 rounded-xl font-bold text-white placeholder:text-white/20"
+                                  className="h-12 bg-muted border-border rounded-xl font-bold text-foreground placeholder:text-muted-foreground/30"
                                 />
                               </div>
                             </div>
                           </div>
                           
-                          <div className="w-full h-px bg-white/5" />
-
+                          <div className="w-full h-px bg-border" />
+ 
                           {/* Work Info Group */}
                           <div className="space-y-4">
                             <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-2 px-1">업무 정보</h4>
                             <div className="grid grid-cols-2 gap-4">
                               <div className="space-y-2">
-                                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">부서</label>
+                                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">부서</label>
                                 <Select value={newUser.departmentId} onValueChange={(v) => setNewUser({...newUser, departmentId: v})}>
-                                  <SelectTrigger className="h-12 bg-white/5 border-white/10 rounded-xl font-bold text-left text-white">
+                                  <SelectTrigger className="h-12 bg-muted border-border rounded-xl font-bold text-left text-foreground">
                                     <div className="flex items-center gap-2">
-                                      <Building2 className="w-4 h-4 text-white/20" />
+                                      <Building2 className="w-4 h-4 text-muted-foreground/30" />
                                       <SelectValue placeholder="부서 선택" />
                                     </div>
                                   </SelectTrigger>
-                                  <SelectContent className="bg-[#1c1c1e] border-white/10 rounded-xl text-white text-left">
+                                  <SelectContent className="bg-card border-border rounded-xl text-foreground text-left">
                                     {departments.map(dept => (
                                       <SelectItem key={dept.id} value={dept.id} className="font-bold">{dept.name}</SelectItem>
                                     ))}
@@ -920,12 +924,12 @@ export const EmployeeManagement: React.FC = () => {
                                 </Select>
                               </div>
                               <div className="space-y-2">
-                                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">직위</label>
+                                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">직위</label>
                                 <Select value={newUser.position} onValueChange={(v) => setNewUser({...newUser, position: v})}>
-                                  <SelectTrigger className="h-12 bg-white/5 border-white/10 rounded-xl font-bold text-left text-white">
+                                  <SelectTrigger className="h-12 bg-muted border-border rounded-xl font-bold text-left text-foreground">
                                     <SelectValue />
                                   </SelectTrigger>
-                                  <SelectContent className="bg-[#1c1c1e] border-white/10 rounded-xl text-white text-left">
+                                  <SelectContent className="bg-card border-border rounded-xl text-foreground text-left">
                                     {positions.length > 0 ? (
                                       positions.map(pos => (
                                         <SelectItem key={pos.id} value={pos.name} className="font-bold">{pos.name}</SelectItem>
@@ -939,15 +943,15 @@ export const EmployeeManagement: React.FC = () => {
                                 </Select>
                               </div>
                             </div>
-
+ 
                             <div className="grid grid-cols-2 gap-4">
                               <div className="space-y-2">
-                                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">직무(팀)</label>
+                                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">직무(팀)</label>
                                 <Select value={newUser.jobRole} onValueChange={(v) => setNewUser({...newUser, jobRole: v})}>
-                                  <SelectTrigger className="h-12 bg-white/5 border-white/10 rounded-xl font-bold text-left text-white">
+                                  <SelectTrigger className="h-12 bg-muted border-border rounded-xl font-bold text-left text-foreground">
                                     <SelectValue placeholder="직무 선택" />
                                   </SelectTrigger>
-                                  <SelectContent className="bg-[#1c1c1e] border-white/10 rounded-xl text-white text-left">
+                                  <SelectContent className="bg-card border-border rounded-xl text-foreground text-left">
                                     {jobRoles.length > 0 ? (
                                       jobRoles.map(jr => (
                                         <SelectItem key={jr.id} value={jr.name} className="font-bold">{jr.name}</SelectItem>
@@ -961,27 +965,27 @@ export const EmployeeManagement: React.FC = () => {
                                 </Select>
                               </div>
                               <div className="space-y-2">
-                                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">입사일 *</label>
+                                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">입사일 *</label>
                                 <div className="relative">
-                                  <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                                  <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/30" />
                                   <Input 
                                     type="date"
                                     value={newUser.joinedAt}
                                     onChange={(e) => setNewUser({...newUser, joinedAt: e.target.value})}
-                                    className="h-12 pl-12 bg-white/5 border-white/10 rounded-xl font-bold text-white"
+                                    className="h-12 pl-12 bg-muted border-border rounded-xl font-bold text-foreground"
                                   />
                                 </div>
                               </div>
                             </div>
-
+ 
                             <div className="grid grid-cols-2 gap-4">
                               <div className="space-y-2">
-                                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">시스템 권한</label>
+                                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">시스템 권한</label>
                                 <Select value={newUser.role} onValueChange={(v) => setNewUser({...newUser, role: v as Role})}>
-                                  <SelectTrigger className="h-12 bg-white/5 border-white/10 rounded-xl font-bold text-left text-white">
+                                  <SelectTrigger className="h-12 bg-muted border-border rounded-xl font-bold text-left text-foreground">
                                     <SelectValue />
                                   </SelectTrigger>
-                                  <SelectContent className="bg-[#1c1c1e] border-white/10 rounded-xl text-white text-left">
+                                  <SelectContent className="bg-card border-border rounded-xl text-foreground text-left">
                                     {ROLES.map(role => (
                                       <SelectItem key={role} value={role} className="font-bold">{ROLE_LABELS[role]}</SelectItem>
                                     ))}
@@ -989,14 +993,14 @@ export const EmployeeManagement: React.FC = () => {
                                 </Select>
                               </div>
                               <div className="space-y-2">
-                                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">사업장</label>
+                                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">사업장</label>
                                 <div className="relative">
-                                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/40" />
                                   <Input 
                                     value={newUser.workplace}
                                     onChange={(e) => setNewUser({...newUser, workplace: e.target.value})}
                                     placeholder="울산조선소"
-                                    className="h-12 pl-12 bg-white/5 border-white/10 rounded-xl font-bold text-white placeholder:text-white/20"
+                                    className="h-12 pl-12 bg-muted border-border rounded-xl font-bold text-foreground placeholder:text-muted-foreground/30"
                                   />
                                 </div>
                               </div>
@@ -1004,12 +1008,12 @@ export const EmployeeManagement: React.FC = () => {
                             
                             <div className="grid grid-cols-2 gap-4">
                                <div className="space-y-2">
-                                 <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">재직 상태 *</label>
+                                 <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">재직 상태 *</label>
                                  <Select value={newUser.status} onValueChange={(v) => setNewUser({...newUser, status: v as UserStatus, isActive: v === 'ACTIVE' || v === 'ON_LEAVE'})}>
-                                   <SelectTrigger className="h-12 bg-white/5 border-white/10 rounded-xl font-bold text-left text-white">
+                                   <SelectTrigger className="h-12 bg-muted border-border rounded-xl font-bold text-left text-foreground">
                                      <SelectValue />
                                    </SelectTrigger>
-                                   <SelectContent className="bg-[#1c1c1e] border-white/10 rounded-xl text-white text-left">
+                                   <SelectContent className="bg-card border-border rounded-xl text-foreground text-left">
                                      <SelectItem value="ACTIVE" className="font-bold">재직 중</SelectItem>
                                      <SelectItem value="ON_LEAVE" className="font-bold">휴직 중</SelectItem>
                                      <SelectItem value="RETIRED" className="font-bold">퇴직 중</SelectItem>
@@ -1017,26 +1021,26 @@ export const EmployeeManagement: React.FC = () => {
                                  </Select>
                                </div>
                                <div className="space-y-2 opacity-0 pointer-events-none">
-                                 <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">공백</label>
+                                 <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">공백</label>
                                  <div className="h-12" />
                                </div>
                             </div>
                           </div>
                           
                           <div className="space-y-2">
-                            <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">이메일 계정</label>
+                            <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">이메일 계정</label>
                             <Input 
                               value={newUser.email}
                               onChange={(e) => setNewUser({...newUser, email: e.target.value})}
                               placeholder="example@gmail.com (선택)"
-                              className="h-12 bg-white/5 border-white/10 rounded-xl font-bold text-white placeholder:text-white/20"
+                              className="h-12 bg-muted border-border rounded-xl font-bold text-foreground placeholder:text-muted-foreground/30"
                             />
                           </div>
                         </div>
-
-                        <DialogFooter className="p-8 pt-6 bg-white/5 border-t border-white/10 flex flex-row gap-3 min-h-[100px] shrink-0">
-                          <Button variant="outline" className="flex-1 h-14 rounded-2xl font-black border-white/10 bg-white/5 text-white hover:bg-white/10 transition-all" onClick={() => setIsAddUserOpen(false)}>취소</Button>
-                          <Button className="flex-1 h-14 rounded-2xl font-black shadow-lg shadow-primary/20 bg-primary text-white hover:shadow-primary/40 active:scale-95 transition-all" onClick={handleAddUser}>인사정보 저장</Button>
+ 
+                        <DialogFooter className="p-8 pt-6 bg-muted/20 border-t border-border flex flex-row gap-3 min-h-[100px] shrink-0">
+                          <Button variant="outline" className="flex-1 h-14 rounded-2xl font-black border-border bg-background text-foreground hover:bg-muted transition-all" onClick={() => setIsAddUserOpen(false)}>취소</Button>
+                          <Button className="flex-1 h-14 rounded-2xl font-black shadow-lg shadow-primary/20 bg-primary text-primary-foreground hover:shadow-primary/40 active:scale-95 transition-all" onClick={handleAddUser}>인사정보 저장</Button>
                         </DialogFooter>
                       </DialogContent>
                     </Dialog>
@@ -1055,7 +1059,7 @@ export const EmployeeManagement: React.FC = () => {
                   <Card 
                     key={user.uid} 
                     className={cn(
-                      "border-none shadow-sm bg-white/5 rounded-2xl overflow-hidden cursor-pointer active:scale-[0.98] transition-all hover:bg-white/10 border border-white/5",
+                      "border-none shadow-sm bg-muted/40 rounded-2xl overflow-hidden cursor-pointer active:scale-[0.98] transition-all hover:bg-muted/60 border border-border",
                       isSelf && "ring-2 ring-primary/20",
                       !user.isActive && "opacity-40"
                     )}
@@ -1070,15 +1074,15 @@ export const EmployeeManagement: React.FC = () => {
                   >
                     <CardContent className="p-4 flex items-center justify-between">
                       <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-white/30 font-black text-lg">
+                        <div className="w-12 h-12 bg-muted rounded-2xl flex items-center justify-center text-muted-foreground font-black text-lg">
                           {user.displayName.charAt(0)}
                         </div>
                         <div className="space-y-1 text-left">
-                          <div className="font-black text-lg text-white tracking-tighter leading-none flex items-center gap-2">
+                          <div className="font-black text-lg text-foreground tracking-tighter leading-none flex items-center gap-2">
                             {user.displayName}
                             {isSelf && <Badge variant="outline" className="text-[8px] h-4 font-black bg-primary/20 text-primary border-primary/30">나</Badge>}
                             {user.status === 'RETIRED' || (!user.status && !user.isActive) ? (
-                              <span className="text-[10px] text-white/30 font-bold px-2 py-0.5 bg-white/5 rounded-md border border-white/5">(퇴사)</span>
+                              <span className="text-[10px] text-muted-foreground font-bold px-2 py-0.5 bg-muted rounded-md border border-border">(퇴사)</span>
                             ) : user.status === 'ON_LEAVE' ? (
                               <span className="text-[10px] text-amber-500 font-bold px-2 py-0.5 bg-amber-500/10 rounded-md border border-amber-500/20">(휴직)</span>
                             ) : (
@@ -1086,9 +1090,9 @@ export const EmployeeManagement: React.FC = () => {
                             )}
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-mono text-[10px] font-black text-white/30 uppercase tracking-widest">{user.employeeId}</span>
-                            <Badge variant="secondary" className="bg-white/5 text-white/60 text-[9px] font-bold px-1.5 h-5">{user.position}</Badge>
-                            {user.jobRole && <Badge variant="outline" className="text-[9px] font-bold px-1.5 h-5 border-white/10 text-white/40">{user.jobRole}</Badge>}
+                            <span className="font-mono text-[10px] font-black text-muted-foreground uppercase tracking-widest">{user.employeeId}</span>
+                            <Badge variant="secondary" className="bg-muted text-foreground/70 text-[9px] font-bold px-1.5 h-5">{user.position}</Badge>
+                            {user.jobRole && <Badge variant="outline" className="text-[9px] font-bold px-1.5 h-5 border-border text-muted-foreground">{user.jobRole}</Badge>}
                             {(profile?.role === 'CEO' || profile?.role === 'SAFETY_MANAGER') && (
                               <Button 
                                 variant="ghost" 
@@ -1111,7 +1115,7 @@ export const EmployeeManagement: React.FC = () => {
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          className="w-8 h-8 rounded-lg text-white/20 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                          className="w-8 h-8 rounded-lg text-muted-foreground/20 hover:text-destructive hover:bg-destructive/10 transition-colors"
                           onClick={(e) => {
                             e.stopPropagation();
                             setDeleteId(user.uid);
@@ -1136,13 +1140,13 @@ export const EmployeeManagement: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="leave" className="space-y-6 outline-none">
-          <Card className="border-none shadow-sm bg-card rounded-3xl overflow-hidden border border-white/5">
-            <CardHeader className="p-6 border-b border-white/5 bg-white/5">
+          <Card className="border-none shadow-sm bg-card rounded-3xl overflow-hidden border border-border">
+            <CardHeader className="p-6 border-b border-border bg-muted/30">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-black tracking-tight flex items-center gap-2 text-white">
+                <CardTitle className="text-lg font-black tracking-tight flex items-center gap-2 text-foreground">
                   <CalendarRange className="w-5 h-5 text-primary" /> 전 사원 연차 관리
                 </CardTitle>
-                <div className="text-[10px] font-black text-white/30 uppercase tracking-widest">
+                <div className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                   총 {users.length}명
                 </div>
               </div>
@@ -1150,8 +1154,8 @@ export const EmployeeManagement: React.FC = () => {
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <Table>
-                  <TableHeader className="bg-white/5">
-                    <TableRow className="border-white/5 hover:bg-transparent">
+                  <TableHeader className="bg-muted/50">
+                    <TableRow className="border-border hover:bg-transparent">
                       <TableHead className="text-[10px] font-black text-muted-foreground uppercase tracking-widest py-4">사번</TableHead>
                       <TableHead className="text-[10px] font-black text-muted-foreground uppercase tracking-widest py-4">이름</TableHead>
                       <TableHead className="text-[10px] font-black text-muted-foreground uppercase tracking-widest py-4">부서</TableHead>
@@ -1163,9 +1167,9 @@ export const EmployeeManagement: React.FC = () => {
                     {filteredUsers
                       .sort((a, b) => a.displayName.localeCompare(b.displayName))
                       .map((user) => (
-                        <TableRow key={user.uid} className="border-white/5 hover:bg-white/5 transition-colors">
-                          <TableCell className="font-mono text-[11px] font-black text-white/30">{user.employeeId}</TableCell>
-                          <TableCell className="font-black text-white">{user.displayName}</TableCell>
+                         <TableRow key={user.uid} className="border-border hover:bg-muted/30 transition-colors">
+                          <TableCell className="font-mono text-[11px] font-black text-muted-foreground">{user.employeeId}</TableCell>
+                          <TableCell className="font-black text-foreground">{user.displayName}</TableCell>
                           <TableCell className="text-xs font-bold text-muted-foreground">{user.departmentName || '-'}</TableCell>
                           <TableCell className="text-xs font-bold text-muted-foreground">{user.position || '-'}</TableCell>
                           <TableCell>
@@ -1176,9 +1180,9 @@ export const EmployeeManagement: React.FC = () => {
                                 defaultValue={user.annualLeaveBalance || 0}
                                 onBlur={(e) => handleLeaveBalanceChange(user.uid, e.target.value)}
                                 disabled={!isHRAdmin}
-                                className="h-9 w-24 bg-black/20 border-white/5 text-xs font-black rounded-lg text-center disabled:opacity-50 text-white"
+                                className="h-9 w-24 bg-background border-border text-xs font-black rounded-lg text-center disabled:opacity-50 text-foreground"
                               />
-                              <span className="text-[10px] font-black text-white/30">일</span>
+                              <span className="text-[10px] font-black text-muted-foreground">일</span>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1193,9 +1197,9 @@ export const EmployeeManagement: React.FC = () => {
         {isHRAdmin && (
         <TabsContent value="departments" className="space-y-8 outline-none">
           <div className="grid lg:grid-cols-2 gap-8">
-            <Card className="border-none shadow-sm bg-card rounded-2xl overflow-hidden border border-white/5">
-              <CardHeader className="pb-4 pt-6 px-6 bg-white/5 border-b border-white/5">
-                <CardTitle className="text-base font-black tracking-tight flex items-center gap-2 text-white">
+            <Card className="border-none shadow-sm bg-card rounded-2xl overflow-hidden border border-border">
+              <CardHeader className="pb-4 pt-6 px-6 bg-muted/30 border-b border-border">
+                <CardTitle className="text-base font-black tracking-tight flex items-center gap-2 text-foreground">
                   <Plus className="w-4 h-4 text-primary" /> 새 부서 추가
                 </CardTitle>
               </CardHeader>
@@ -1206,17 +1210,17 @@ export const EmployeeManagement: React.FC = () => {
                     placeholder="예: 생산1팀, 품질관리부" 
                     value={newDeptName}
                     onChange={(e) => setNewDeptName(e.target.value)}
-                    className="h-12 text-sm border-white/5 bg-black/20 rounded-xl focus:ring-primary/20 font-bold text-white placeholder:text-white/20"
+                    className="h-12 text-sm border-border bg-background rounded-xl focus:ring-primary/20 font-bold text-foreground placeholder:text-muted-foreground/30"
                   />
                 </div>
-                <Button className="w-full h-12 gap-2 font-black text-sm rounded-xl shadow-lg active:scale-[0.98] transition-all bg-primary text-white" onClick={handleAddDept}>
+                <Button className="w-full h-12 gap-2 font-black text-sm rounded-xl shadow-lg active:scale-[0.98] transition-all bg-primary text-primary-foreground" onClick={handleAddDept}>
                   부서 생성하기
                 </Button>
               </CardContent>
             </Card>
 
-            <Card className="border-none shadow-sm bg-card rounded-2xl overflow-hidden border border-white/5">
-              <CardHeader className="pb-4 pt-6 px-6 bg-white/5 border-b border-white/5">
+            <Card className="border-none shadow-sm bg-card rounded-2xl overflow-hidden border border-border">
+              <CardHeader className="pb-4 pt-6 px-6 bg-muted/30 border-b border-border">
                 <CardTitle className="text-base font-black tracking-tight flex items-center gap-2 text-emerald-500">
                   <Plus className="w-4 h-4 text-emerald-500" /> 새 직무 추가
                 </CardTitle>
@@ -1228,7 +1232,7 @@ export const EmployeeManagement: React.FC = () => {
                     placeholder="예: 용접, 사상, 취부" 
                     value={newJobRoleName}
                     onChange={(e) => setNewJobRoleName(e.target.value)}
-                    className="h-12 text-sm border-white/5 bg-black/20 rounded-xl focus:ring-primary/20 font-bold text-white placeholder:text-white/20"
+                    className="h-12 text-sm border-border bg-background rounded-xl focus:ring-primary/20 font-bold text-foreground placeholder:text-muted-foreground/30"
                   />
                 </div>
                 <Button className="w-full h-12 gap-2 font-black text-sm rounded-xl shadow-lg active:scale-[0.98] transition-all bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleAddJobRole}>
@@ -1237,8 +1241,8 @@ export const EmployeeManagement: React.FC = () => {
               </CardContent>
             </Card>
 
-            <Card className="border-none shadow-sm bg-card rounded-2xl overflow-hidden border border-white/5">
-              <CardHeader className="pb-4 pt-6 px-6 bg-white/5 border-b border-white/5">
+            <Card className="border-none shadow-sm bg-card rounded-2xl overflow-hidden border border-border">
+              <CardHeader className="pb-4 pt-6 px-6 bg-muted/30 border-b border-border">
                 <CardTitle className="text-base font-black tracking-tight flex items-center gap-2 text-blue-400">
                   <Plus className="w-4 h-4 text-blue-400" /> 새 직위 추가
                 </CardTitle>
@@ -1250,7 +1254,7 @@ export const EmployeeManagement: React.FC = () => {
                     placeholder="예: 사원, 대리, 과장" 
                     value={newPositionName}
                     onChange={(e) => setNewPositionName(e.target.value)}
-                    className="h-12 text-sm border-white/5 bg-black/20 rounded-xl focus:ring-primary/20 font-bold text-white placeholder:text-white/20"
+                    className="h-12 text-sm border-border bg-background rounded-xl focus:ring-primary/20 font-bold text-foreground placeholder:text-muted-foreground/30"
                   />
                 </div>
                 <Button className="w-full h-12 gap-2 font-black text-sm rounded-xl shadow-lg active:scale-[0.98] transition-all bg-blue-600 hover:bg-blue-700 text-white" onClick={handleAddPosition}>
@@ -1264,19 +1268,19 @@ export const EmployeeManagement: React.FC = () => {
             <div className="space-y-4">
               <div className="flex items-center justify-between px-1">
                 <h3 className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">부서 목록 ({departments.length})</h3>
-                <div className="h-px flex-1 bg-white/5 ml-4" />
+                <div className="h-px flex-1 bg-border ml-4" />
               </div>
               
               <div className="grid gap-3 max-h-[400px] overflow-y-auto no-scrollbar">
                 {departments.map((dept) => (
-                  <Card key={dept.id} className="border-none shadow-sm bg-white/5 rounded-2xl border border-white/5">
+                  <Card key={dept.id} className="border-none shadow-sm bg-muted/40 rounded-2xl border border-border">
                     <CardContent className="p-5 flex items-center justify-between">
                       <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-white/30">
+                        <div className="w-10 h-10 bg-muted rounded-xl flex items-center justify-center text-muted-foreground/30">
                           <Building2 className="w-5 h-5" />
                         </div>
                         <div>
-                          <div className="font-black text-white tracking-tight">{dept.name}</div>
+                          <div className="font-black text-foreground tracking-tight">{dept.name}</div>
                           <div className="text-[10px] text-muted-foreground font-bold">
                             현재 인원: <span className="text-primary">{users.filter(u => u.departmentId === dept.id).length}명</span>
                           </div>
@@ -1285,7 +1289,7 @@ export const EmployeeManagement: React.FC = () => {
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        className="w-10 h-10 rounded-xl text-white/20 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                        className="w-10 h-10 rounded-xl text-muted-foreground/20 hover:text-destructive hover:bg-destructive/10 transition-colors"
                         onClick={() => handleDeleteDept(dept.id)}
                       >
                         <Trash2 className="w-4 h-4" />
@@ -1294,7 +1298,7 @@ export const EmployeeManagement: React.FC = () => {
                   </Card>
                 ))}
                 {departments.length === 0 && (
-                  <div className="py-10 text-center text-white/30 text-xs font-bold border border-dashed border-white/10 rounded-2xl bg-white/5">
+                  <div className="py-10 text-center text-muted-foreground/30 text-xs font-bold border border-dashed border-border rounded-2xl bg-muted/20">
                     등록된 부서가 없습니다.
                   </div>
                 )}
@@ -1304,19 +1308,19 @@ export const EmployeeManagement: React.FC = () => {
             <div className="space-y-4">
               <div className="flex items-center justify-between px-1">
                 <h3 className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">직무 목록 ({jobRoles.length})</h3>
-                <div className="h-px flex-1 bg-white/5 ml-4" />
+                <div className="h-px flex-1 bg-border ml-4" />
               </div>
               
               <div className="grid gap-3 max-h-[400px] overflow-y-auto no-scrollbar">
                 {jobRoles.map((jr) => (
-                  <Card key={jr.id} className="border-none shadow-sm bg-white/5 rounded-2xl border border-white/5">
+                  <Card key={jr.id} className="border-none shadow-sm bg-muted/40 rounded-2xl border border-border">
                     <CardContent className="p-5 flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-500">
                           <UserCog className="w-5 h-5" />
                         </div>
                         <div>
-                          <div className="font-black text-white tracking-tight">{jr.name}</div>
+                          <div className="font-black text-foreground tracking-tight">{jr.name}</div>
                           <div className="text-[10px] text-muted-foreground font-bold">
                             해당 사원: <span className="text-emerald-500">{users.filter(u => u.jobRole === jr.name).length}명</span>
                           </div>
@@ -1325,7 +1329,7 @@ export const EmployeeManagement: React.FC = () => {
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        className="w-10 h-10 rounded-xl text-white/20 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                        className="w-10 h-10 rounded-xl text-muted-foreground/20 hover:text-destructive hover:bg-destructive/10 transition-colors"
                         onClick={() => handleDeleteJobRole(jr.id)}
                       >
                         <Trash2 className="w-4 h-4" />
@@ -1334,7 +1338,7 @@ export const EmployeeManagement: React.FC = () => {
                   </Card>
                 ))}
                 {jobRoles.length === 0 && (
-                  <div className="py-10 text-center text-white/30 text-xs font-bold border border-dashed border-white/10 rounded-2xl bg-white/5">
+                  <div className="py-10 text-center text-muted-foreground/30 text-xs font-bold border border-dashed border-border rounded-2xl bg-muted/20">
                     등록된 직무가 없습니다.
                   </div>
                 )}
@@ -1344,19 +1348,19 @@ export const EmployeeManagement: React.FC = () => {
             <div className="space-y-4">
               <div className="flex items-center justify-between px-1">
                 <h3 className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">직위 목록 ({positions.length})</h3>
-                <div className="h-px flex-1 bg-white/5 ml-4" />
+                <div className="h-px flex-1 bg-border ml-4" />
               </div>
               
               <div className="grid gap-3 max-h-[400px] overflow-y-auto no-scrollbar">
                 {positions.map((pos) => (
-                  <Card key={pos.id} className="border-none shadow-sm bg-white/5 rounded-2xl border border-white/5">
+                  <Card key={pos.id} className="border-none shadow-sm bg-muted/40 rounded-2xl border border-border">
                     <CardContent className="p-5 flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-500">
                           <Plus className="w-5 h-5" />
                         </div>
                         <div>
-                          <div className="font-black text-white tracking-tight">{pos.name}</div>
+                          <div className="font-black text-foreground tracking-tight">{pos.name}</div>
                           <div className="text-[10px] text-muted-foreground font-bold">
                             해당 사원: <span className="text-blue-500">{users.filter(u => u.position === pos.name).length}명</span>
                           </div>
@@ -1365,7 +1369,7 @@ export const EmployeeManagement: React.FC = () => {
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        className="w-10 h-10 rounded-xl text-white/20 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                        className="w-10 h-10 rounded-xl text-muted-foreground/20 hover:text-destructive hover:bg-destructive/10 transition-colors"
                         onClick={() => handleDeletePosition(pos.id)}
                       >
                         <Trash2 className="w-4 h-4" />
@@ -1374,7 +1378,7 @@ export const EmployeeManagement: React.FC = () => {
                   </Card>
                 ))}
                 {positions.length === 0 && (
-                  <div className="py-10 text-center text-white/30 text-xs font-bold border border-dashed border-white/10 rounded-2xl bg-white/5">
+                  <div className="py-10 text-center text-muted-foreground/30 text-xs font-bold border border-dashed border-border rounded-2xl bg-muted/20">
                     등록된 직위가 없습니다.
                   </div>
                 )}
@@ -1386,9 +1390,9 @@ export const EmployeeManagement: React.FC = () => {
       </Tabs>
 
       <Dialog open={isEditUserOpen} onOpenChange={setIsEditUserOpen}>
-        <DialogContent className="bg-card border-none rounded-[2rem] shadow-2xl max-w-lg w-[95%] p-0 overflow-hidden flex flex-col max-h-[90dvh] text-white">
-          <DialogHeader className="p-8 pb-4 bg-white/5 border-b border-white/5 shrink-0">
-            <DialogTitle className="text-2xl font-black tracking-tighter text-white">정보 수정</DialogTitle>
+        <DialogContent className="bg-card border-border rounded-[2rem] shadow-2xl max-w-lg w-[95%] p-0 overflow-hidden flex flex-col max-h-[90dvh] text-foreground">
+          <DialogHeader className="p-8 pb-4 bg-muted/20 border-b border-border shrink-0">
+            <DialogTitle className="text-2xl font-black tracking-tighter text-foreground">정보 수정</DialogTitle>
             <DialogDescription className="text-muted-foreground font-bold">{editingUser?.displayName} 사원의 정보를 수정합니다.</DialogDescription>
           </DialogHeader>
           <div className="p-8 space-y-6 overflow-y-auto flex-grow no-scrollbar">
@@ -1398,7 +1402,7 @@ export const EmployeeManagement: React.FC = () => {
                 <Input 
                   value={editingUser?.displayName || ''}
                   onChange={(e) => setEditingUser(prev => prev ? {...prev, displayName: e.target.value} : null)}
-                  className="h-12 bg-white/5 border-white/5 rounded-xl font-bold text-white placeholder:text-white/20"
+                  className="h-12 bg-muted border-border rounded-xl font-bold text-foreground placeholder:text-muted-foreground/30"
                 />
               </div>
               <div className="space-y-2">
@@ -1406,7 +1410,7 @@ export const EmployeeManagement: React.FC = () => {
                 <Input 
                   value={editingUser?.employeeId || ''}
                   disabled
-                  className="h-12 bg-white/5 border-white/5 rounded-xl font-bold opacity-50 text-white"
+                  className="h-12 bg-muted border-border rounded-xl font-bold opacity-50 text-foreground"
                 />
               </div>
             </div>
@@ -1415,13 +1419,13 @@ export const EmployeeManagement: React.FC = () => {
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">생년월일</label>
                 <div className="relative">
-                  <CalendarRange className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                  <CalendarRange className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/30" />
                   <Input 
                     type="text"
                     placeholder="860330"
                     value={editingUser?.birthDate || ''}
                     onChange={(e) => setEditingUser(prev => prev ? {...prev, birthDate: e.target.value} : null)}
-                    className="h-12 pl-12 bg-white/5 border-white/5 rounded-xl font-bold text-white placeholder:text-white/20"
+                    className="h-12 pl-12 bg-muted border-border rounded-xl font-bold text-foreground placeholder:text-muted-foreground/30"
                   />
                 </div>
               </div>
@@ -1431,7 +1435,7 @@ export const EmployeeManagement: React.FC = () => {
                   value={editingUser?.phoneNumber || ''}
                   onChange={(e) => setEditingUser(prev => prev ? {...prev, phoneNumber: e.target.value} : null)}
                   placeholder="010-0000-0000"
-                  className="h-12 bg-white/5 border-white/5 rounded-xl font-bold text-white placeholder:text-white/20"
+                  className="h-12 bg-muted border-border rounded-xl font-bold text-foreground placeholder:text-muted-foreground/30"
                 />
               </div>
             </div>
@@ -1444,10 +1448,10 @@ export const EmployeeManagement: React.FC = () => {
                    onValueChange={(v) => setEditingUser(prev => prev ? {...prev, status: v as UserStatus, isActive: v === 'ACTIVE' || v === 'ON_LEAVE'} : null)}
                    disabled={!isHRAdmin}
                  >
-                   <SelectTrigger className="h-12 bg-white/5 border-white/5 rounded-xl font-bold text-white">
+                   <SelectTrigger className="h-12 bg-muted border-border rounded-xl font-bold text-foreground">
                       <SelectValue placeholder="상태 선택" />
                    </SelectTrigger>
-                   <SelectContent className="bg-[#1c1c1e] rounded-xl border-white/5 text-white">
+                   <SelectContent className="bg-card rounded-xl border-border text-foreground">
                      <SelectItem value="ACTIVE">재직 중</SelectItem>
                      <SelectItem value="ON_LEAVE">휴직 중</SelectItem>
                      <SelectItem value="RETIRED">퇴직 중</SelectItem>
@@ -1471,13 +1475,13 @@ export const EmployeeManagement: React.FC = () => {
                   }}
                   disabled={!isHRAdmin}
                 >
-                  <SelectTrigger className="h-12 bg-white/5 border-white/5 rounded-xl font-bold text-white">
+                  <SelectTrigger className="h-12 bg-muted border-border rounded-xl font-bold text-foreground">
                     <div className="flex items-center gap-2">
-                      <Building2 className="w-4 h-4 text-white/20" />
+                      <Building2 className="w-4 h-4 text-muted-foreground/30" />
                       <SelectValue />
                     </div>
                   </SelectTrigger>
-                  <SelectContent className="bg-[#1c1c1e] rounded-xl border-white/5 text-white">
+                  <SelectContent className="bg-card rounded-xl border-border text-foreground">
                     <SelectItem value="none">미지정</SelectItem>
                     {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
                   </SelectContent>
@@ -1490,10 +1494,10 @@ export const EmployeeManagement: React.FC = () => {
                   onValueChange={(v) => setEditingUser(prev => prev ? {...prev, position: v} : null)}
                   disabled={!isHRAdmin}
                 >
-                  <SelectTrigger className="h-12 bg-white/5 border-white/5 rounded-xl font-bold text-white">
+                  <SelectTrigger className="h-12 bg-muted border-border rounded-xl font-bold text-foreground">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#1c1c1e] rounded-xl border-white/5 text-white">
+                  <SelectContent className="bg-card rounded-xl border-border text-foreground">
                     {positions.length > 0 ? (
                       positions.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)
                     ) : (
@@ -1512,10 +1516,10 @@ export const EmployeeManagement: React.FC = () => {
                   onValueChange={(v) => setEditingUser(prev => prev ? {...prev, jobRole: v} : null)}
                   disabled={!isHRAdmin}
                 >
-                  <SelectTrigger className="h-12 bg-white/5 border-white/5 rounded-xl font-bold text-white">
+                  <SelectTrigger className="h-12 bg-muted border-border rounded-xl font-bold text-foreground">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#1c1c1e] rounded-xl border-white/5 text-white">
+                  <SelectContent className="bg-card rounded-xl border-border text-foreground">
                     {jobRoles.length > 0 ? (
                       jobRoles.map(jr => <SelectItem key={jr.id} value={jr.name}>{jr.name}</SelectItem>)
                     ) : (
@@ -1527,19 +1531,19 @@ export const EmployeeManagement: React.FC = () => {
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">입사일</label>
                 <div className="relative">
-                  <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                  <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/30" />
                   <Input 
                     type="date"
                     value={editingUser?.joinedAt || ''}
                     onChange={(e) => setEditingUser(prev => prev ? {...prev, joinedAt: e.target.value} : null)}
-                    className="h-12 pl-12 bg-white/5 border-white/5 rounded-xl font-bold text-white"
+                    className="h-12 pl-12 bg-muted border-border rounded-xl font-bold text-foreground"
                   />
                 </div>
               </div>
             </div>
 
             {isHRAdmin && (
-              <div className="space-y-4 pt-4 border-t border-white/5">
+              <div className="space-y-4 pt-4 border-t border-border">
                 <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">상세 권한 설정</label>
                 <div className="grid grid-cols-2 gap-3">
                   {PERMISSIONS.map((perm) => (
@@ -1557,14 +1561,14 @@ export const EmployeeManagement: React.FC = () => {
                         "flex items-center gap-3 p-3 rounded-xl border-2 transition-all cursor-pointer",
                         (editingUser?.permissions || []).includes(perm.id)
                           ? "bg-primary/5 border-primary text-primary"
-                          : "bg-white/5 border-white/5 text-white/30 hover:border-white/10"
+                          : "bg-muted/40 border-border text-muted-foreground/40 hover:border-muted-foreground/20"
                       )}
                     >
                       <div className={cn(
                         "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all",
                         (editingUser?.permissions || []).includes(perm.id)
-                          ? "bg-primary border-primary text-white"
-                          : "border-white/10 text-transparent"
+                          ? "bg-primary border-primary text-primary-foreground"
+                          : "border-border text-transparent"
                       )}>
                         <CheckCircle2 className="w-3 h-3" />
                       </div>
@@ -1575,12 +1579,12 @@ export const EmployeeManagement: React.FC = () => {
               </div>
             )}
           </div>
-          <DialogFooter className="p-8 pt-4 bg-white/5 border-t border-white/5 flex flex-row gap-3 shadow-2xl">
-            <Button variant="outline" className="flex-1 h-12 rounded-xl font-black border-white/10 bg-white/5 text-white" onClick={() => setIsEditUserOpen(false)}>취소</Button>
+          <DialogFooter className="p-8 pt-4 bg-muted/20 border-t border-border flex flex-row gap-3 shadow-2xl">
+            <Button variant="outline" className="flex-1 h-12 rounded-xl font-black border-border bg-background text-foreground hover:bg-muted" onClick={() => setIsEditUserOpen(false)}>취소</Button>
             {isHRAdmin && editingUser && (
               <Button 
                 variant="outline" 
-                className="flex-1 h-12 rounded-xl font-black border-red-500/30 bg-red-500/5 text-red-500 hover:bg-red-500/10" 
+                className="flex-1 h-12 rounded-xl font-black border-destructive/30 bg-destructive/5 text-destructive hover:bg-destructive/10" 
                 onClick={() => {
                   setResetTarget({ uid: editingUser.uid, employeeId: editingUser.employeeId });
                   setIsResetConfirmOpen(true);
@@ -1589,19 +1593,19 @@ export const EmployeeManagement: React.FC = () => {
                 초기화
               </Button>
             )}
-            <Button className="flex-1 h-12 rounded-xl font-black shadow-lg bg-primary text-white" onClick={handleEditUserSave}>저장하기</Button>
+            <Button className="flex-1 h-12 rounded-xl font-black shadow-lg bg-primary text-primary-foreground" onClick={handleEditUserSave}>저장하기</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isResetConfirmOpen} onOpenChange={setIsResetConfirmOpen}>
-        <DialogContent className="bg-card border-none rounded-[2rem] shadow-2xl max-w-sm w-[90%] p-8 overflow-hidden text-white">
+        <DialogContent className="bg-card border-border rounded-[2rem] shadow-2xl max-w-sm w-[90%] p-8 overflow-hidden text-foreground">
           <DialogHeader className="items-center text-center space-y-4">
             <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center">
               <RefreshCw className="w-8 h-8 text-primary" />
             </div>
             <div className="space-y-1">
-              <DialogTitle className="text-xl font-black text-white tracking-tighter">비밀번호 초기화</DialogTitle>
+              <DialogTitle className="text-xl font-black text-foreground tracking-tighter">비밀번호 초기화</DialogTitle>
               <DialogDescription className="text-muted-foreground font-bold text-xs text-center">
                 선택하신 사원의 비밀번호를 초기화하시겠습니까?<br />초기 비밀번호는 사번으로 설정됩니다.
               </DialogDescription>
@@ -1609,14 +1613,14 @@ export const EmployeeManagement: React.FC = () => {
           </DialogHeader>
           <div className="flex flex-col gap-3 pt-6">
             <Button 
-              className="w-full h-14 bg-primary text-white font-black rounded-xl"
+              className="w-full h-14 bg-primary text-primary-foreground font-black rounded-xl"
               onClick={handleResetPin}
             >
               초기화 실행
             </Button>
             <Button 
               variant="ghost"
-              className="w-full h-10 text-white/40 font-black hover:text-white"
+              className="w-full h-10 text-muted-foreground hover:text-foreground font-black"
               onClick={() => setIsResetConfirmOpen(false)}
             >
               취소
@@ -1626,20 +1630,20 @@ export const EmployeeManagement: React.FC = () => {
       </Dialog>
 
       <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
-        <DialogContent className="bg-card border-none rounded-[2rem] shadow-2xl max-w-sm w-[90%] p-8 overflow-hidden text-white">
+        <DialogContent className="bg-card border-border border rounded-[2rem] shadow-2xl max-w-sm w-[90%] p-8 overflow-hidden text-foreground">
           <DialogHeader className="items-center text-center">
-            <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mb-4">
-              <Trash2 className="w-8 h-8 text-red-500" />
+            <div className="w-16 h-16 bg-destructive/10 rounded-2xl flex items-center justify-center mb-4">
+              <Trash2 className="w-8 h-8 text-destructive" />
             </div>
-            <DialogTitle className="text-xl font-black text-white">정보 삭제 확인</DialogTitle>
+            <DialogTitle className="text-xl font-black text-foreground">정보 삭제 확인</DialogTitle>
             <DialogDescription className="text-muted-foreground font-bold whitespace-pre-wrap">
               {deleteName} 사원의 모든 정보를 삭제하시겠습니까? {"\n"}이 작업은 되돌릴 수 없습니다.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex-row gap-3 mt-6">
-            <Button variant="outline" className="flex-1 h-12 rounded-xl font-black border-white/10 bg-white/5 text-white" onClick={() => setIsDeleteConfirmOpen(false)}>취소</Button>
+            <Button variant="outline" className="flex-1 h-12 rounded-xl font-black border-border bg-background text-foreground hover:bg-muted" onClick={() => setIsDeleteConfirmOpen(false)}>취소</Button>
             <Button 
-              className="flex-1 h-12 rounded-xl font-black bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20" 
+              className="flex-1 h-12 rounded-xl font-black bg-destructive hover:bg-destructive/90 text-destructive-foreground shadow-lg shadow-destructive/20" 
               onClick={() => {
                 if (deleteId) {
                   handleDeleteUser(deleteId);
@@ -1654,12 +1658,12 @@ export const EmployeeManagement: React.FC = () => {
       </Dialog>
 
       <Dialog open={isGrantCouponOpen} onOpenChange={setIsGrantCouponOpen}>
-        <DialogContent className="max-w-md p-0 overflow-hidden bg-card border-none rounded-3xl shadow-2xl flex flex-col max-h-[90dvh] w-[95%] text-white border border-white/5">
-          <DialogHeader className="p-8 pb-4 bg-emerald-500/5 shrink-0 border-b border-white/5">
+        <DialogContent className="max-w-md p-0 overflow-hidden bg-card border-border rounded-3xl shadow-2xl flex flex-col max-h-[90dvh] w-[95%] text-foreground border">
+          <DialogHeader className="p-8 pb-4 bg-emerald-500/5 shrink-0 border-b border-border">
             <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-emerald-500/20">
               <Gift className="w-6 h-6 text-white" />
             </div>
-            <DialogTitle className="text-2xl font-black tracking-tighter text-white">
+            <DialogTitle className="text-2xl font-black tracking-tighter text-foreground">
               칭찬 쿠폰 지급
             </DialogTitle>
             <DialogDescription className="text-sm font-bold text-muted-foreground">
@@ -1675,7 +1679,7 @@ export const EmployeeManagement: React.FC = () => {
                   type="date"
                   value={couponForm.date}
                   onChange={(e) => setCouponForm({...couponForm, date: e.target.value})}
-                  className="h-12 bg-white/5 border-white/5 rounded-xl font-bold text-white"
+                  className="h-12 bg-muted border-border rounded-xl font-bold text-foreground"
                 />
               </div>
               <div className="space-y-2">
@@ -1684,7 +1688,7 @@ export const EmployeeManagement: React.FC = () => {
                   type="time"
                   value={couponForm.time}
                   onChange={(e) => setCouponForm({...couponForm, time: e.target.value})}
-                  className="h-12 bg-white/5 border-white/5 rounded-xl font-bold text-white"
+                  className="h-12 bg-muted border-border rounded-xl font-bold text-foreground"
                 />
               </div>
             </div>
@@ -1692,12 +1696,12 @@ export const EmployeeManagement: React.FC = () => {
             <div className="space-y-2">
               <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">발생 장소</label>
               <div className="relative">
-                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/30" />
                 <Input 
                   placeholder="예: 제1공장 용접실"
                   value={couponForm.location}
                   onChange={(e) => setCouponForm({...couponForm, location: e.target.value})}
-                  className="h-12 pl-12 bg-white/5 border-white/5 rounded-xl font-bold text-white placeholder:text-white/20"
+                  className="h-12 pl-12 bg-muted border-border rounded-xl font-bold text-foreground placeholder:text-muted-foreground/30"
                 />
               </div>
             </div>
@@ -1708,7 +1712,7 @@ export const EmployeeManagement: React.FC = () => {
                 placeholder="어떤 칭찬을 해주고 싶으신가요?"
                 value={couponForm.reason}
                 onChange={(e) => setCouponForm({...couponForm, reason: e.target.value})}
-                className="w-full min-h-[100px] p-4 bg-white/5 border border-white/5 rounded-xl font-bold text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 text-white placeholder:text-white/20"
+                className="w-full min-h-[100px] p-4 bg-muted border border-border rounded-xl font-bold text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground placeholder:text-muted-foreground/30"
               />
             </div>
 
@@ -1718,10 +1722,10 @@ export const EmployeeManagement: React.FC = () => {
                 value={String(couponForm.points)} 
                 onValueChange={(v) => setCouponForm({...couponForm, points: parseInt(v)})}
               >
-                <SelectTrigger className="h-12 bg-white/5 border-white/5 rounded-xl font-black text-white">
+                <SelectTrigger className="h-12 bg-muted border-border rounded-xl font-black text-foreground">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-[#1c1c1e] rounded-xl border-white/5 text-white">
+                <SelectContent className="bg-card rounded-xl border-border text-foreground">
                   <SelectItem value="1">1 P (5,000원)</SelectItem>
                   <SelectItem value="2">2 P (10,000원)</SelectItem>
                   <SelectItem value="3">3 P (15,000원)</SelectItem>
@@ -1732,8 +1736,8 @@ export const EmployeeManagement: React.FC = () => {
             </div>
           </div>
 
-          <DialogFooter className="p-8 pt-4 bg-white/5 border-t border-white/5 flex flex-row gap-3">
-            <Button variant="outline" className="flex-1 h-12 rounded-xl font-black border-white/5 bg-white/5 text-white" onClick={() => setIsGrantCouponOpen(false)}>취소</Button>
+          <DialogFooter className="p-8 pt-4 bg-muted/20 border-t border-border flex flex-row gap-3">
+            <Button variant="outline" className="flex-1 h-12 rounded-xl font-black border-border bg-background text-foreground hover:bg-muted" onClick={() => setIsGrantCouponOpen(false)}>취소</Button>
             <Button className="flex-1 h-12 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-black shadow-lg shadow-emerald-500/20" onClick={handleGrantCoupon}>쿠폰 지급하기</Button>
           </DialogFooter>
         </DialogContent>

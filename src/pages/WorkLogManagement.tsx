@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { db, handleFirestoreError, OperationType } from '@/src/firebase';
+import { db, handleFirestoreError, OperationType } from '@/firebase';
 import { collection, query, where, orderBy, onSnapshot, getDocs, doc, updateDoc, addDoc } from 'firebase/firestore';
-import { TeamWorkLog, UserProfile, Department, IndividualWorkLog, Notification } from '@/src/types';
+import { TeamWorkLog, UserProfile, Department, IndividualWorkLog, Notification } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useAuth } from '@/src/components/AuthProvider';
+import { useAuth } from '@/components/AuthProvider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 export const WorkLogManagement: React.FC = () => {
@@ -56,7 +56,8 @@ export const WorkLogManagement: React.FC = () => {
 
   const canApproveAsLeader = profile && (
     ['TEAM_LEADER', 'DIRECTOR', 'CEO', 'GENERAL_MANAGER'].includes(profile.role) ||
-    (profile.position && ['팀장', '직장', '소장', '실장'].some(p => profile.position?.includes(p)))
+    (profile.position && ['팀장', '직장', '소장', '실장'].some(p => profile.position?.includes(p))) ||
+    profile.permissions?.includes('team_work_log_approve')
   );
 
   const canFinalApprove = profile && (
@@ -104,8 +105,9 @@ export const WorkLogManagement: React.FC = () => {
     
     // Security filtering: Leaders only see their own department's logs
     // Clerks, GMs, Directors, CEO see overall
-    const isGlobalAdmin = profile && ['CEO', 'GENERAL_MANAGER', 'CLERK', 'GENERAL_AFFAIRS', 'DIRECTOR'].includes(profile.role);
-    const departmentMatch = isGlobalAdmin || log.departmentId === profile?.departmentId;
+    const isGlobalAdmin = profile && ['CEO', 'GENERAL_MANAGER', 'CLERK', 'GENERAL_AFFAIRS', 'DIRECTOR', 'SAFETY_MANAGER'].includes(profile.role);
+    const hasMgmtPermission = profile?.permissions?.includes('work_log_mgmt');
+    const departmentMatch = (isGlobalAdmin || hasMgmtPermission) || log.departmentId === profile?.departmentId;
 
     return dateMatch && deptFilterMatch && statusMatch && departmentMatch;
   });
@@ -120,14 +122,14 @@ export const WorkLogManagement: React.FC = () => {
         approvedByLeaderAt: new Date().toISOString()
       });
 
-      // Notify Clerks/General Affairs
-      const clerksQ = query(collection(db, 'users'), where('role', 'in', ['CLERK', 'GENERAL_AFFAIRS']));
+      // Notify Clerks/General Affairs/General Manager
+      const clerksQ = query(collection(db, 'users'), where('role', 'in', ['CLERK', 'GENERAL_AFFAIRS', 'GENERAL_MANAGER']));
       const clerksSnap = await getDocs(clerksQ);
       
       const notifications = clerksSnap.docs.map(clerk => ({
         uid: clerk.id,
         title: '신규 작업일지 결재 알림',
-        message: `${log.userName}님의 작업일지를 팀장(${profile.displayName})이 결재하였습니다. 최종 확인 바랍니다.`,
+        message: `${log.userName}님의 작업일지를 ${profile.role === 'DIRECTOR' ? '직장' : '팀장'}(${profile.displayName})이 결재하였습니다. 최종 확인 바랍니다.`,
         type: 'SYSTEM',
         isRead: false,
         createdAt: new Date().toISOString(),
@@ -184,17 +186,17 @@ export const WorkLogManagement: React.FC = () => {
             <ChevronLeft className="w-6 h-6" />
           </Button>
           <div>
-            <h1 className="text-xl sm:text-2xl font-black text-white whitespace-nowrap">작업일지 관리</h1>
-            <p className="text-[10px] sm:text-xs font-bold text-white/40 uppercase tracking-wider">Work Log Management</p>
+            <h1 className="text-xl sm:text-2xl font-black text-foreground whitespace-nowrap">작업일지 관리</h1>
+            <p className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-wider">Work Log Management</p>
           </div>
         </div>
       </div>
 
-      <div className="bg-white/5 p-1 rounded-2xl flex gap-1 mb-6">
+      <div className="bg-muted p-1 rounded-2xl flex gap-1 mb-6">
         <button
           onClick={() => setActiveTab('PERSONAL')}
           className={`flex-1 px-6 py-3 rounded-xl transition-all font-black text-xs flex items-center justify-center gap-2 ${
-            activeTab === 'PERSONAL' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-white/40 hover:bg-white/5'
+            activeTab === 'PERSONAL' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-muted-foreground hover:bg-muted/50'
           }`}
         >
           <UserIcon className="w-4 h-4" />
@@ -203,7 +205,7 @@ export const WorkLogManagement: React.FC = () => {
         <button
           onClick={() => setActiveTab('TEAM')}
           className={`flex-1 px-6 py-3 rounded-xl transition-all font-black text-xs flex items-center justify-center gap-2 ${
-            activeTab === 'TEAM' ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5'
+            activeTab === 'TEAM' ? 'bg-card text-foreground shadow-sm shadow-black/5' : 'text-muted-foreground hover:bg-muted/50'
           }`}
         >
           <Users className="w-4 h-4" />
@@ -212,7 +214,7 @@ export const WorkLogManagement: React.FC = () => {
       </div>
 
       {/* Filter Section */}
-      <Card className="bg-white/5 border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl">
+      <Card className="bg-card border border-border rounded-[2.5rem] overflow-hidden shadow-2xl">
         <CardContent className="p-8 space-y-8">
           <div className="flex items-center gap-3 text-primary">
             <Filter className="w-5 h-5" />
@@ -221,52 +223,52 @@ export const WorkLogManagement: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-white/30 ml-1 uppercase">조회 기간</label>
+              <label className="text-[10px] font-black text-muted-foreground/60 ml-1 uppercase">조회 기간</label>
               <div className="flex items-center gap-2">
                 <Input 
                   type="date"
                   value={filters.startDate}
                   onChange={(e) => setFilters({...filters, startDate: e.target.value})}
-                  className="bg-white/5 border-white/10 text-white rounded-xl h-12 text-sm font-bold"
+                  className="bg-muted border-border text-foreground rounded-xl h-12 text-sm font-bold"
                 />
-                <ArrowRight className="w-4 h-4 text-white/20 shrink-0" />
+                <ArrowRight className="w-4 h-4 text-muted-foreground/40 shrink-0" />
                 <Input 
                   type="date"
                   value={filters.endDate}
                   onChange={(e) => setFilters({...filters, endDate: e.target.value})}
-                  className="bg-white/5 border-white/10 text-white rounded-xl h-12 text-sm font-bold"
+                  className="bg-muted border-border text-foreground rounded-xl h-12 text-sm font-bold"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-white/30 ml-1 uppercase">부서 / 팀</label>
+              <label className="text-[10px] font-black text-muted-foreground/60 ml-1 uppercase">부서 / 팀</label>
               <Select 
                 value={filters.departmentId} 
                 onValueChange={(val) => setFilters({...filters, departmentId: val})}
               >
-                <SelectTrigger className="bg-white/5 border-white/10 text-white rounded-xl h-12 text-sm font-bold">
+                <SelectTrigger className="bg-muted border-border text-foreground rounded-xl h-12 text-sm font-bold">
                   <SelectValue placeholder="전체" />
                 </SelectTrigger>
-                <SelectContent className="bg-[#1a1a1a] border-white/10 text-white">
+                <SelectContent className="bg-card border-border text-foreground">
                   <SelectItem value="ALL">전체 부서</SelectItem>
                   {departments.map(dept => (
-                    <SelectItem key={dept.id} value={dept.id!}>{dept.name}</SelectItem>
+                    <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-white/30 ml-1 uppercase">승인 상태</label>
+              <label className="text-[10px] font-black text-muted-foreground ml-1 uppercase">승인 상태</label>
               <Select 
                 value={filters.status} 
                 onValueChange={(val) => setFilters({...filters, status: val})}
               >
-                <SelectTrigger className="bg-white/5 border-white/10 text-white rounded-xl h-12 text-sm font-bold">
+                <SelectTrigger className="bg-muted border-border text-foreground rounded-xl h-12 text-sm font-bold">
                   <SelectValue placeholder="전체" />
                 </SelectTrigger>
-                <SelectContent className="bg-[#1a1a1a] border-white/10 text-white">
+                <SelectContent className="bg-card border-border text-foreground">
                   <SelectItem value="ALL">전체 상태</SelectItem>
                   <SelectItem value="PENDING">대기중</SelectItem>
                   <SelectItem value="LEADER_APPROVED">팀장확인</SelectItem>
@@ -280,7 +282,7 @@ export const WorkLogManagement: React.FC = () => {
 
       <div className="space-y-6">
         <div className="flex items-center justify-between px-2">
-          <h3 className="text-xl font-black text-white flex items-center gap-3">
+          <h3 className="text-xl font-black text-foreground flex items-center gap-3">
              <ClipboardList className="w-6 h-6 text-primary" />
              일지 결재 내역
              <Badge className="bg-primary/20 text-primary border-none font-black ml-2">{filteredPersonal.length}</Badge>
@@ -290,17 +292,17 @@ export const WorkLogManagement: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {activeTab === 'PERSONAL' ? (
             filteredPersonal.map((log) => (
-              <Card key={log.id} className="bg-white/5 border-white/10 rounded-3xl overflow-hidden hover:bg-white/[0.08] transition-all group">
+              <Card key={log.id} className="bg-card border border-border rounded-3xl overflow-hidden hover:bg-muted/50 transition-all group">
                 <div className="p-6 space-y-6">
                   {/* ... same log content ... */}
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-white/40 group-hover:bg-primary/20 group-hover:text-primary transition-all">
+                      <div className="w-12 h-12 bg-muted rounded-2xl flex items-center justify-center text-muted-foreground group-hover:bg-primary/20 group-hover:text-primary transition-all">
                         <UserIcon className="w-6 h-6" />
                       </div>
                       <div>
-                        <h4 className="text-lg font-black text-white">{log.userName}</h4>
-                        <p className="text-xs font-bold text-white/40">{log.departmentName} | {log.date}</p>
+                        <h4 className="text-lg font-black text-foreground">{log.userName}</h4>
+                        <p className="text-xs font-bold text-muted-foreground">{log.departmentName} | {log.date}</p>
                       </div>
                     </div>
                     <div className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest ${
@@ -312,30 +314,30 @@ export const WorkLogManagement: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="space-y-2 bg-white/[0.02] p-4 rounded-2xl border border-white/5">
+                  <div className="space-y-2 bg-muted/30 p-4 rounded-2xl border border-border">
                     {log.tasks.map((task, idx) => (
                       <div key={idx} className="flex justify-between items-center text-sm">
-                        <span className="text-white/60 font-medium">• {task.content}</span>
+                        <span className="text-foreground/80 font-medium">• {task.content}</span>
                         <span className="text-primary font-black ml-4">{task.hours}H</span>
                       </div>
                     ))}
-                    <div className="pt-2 border-t border-white/10 flex justify-between items-center mt-2">
-                      <span className="text-[10px] font-black text-white/30 uppercase">Today Store Out</span>
-                      <span className="text-sm font-black text-white flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-white/40" />
+                    <div className="pt-2 border-t border-border flex justify-between items-center mt-2">
+                      <span className="text-[10px] font-black text-muted-foreground uppercase">Today Store Out</span>
+                      <span className="text-sm font-black text-foreground flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-muted-foreground/60" />
                         {log.clockOutTime}
                       </span>
                     </div>
                   </div>
 
-                  <div className="flex gap-4 p-3 bg-white/5 rounded-xl text-[10px] font-bold text-white/20">
+                  <div className="flex gap-4 p-3 bg-muted/50 rounded-xl text-[10px] font-bold text-muted-foreground/60">
                     <div className="flex-1">
                       <p className="uppercase mb-1">팀장 결재</p>
-                      <p className="text-white/60">{log.approvedByLeaderName || '미결재'}</p>
+                      <p className="text-foreground/60">{log.approvedByLeaderName || '미결재'}</p>
                     </div>
                     <div className="flex-1">
                       <p className="uppercase mb-1">최종 승인</p>
-                      <p className="text-white/60">{log.approvedByClerkName || '미승인'}</p>
+                      <p className="text-foreground/60">{log.approvedByClerkName || '미승인'}</p>
                     </div>
                   </div>
 
@@ -364,7 +366,7 @@ export const WorkLogManagement: React.FC = () => {
                         setEditingLog(log);
                         setEditTasks([...log.tasks]);
                       }}
-                      className="flex-1 text-white/20 hover:text-white hover:bg-white/10 font-bold rounded-2xl h-12"
+                      className="flex-1 text-muted-foreground/40 hover:text-foreground hover:bg-muted font-bold rounded-2xl h-12"
                     >
                       내용 수정
                     </Button>
@@ -374,17 +376,17 @@ export const WorkLogManagement: React.FC = () => {
             ))
           ) : (
             teamLogs.map((log) => (
-              <Card key={log.id} className="bg-white/5 border-white/10 rounded-2xl overflow-hidden p-5 space-y-4">
+              <Card key={log.id} className="bg-card border border-border rounded-2xl overflow-hidden p-5 space-y-4">
                 <div className="flex justify-between items-start">
                   <div className="flex items-center gap-3">
                     <Users className="w-5 h-5 text-primary" />
                     <div>
-                      <h4 className="text-sm font-black text-white">{log.teamName}</h4>
-                      <p className="text-[10px] text-white/40">{log.date} 일지</p>
+                      <h4 className="text-sm font-black text-foreground">{log.teamName}</h4>
+                      <p className="text-[10px] text-muted-foreground">{log.date} 일지</p>
                     </div>
                   </div>
                 </div>
-                <div className="text-[10px] text-white/60">
+                <div className="text-[10px] text-muted-foreground/80">
                    {log.entries.length}명의 대원 작업 내용이 기록됨
                 </div>
               </Card>
@@ -394,7 +396,7 @@ export const WorkLogManagement: React.FC = () => {
       </div>
       {/* Edit Dialog */}
       <Dialog open={!!editingLog} onOpenChange={(open) => !open && setEditingLog(null)}>
-        <DialogContent className="bg-[#1a1a1a] border-white/10 text-white max-w-lg rounded-3xl">
+        <DialogContent className="bg-card border border-border text-foreground max-w-lg rounded-3xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-black">{editingLog?.userName} 작업일지 수정</DialogTitle>
           </DialogHeader>
@@ -408,7 +410,7 @@ export const WorkLogManagement: React.FC = () => {
                     newTasks[idx].content = e.target.value;
                     setEditTasks(newTasks);
                   }}
-                  className="bg-white/5 border-white/10 rounded-xl"
+                  className="bg-muted border-border rounded-xl text-foreground"
                   placeholder="작업 내용"
                 />
                 <div className="w-20 relative">
@@ -419,9 +421,9 @@ export const WorkLogManagement: React.FC = () => {
                       newTasks[idx].hours = e.target.value;
                       setEditTasks(newTasks);
                     }}
-                    className="bg-white/5 border-white/10 text-center rounded-xl pr-6 font-bold"
+                    className="bg-muted border-border text-center rounded-xl pr-6 font-bold text-foreground"
                   />
-                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-white/20 font-black">H</span>
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground/40 font-black">H</span>
                 </div>
               </div>
             ))}

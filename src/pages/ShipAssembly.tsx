@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/src/components/AuthProvider';
-import { db } from '@/src/firebase';
+import { useAuth } from '@/components/AuthProvider';
+import { db } from '@/firebase';
 import { doc, updateDoc, increment } from 'firebase/firestore';
-import { SHIP_PARTS } from '@/src/services/shipService';
+import { SHIP_PARTS } from '@/services/shipService';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';

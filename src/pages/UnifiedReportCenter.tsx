@@ -365,7 +365,7 @@ const UnifiedReportCenter: React.FC = () => {
   return (
     <div className="p-2 space-y-6 pb-24">
       {/* Header */}
-        <header className="flex flex-col gap-1 px-4 py-6 relative overflow-hidden bg-white/[0.02] rounded-[2.5rem] border border-white/5 shadow-2xl">
+        <header className="flex flex-col gap-1 px-4 py-6 relative overflow-hidden bg-muted/20 rounded-[2.5rem] border border-border shadow-2xl">
           <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-3xl -mr-10 -mt-10" />
           <div className="flex items-center gap-3 relative z-10">
             <div className="w-12 h-12 bg-primary/20 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20">
@@ -373,7 +373,7 @@ const UnifiedReportCenter: React.FC = () => {
             </div>
             <div>
               <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-0.5">Corporate Intelligence</p>
-              <h2 className="text-2xl font-black text-white tracking-tight">통합 보고서 시스템</h2>
+              <h2 className="text-2xl font-black text-foreground tracking-tight">통합 보고서 시스템</h2>
             </div>
           </div>
         </header>
@@ -387,20 +387,20 @@ const UnifiedReportCenter: React.FC = () => {
               className={cn(
                 "p-4 rounded-[2rem] border transition-all flex flex-col items-center gap-3 group active:scale-95",
                 reportType === item.id 
-                  ? "bg-white/10 border-white/20 shadow-xl shadow-black/40 scale-[1.02]" 
-                  : "bg-white/[0.02] border-white/5 hover:bg-white/[0.05]"
+                  ? "bg-muted border-primary shadow-xl shadow-black/10 scale-[1.02]" 
+                  : "bg-card border-border hover:bg-muted/50"
               )}
             >
               <div className={cn(
                 "w-12 h-12 flex items-center justify-center rounded-2xl transition-transform group-hover:scale-110",
                 item.bg,
-                reportType === item.id ? "shadow-lg shadow-black/20" : ""
+                reportType === item.id ? "shadow-lg shadow-black/10" : ""
               )}>
                 <item.icon className={cn("w-6 h-6", item.color)} />
               </div>
               <span className={cn(
                 "text-xs font-black transition-colors leading-tight text-center",
-                reportType === item.id ? "text-white" : "text-white/30 group-hover:text-white/60"
+                reportType === item.id ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"
               )}>
                 {item.label}
               </span>
@@ -409,38 +409,38 @@ const UnifiedReportCenter: React.FC = () => {
         </div>
 
         {/* Filters Card */}
-        <Card className="bg-white/5 border-white/5 rounded-[2rem] overflow-hidden">
-          <CardHeader className="p-6 border-b border-white/5 bg-white/5">
-            <CardTitle className="text-sm font-black text-white flex items-center gap-2">
+        <Card className="bg-card border-border rounded-[2rem] overflow-hidden">
+          <CardHeader className="p-6 border-b border-border bg-muted/30">
+            <CardTitle className="text-sm font-black text-foreground flex items-center gap-2">
               <Filter className="w-4 h-4 text-primary" />
               보고서 상세 조건 설정
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-6 space-y-6">
+          <CardContent className="p-6 space-y-6 text-foreground">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               {/* Date Filters */}
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">조회 기간 (시작)</label>
+                  <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">조회 기간 (시작)</label>
                   <div className="relative">
-                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/30" />
                     <Input 
                       type="date"
                       value={dateRange.start}
                       onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-                      className="bg-black/20 border-white/5 h-12 pl-12 rounded-xl text-white font-bold"
+                      className="bg-background border-border h-12 pl-12 rounded-xl text-foreground font-bold"
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">조회 기간 (종료)</label>
+                  <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">조회 기간 (종료)</label>
                   <div className="relative">
-                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/30" />
                     <Input 
                       type="date"
                       value={dateRange.end}
                       onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-                      className="bg-black/20 border-white/5 h-12 pl-12 rounded-xl text-white font-bold"
+                      className="bg-background border-border h-12 pl-12 rounded-xl text-foreground font-bold"
                     />
                   </div>
                 </div>
@@ -449,27 +449,27 @@ const UnifiedReportCenter: React.FC = () => {
               {/* Name & Dept Filters */}
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">대상 성명 (검색어)</label>
+                  <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">대상 성명 (검색어)</label>
                   <div className="relative">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/30" />
                     <Input 
                       placeholder="성명 검색..."
                       value={targetName}
                       onChange={(e) => setTargetName(e.target.value)}
-                      className="bg-black/20 border-white/5 h-12 pl-12 rounded-xl text-white font-bold placeholder:text-white/10"
+                      className="bg-background border-border h-12 pl-12 rounded-xl text-foreground font-bold placeholder:text-muted-foreground/10"
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">대상 부서/팀</label>
+                  <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">대상 부서/팀</label>
                   <Select value={targetDept} onValueChange={setTargetDept}>
-                    <SelectTrigger className="bg-black/20 border-white/5 h-12 rounded-xl text-white font-bold text-xs ring-0">
+                    <SelectTrigger className="bg-background border-border h-12 rounded-xl text-foreground font-bold text-xs ring-0">
                       <div className="flex items-center gap-2">
-                        <Building2 className="w-4 h-4 text-white/30" />
+                        <Building2 className="w-4 h-4 text-muted-foreground/30" />
                         <SelectValue placeholder="전체 부서" />
                       </div>
                     </SelectTrigger>
-                    <SelectContent className="bg-slate-900 border-white/10 text-white">
+                    <SelectContent className="bg-card border-border text-foreground">
                       <SelectItem value="ALL">전체 부서</SelectItem>
                       {departments.map(d => (
                         <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
@@ -493,7 +493,7 @@ const UnifiedReportCenter: React.FC = () => {
                 onClick={() => handleExport('PDF')}
                 disabled={loading}
                 variant="outline"
-                className="flex-1 border-white/10 bg-white/5 hover:bg-white/10 text-white font-black rounded-2xl h-14 gap-2 text-base transition-all active:scale-95"
+                className="flex-1 border-border bg-muted hover:bg-muted/80 text-foreground font-black rounded-2xl h-14 gap-2 text-base transition-all active:scale-95"
               >
                 {loading ? <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" /> : <FileText className="w-6 h-6 text-rose-500" />}
                 PDF 리포트 생성
@@ -503,8 +503,8 @@ const UnifiedReportCenter: React.FC = () => {
             <div className="mt-4 p-4 bg-primary/5 rounded-2xl border border-primary/10 flex gap-3">
               <FileIcon className="w-5 h-5 text-primary shrink-0 mt-0.5" />
               <div className="space-y-1">
-                <p className="text-xs font-black text-white/80 tracking-tight">보고서 생성 안내</p>
-                <p className="text-[10px] font-bold text-white/40 leading-relaxed">
+                <p className="text-xs font-black text-foreground uppercase tracking-tight">보고서 생성 안내</p>
+                <p className="text-[10px] font-bold text-muted-foreground leading-relaxed">
                   필터링 조건에 따라 최대 500건의 데이터를 추출합니다. 데이터가 많은 경우 기간을 좁게 설정하여 추출해 주세요.
                   성명 및 부서 필터는 선택 사항이며, 입력 시 해당 조건에 맞는 데이터만 포함됩니다.
                 </p>

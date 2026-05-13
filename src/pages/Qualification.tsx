@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/src/components/AuthProvider';
-import { db } from '@/src/firebase';
+import { useAuth } from '@/components/AuthProvider';
+import { db } from '@/firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -111,27 +111,27 @@ export const Qualification: React.FC = () => {
       <header className="flex flex-col gap-1">
         <div className="flex items-center gap-2">
           <div className="w-2 h-6 bg-primary rounded-full" />
-          <h2 className="text-3xl font-black tracking-tighter text-white">자격 및 안전 장비</h2>
+          <h2 className="text-3xl font-black tracking-tighter text-foreground">자격 및 안전 장비</h2>
         </div>
       </header>
 
       <section className="space-y-4">
-        <h3 className="text-sm font-black flex items-center gap-2 text-white ml-2 uppercase tracking-widest">
+        <h3 className="text-sm font-black flex items-center gap-2 text-foreground ml-2 uppercase tracking-widest">
           <Award className="w-4 h-4 text-primary" /> 보유 자격 및 면허
         </h3>
         <div className="grid gap-4">
           {qualifications.map((q) => (
-            <Card key={q.id} className="border-none shadow-none bg-card rounded-3xl overflow-hidden border border-white/5 group transition-all">
+            <Card key={q.id} className="border-none shadow-none bg-card rounded-3xl overflow-hidden border border-border group transition-all">
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/5 group-hover:bg-primary/5 transition-colors">
+                    <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center border border-border group-hover:bg-primary/5 transition-colors">
                       {getCategoryIcon(q.category)}
                     </div>
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-black text-white">{q.name}</span>
-                        <Badge variant="outline" className="text-[9px] font-black h-5 uppercase px-2 border-white/10 text-muted-foreground">{q.level}</Badge>
+                        <span className="text-sm font-black text-foreground">{q.name}</span>
+                        <Badge variant="outline" className="text-[9px] font-black h-5 uppercase px-2 border-border text-muted-foreground">{q.level}</Badge>
                       </div>
                       <p className="text-[10px] font-bold text-muted-foreground">{q.issuer}</p>
                     </div>
@@ -143,7 +143,7 @@ export const Qualification: React.FC = () => {
                     )}>
                       {isExpired(q.expiryDate) ? '만료됨' : '유효함'}
                     </Badge>
-                    <span className="text-[9px] font-bold text-white/20">만료일: {q.expiryDate}</span>
+                    <span className="text-[9px] font-bold text-muted-foreground/30">만료일: {q.expiryDate}</span>
                   </div>
                 </div>
               </CardContent>
@@ -153,10 +153,10 @@ export const Qualification: React.FC = () => {
       </section>
 
       <section className="space-y-4 pt-4">
-        <h3 className="text-sm font-black flex items-center gap-2 text-white ml-2 uppercase tracking-widest">
+        <h3 className="text-sm font-black flex items-center gap-2 text-foreground ml-2 uppercase tracking-widest">
           <HardHat className="w-4 h-4 text-primary" /> 안전 장비(PPE) 점검 현황
         </h3>
-        <Card className="border-none shadow-none bg-card rounded-[2.5rem] overflow-hidden border border-white/5">
+        <Card className="border-none shadow-none bg-card rounded-[2.5rem] overflow-hidden border border-border">
           <CardContent className="p-6">
             <div className="space-y-6">
               {ppeItems.map((item) => (
@@ -171,28 +171,28 @@ export const Qualification: React.FC = () => {
                       {item.status === 'SAFE' ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
                     </div>
                     <div className="space-y-0.5">
-                      <span className="text-xs font-black text-white">{item.name}</span>
+                      <span className="text-xs font-black text-foreground">{item.name}</span>
                       <div className="flex items-center gap-2">
-                        <span className="text-[9px] font-bold text-white/40 uppercase tracking-widest">{item.serialNumber}</span>
+                        <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">{item.serialNumber}</span>
                       </div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-[9px] font-black text-white/20 uppercase tracking-widest leading-none mb-1">다음 점검일</div>
+                    <div className="text-[9px] font-black text-muted-foreground/40 uppercase tracking-widest leading-none mb-1">다음 점검일</div>
                     <div className={cn(
                       "text-xs font-black tracking-tight",
-                      item.status === 'SAFE' ? "text-white" : "text-amber-500"
+                      item.status === 'SAFE' ? "text-foreground" : "text-amber-500"
                     )}>{item.nextInspection}</div>
                   </div>
                 </div>
               ))}
             </div>
             
-            <div className="mt-8 p-6 bg-white/5 rounded-3xl border border-white/5">
+            <div className="mt-8 p-6 bg-muted rounded-3xl border border-border">
                <div className="flex items-start gap-3">
                  <ShieldAlert className="w-4 h-4 text-primary mt-0.5" />
                  <div className="space-y-1">
-                   <p className="text-[10px] font-black text-white">장비 점검 알림</p>
+                   <p className="text-[10px] font-black text-foreground">장비 점검 알림</p>
                    <p className="text-[9px] font-bold text-muted-foreground leading-relaxed">
                      조선소 안전 규정에 따라 고소 작업용 안전 벨트와 용접면은 6개월마다 정기 점검이 필수입니다. 
                      만료 15일 전부터 점검 요청이 가능합니다.

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { db } from '@/src/firebase';
+import { db } from '@/firebase';
 import { collection, onSnapshot, query, where, addDoc } from 'firebase/firestore';
-import { Training, TrainingResult, QuizQuestion } from '@/src/types';
-import { useAuth } from '@/src/components/AuthProvider';
+import { Training, TrainingResult, QuizQuestion } from '@/types';
+import { useAuth } from '@/components/AuthProvider';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -155,7 +155,7 @@ export const TrainingList: React.FC = () => {
   return (
     <div className="space-y-6 pb-24 px-1">
       <header className="py-6">
-        <h2 className="text-3xl font-black tracking-tight text-white leading-tight">직무 교육</h2>
+        <h2 className="text-3xl font-black tracking-tight text-foreground leading-tight">직무 교육</h2>
         <p className="text-muted-foreground font-bold">안전한 업무를 위한 필수 코스</p>
       </header>
 
@@ -163,27 +163,27 @@ export const TrainingList: React.FC = () => {
         {trainings.map(t => {
           const result = results.find(r => r.trainingId === t.id);
           return (
-            <Card key={t.id} className="border-none shadow-none bg-card rounded-2xl overflow-hidden border border-white/5">
+            <Card key={t.id} className="border-none shadow-none bg-card rounded-2xl overflow-hidden border border-border">
               <CardContent className="p-6 space-y-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-2 flex-1">
-                    <Badge className={cn("rounded-lg font-black text-[10px]", result?.isPassed ? "bg-emerald-500/20 text-emerald-500" : "bg-white/5 text-muted-foreground")}>
+                    <Badge className={cn("rounded-lg font-black text-[10px]", result?.isPassed ? "bg-emerald-500/20 text-emerald-500" : "bg-muted text-muted-foreground")}>
                        {result?.isPassed ? '이수완료' : '교육중'}
                     </Badge>
-                    <h3 className="text-lg font-black text-white tracking-tight">{t.title}</h3>
+                    <h3 className="text-lg font-black text-foreground tracking-tight">{t.title}</h3>
                     <p className="text-xs text-muted-foreground font-bold line-clamp-1">{t.description}</p>
                   </div>
-                  <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-muted-foreground">
+                  <div className="w-12 h-12 bg-muted rounded-2xl flex items-center justify-center text-muted-foreground">
                     <BookOpen className="w-6 h-6" />
                   </div>
                 </div>
-                <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                <div className="flex items-center justify-between pt-4 border-t border-border">
                    <div className="flex gap-4">
                       <span className="text-[10px] font-black text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" /> {t.timeLimit}분</span>
                       <span className="text-[10px] font-black text-muted-foreground flex items-center gap-1"><HelpCircle className="w-3 h-3" /> {t.questions?.length}문항</span>
                    </div>
                    <Button 
-                    className={cn("rounded-xl h-10 px-4 font-black shadow-none", result?.isPassed ? "bg-white/5 text-muted-foreground" : "bg-primary text-white")}
+                    className={cn("rounded-xl h-10 px-4 font-black shadow-none", result?.isPassed ? "bg-muted text-muted-foreground" : "bg-primary text-white hover:bg-primary/90")}
                     onClick={() => setSelectedTraining(t)}
                    >
                      {result?.isPassed ? '학습하기' : '교육중'}
@@ -195,14 +195,14 @@ export const TrainingList: React.FC = () => {
         })}
         {trainings.length === 0 && (
           <div className="py-20 text-center opacity-30">
-            <Star className="w-16 h-16 mx-auto mb-4" />
-            <p className="font-black text-sm">등록된 교육이 없습니다</p>
+            <Star className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+            <p className="font-black text-sm text-muted-foreground">등록된 교육이 없습니다</p>
           </div>
         )}
       </div>
 
       <Dialog open={!!selectedTraining && !isExamMode} onOpenChange={(open) => !open && setSelectedTraining(null)}>
-        <DialogContent className="bg-card border-none rounded-3xl text-white max-w-[95vw] sm:max-w-md p-0 overflow-hidden flex flex-col max-h-[90vh]">
+        <DialogContent className="bg-card border border-border rounded-3xl text-foreground max-w-[95vw] sm:max-w-md p-0 overflow-hidden flex flex-col max-h-[90vh] shadow-2xl">
           {selectedTraining && (
             <>
               <DialogHeader className="p-8 pb-4">
@@ -210,22 +210,22 @@ export const TrainingList: React.FC = () => {
                 <DialogDescription className="text-muted-foreground font-bold">충분히 학습 후 시험에 응시하세요</DialogDescription>
               </DialogHeader>
               <div className="p-8 overflow-y-auto flex-1 space-y-6">
-                 <div className="markdown-body text-sm font-bold text-muted-foreground leading-relaxed">
+                 <div className="markdown-body text-sm font-bold text-foreground leading-relaxed">
                    <ReactMarkdown>{selectedTraining.content}</ReactMarkdown>
                  </div>
                  {selectedTraining.videoUrl && (
-                   <Button className="w-full h-14 bg-white/5 text-white rounded-2xl gap-2" onClick={() => window.open(selectedTraining.videoUrl, '_blank')}>
+                   <Button className="w-full h-14 bg-muted text-foreground rounded-2xl gap-2 hover:bg-muted/80" onClick={() => window.open(selectedTraining.videoUrl, '_blank')}>
                      <PlayCircle className="w-5 h-5" /> 시청각 자료 보기
                    </Button>
                  )}
               </div>
-              <div className="p-6 border-t border-white/5 space-y-2">
+              <div className="p-6 border-t border-border space-y-2">
                  {(() => {
                     const attempts = results.filter(r => r.trainingId === selectedTraining.id).length;
                     return (
                       <>
                         <Button 
-                          className="w-full h-16 bg-primary text-white font-black rounded-2xl disabled:opacity-50" 
+                          className="w-full h-16 bg-primary text-white font-black rounded-2xl disabled:opacity-50 shadow-lg shadow-primary/20" 
                           onClick={() => handleStartExam()}
                           disabled={attempts >= 2}
                         >
@@ -244,19 +244,19 @@ export const TrainingList: React.FC = () => {
       </Dialog>
 
       <Dialog open={isExamMode} onOpenChange={setIsExamMode}>
-        <DialogContent className="bg-[#1c1c1e] border-none rounded-3xl text-white p-0 overflow-hidden flex flex-col h-full max-h-[100vh] sm:max-h-[90vh]">
-           <DialogHeader className="p-8 bg-white/5">
+        <DialogContent className="bg-card border border-border rounded-3xl text-foreground p-0 overflow-hidden flex flex-col h-full max-h-[100vh] sm:max-h-[90vh] shadow-2xl">
+           <DialogHeader className="p-8 bg-muted/30 border-b border-border">
               <div className="flex justify-between items-center w-full">
                  <DialogTitle className="font-black">평가 수행</DialogTitle>
-                 <Badge className="bg-primary/20 text-primary border-none flex gap-2 font-black">
-                    <Clock className="w-3 h-3" /> {formatTime(timeLeft)}
+                 <Badge className="bg-primary/10 text-primary border-none flex gap-2 font-black h-8">
+                    <Clock className="w-3.5 h-3.5" /> {formatTime(timeLeft)}
                  </Badge>
               </div>
            </DialogHeader>
            <div className="p-8 flex-1 overflow-y-auto space-y-8">
               {activeQuestions.map((q, idx) => (
                 <div key={q.id} className="space-y-4">
-                   <h4 className="text-base font-black text-white">{idx+1}. {q.question}</h4>
+                   <h4 className="text-base font-black text-foreground">{idx+1}. {q.question}</h4>
                    <div className="grid gap-2">
                       {q.options.map((opt, oIdx) => (
                         <button 
@@ -264,7 +264,7 @@ export const TrainingList: React.FC = () => {
                           onClick={() => setCurrentAnswers({...currentAnswers, [q.id]: oIdx})}
                           className={cn(
                             "p-4 rounded-2xl text-left font-bold text-xs border transition-all",
-                            currentAnswers[q.id] === oIdx ? "bg-primary border-primary text-white" : "bg-white/5 border-white/5 text-muted-foreground"
+                            currentAnswers[q.id] === oIdx ? "bg-primary border-primary text-white shadow-lg shadow-primary/20" : "bg-muted border-border text-foreground hover:bg-muted/80"
                           )}
                         >
                           {oIdx + 1}. {String(opt).replace(/^\d+[\.\)\s]+/, '')}
@@ -274,8 +274,8 @@ export const TrainingList: React.FC = () => {
                 </div>
               ))}
            </div>
-           <div className="p-6 border-t border-white/5">
-             <Button className="w-full h-16 bg-white text-black font-black rounded-2xl" onClick={() => handleSubmitExam()}>
+           <div className="p-6 border-t border-border">
+             <Button className="w-full h-16 bg-foreground text-background font-black rounded-2xl shadow-xl active:scale-95 transition-all" onClick={() => handleSubmitExam()}>
                제출 완료
              </Button>
            </div>
@@ -283,17 +283,17 @@ export const TrainingList: React.FC = () => {
       </Dialog>
 
       <Dialog open={isResultOpen} onOpenChange={setIsResultOpen}>
-        <DialogContent className="bg-card border-none rounded-3xl text-white max-w-sm text-center p-8 space-y-6">
+        <DialogContent className="bg-card border border-border rounded-3xl text-foreground max-w-sm text-center p-8 space-y-6 shadow-2xl">
            {lastResult && (
              <>
-               <div className={cn("w-20 h-20 mx-auto rounded-3xl flex items-center justify-center", lastResult.isPassed ? "bg-emerald-500" : "bg-red-500")}>
+               <div className={cn("w-20 h-20 mx-auto rounded-3xl flex items-center justify-center shadow-lg", lastResult.isPassed ? "bg-emerald-500" : "bg-red-500")}>
                   {lastResult.isPassed ? <Trophy className="w-10 h-10 text-white" /> : <AlertCircle className="w-10 h-10 text-white" />}
                </div>
                <div className="space-y-1">
                   <h3 className="text-2xl font-black">{lastResult.isPassed ? '시험 합격!' : '시험 불합격'}</h3>
                   <p className="text-muted-foreground font-bold">{lastResult.score}점 ({lastResult.totalQuestions}문항 응시)</p>
                </div>
-               <Button className="w-full h-14 bg-primary text-white font-black rounded-2xl" onClick={() => setIsResultOpen(false)}>
+               <Button className="w-full h-14 bg-primary text-white font-black rounded-2xl shadow-lg shadow-primary/20" onClick={() => setIsResultOpen(false)}>
                   확인
                </Button>
              </>

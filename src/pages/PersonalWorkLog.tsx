@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/src/components/AuthProvider';
-import { db } from '@/src/firebase';
+import { useAuth } from '@/components/AuthProvider';
+import { db } from '@/firebase';
 import { collection, addDoc, query, where, orderBy, onSnapshot, limit, serverTimestamp } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,9 +20,9 @@ import {
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
-import { IndividualWorkLog } from '@/src/types';
+import { IndividualWorkLog } from '@/types';
 
-import { handleFirestoreError, OperationType } from '@/src/lib/errorHandlers';
+import { handleFirestoreError, OperationType } from '@/lib/errorHandlers';
 
 export const PersonalWorkLog: React.FC = () => {
   const { profile } = useAuth();
@@ -32,6 +32,17 @@ export const PersonalWorkLog: React.FC = () => {
   const [tasks, setTasks] = useState<{ content: string; hours: string }[]>([{ content: '', hours: '' }]);
   const [clockOutTime, setClockOutTime] = useState('18:00');
   const [recentLogs, setRecentLogs] = useState<IndividualWorkLog[]>([]);
+
+  const handleCopyPreviousLog = () => {
+    if (recentLogs.length > 0) {
+      const lastLog = recentLogs[0];
+      setTasks(lastLog.tasks.map(t => ({ ...t })));
+      setClockOutTime(lastLog.clockOutTime);
+      toast.success('전일 작업 내용을 불러왔습니다.');
+    } else {
+      toast.error('이전 기록이 없습니다.');
+    }
+  };
 
   useEffect(() => {
     if (!profile) return;
@@ -109,34 +120,46 @@ export const PersonalWorkLog: React.FC = () => {
           <ChevronLeft className="w-6 h-6" />
         </Button>
         <div>
-          <h1 className="text-2xl font-black text-white">나의 작업일지 작성</h1>
-          <p className="text-sm text-white/40 font-bold">오늘의 업무 내역을 기록해 주세요.</p>
+          <h1 className="text-2xl font-black text-foreground">나의 작업일지 작성</h1>
+          <p className="text-sm text-muted-foreground font-bold">오늘의 업무 내역을 기록해 주세요.</p>
         </div>
       </div>
 
+      <div className="flex justify-end pr-1">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={handleCopyPreviousLog}
+          className="bg-muted border-border text-foreground font-bold gap-2 rounded-xl text-xs"
+        >
+          <ClipboardList className="w-3.5 h-3.5 text-primary" />
+          전일 데이터 복사
+        </Button>
+      </div>
+
       <form onSubmit={handleSubmit} className="space-y-6">
-        <Card className="bg-white/5 border-white/10 rounded-3xl overflow-hidden shadow-xl">
+        <Card className="bg-card border-border rounded-3xl overflow-hidden shadow-xl">
           <CardContent className="p-6 space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">작업 일자</label>
+                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">작업 일자</label>
                 <div className="relative">
                   <Input 
                     type="date"
                     value={logDate}
                     onChange={(e) => setLogDate(e.target.value)}
-                    className="bg-white/5 border-white/10 rounded-xl h-12 font-black"
+                    className="bg-muted border-border rounded-xl h-12 font-black text-foreground"
                   />
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">퇴근 시간</label>
+                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">퇴근 시간</label>
                 <div className="relative">
                   <Input 
                     type="time"
                     value={clockOutTime}
                     onChange={(e) => setClockOutTime(e.target.value)}
-                    className="bg-white/5 border-white/10 rounded-xl h-12 font-black"
+                    className="bg-muted border-border rounded-xl h-12 font-black text-foreground"
                   />
                 </div>
               </div>
@@ -164,7 +187,7 @@ export const PersonalWorkLog: React.FC = () => {
                         placeholder="작업 내용을 입력하세요"
                         value={task.content}
                         onChange={(e) => updateTask(idx, 'content', e.target.value)}
-                        className="bg-white/5 border-white/10 rounded-xl text-sm font-semibold"
+                        className="bg-muted border-border rounded-xl text-sm font-semibold text-foreground"
                       />
                     </div>
                     <div className="w-20 relative">
@@ -172,9 +195,9 @@ export const PersonalWorkLog: React.FC = () => {
                         placeholder="시간"
                         value={task.hours}
                         onChange={(e) => updateTask(idx, 'hours', e.target.value)}
-                        className="bg-white/5 border-white/10 rounded-xl text-center font-black pr-6"
+                        className="bg-muted border-border rounded-xl text-center font-black pr-6 text-foreground"
                       />
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-black text-white/20">H</span>
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-black text-muted-foreground/30">H</span>
                     </div>
                     {tasks.length > 1 && (
                       <Button 
@@ -182,7 +205,7 @@ export const PersonalWorkLog: React.FC = () => {
                         variant="ghost" 
                         size="icon" 
                         onClick={() => handleRemoveTask(idx)}
-                        className="text-white/10 hover:text-red-500"
+                        className="text-muted-foreground/30 hover:text-red-500"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -192,9 +215,9 @@ export const PersonalWorkLog: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white/[0.02] rounded-2xl p-4 border border-white/5 flex gap-3">
-              <AlertCircle className="w-5 h-5 text-white/20 shrink-0 mt-0.5" />
-              <p className="text-[11px] text-white/40 font-medium leading-relaxed">
+            <div className="bg-muted rounded-2xl p-4 border border-border flex gap-3">
+              <AlertCircle className="w-5 h-5 text-primary/40 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-muted-foreground font-medium leading-relaxed">
                 입력하신 내용은 소속 팀장/직장님께 전달되어 확인 후 최종 승인됩니다. <br/>
                 정확한 시간을 입력해 주세요.
               </p>
@@ -214,30 +237,30 @@ export const PersonalWorkLog: React.FC = () => {
 
       {/* Recent History */}
       <div className="space-y-4 pt-4">
-        <h3 className="text-sm font-black text-white/40 uppercase tracking-widest flex items-center gap-2">
+        <h3 className="text-sm font-black text-muted-foreground uppercase tracking-widest flex items-center gap-2">
           <FileText className="w-4 h-4" />
           최근 제출 내역
         </h3>
         <div className="space-y-3">
           {recentLogs.length === 0 ? (
-            <div className="py-8 text-center border border-dashed border-white/5 rounded-3xl">
-              <p className="text-white/20 text-xs font-bold">최근 제출 기록이 없습니다.</p>
+            <div className="py-8 text-center border border-dashed border-border rounded-3xl">
+              <p className="text-muted-foreground/40 text-xs font-bold">최근 제출 기록이 없습니다.</p>
             </div>
           ) : (
             recentLogs.map(log => (
-              <div key={log.id} className="bg-white/5 border border-white/5 p-4 rounded-2xl flex items-center justify-between">
+              <div key={log.id} className="bg-card border border-border p-4 rounded-2xl flex items-center justify-between shadow-sm">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-black text-white">{log.date}</span>
-                    <span className="text-[10px] font-bold text-white/20">{log.clockOutTime} 퇴근</span>
+                    <span className="text-sm font-black text-foreground">{log.date}</span>
+                    <span className="text-[10px] font-bold text-muted-foreground/60">{log.clockOutTime} 퇴근</span>
                   </div>
                   <div className="flex gap-2">
                     {log.tasks.slice(0, 2).map((t, i) => (
-                      <span key={i} className="text-[10px] text-white/40 bg-white/5 px-2 py-0.5 rounded-md truncate max-w-[100px]">
+                      <span key={i} className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-md truncate max-w-[100px]">
                         {t.content}
                       </span>
                     ))}
-                    {log.tasks.length > 2 && <span className="text-[10px] text-white/20">...</span>}
+                    {log.tasks.length > 2 && <span className="text-[10px] text-muted-foreground/30">...</span>}
                   </div>
                 </div>
                 <div className={`px-3 py-1 rounded-full text-[10px] font-black border ${

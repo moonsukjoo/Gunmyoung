@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useAuth } from '@/src/components/AuthProvider';
-import { db } from '@/src/firebase';
-import { collection, addDoc, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { useAuth } from '@/components/AuthProvider';
+import { db } from '@/firebase';
+import { collection, addDoc, query, where, getDocs, doc, getDoc, orderBy, limit } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,7 +20,7 @@ import {
   Loader2,
   Table as TableIcon
 } from 'lucide-react';
-import { TeamWorkLog, WorkLogEntry, UserProfile } from '@/src/types';
+import { TeamWorkLog, WorkLogEntry, UserProfile } from '@/types';
 
 export const WorkLog: React.FC = () => {
   const { profile } = useAuth();
@@ -31,13 +31,73 @@ export const WorkLog: React.FC = () => {
   const [logDate, setLogDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [entries, setEntries] = useState<WorkLogEntry[]>([]);
   const [teamName, setTeamName] = useState('');
+  const [previousLog, setPreviousLog] = useState<TeamWorkLog | null>(null);
 
   useEffect(() => {
     if (profile) {
       setTeamName(profile.departmentName || '');
       loadTeamMembers(profile.departmentName || '');
+      loadPreviousLog(profile.departmentId || '');
     }
   }, [profile]);
+
+  const loadPreviousLog = async (deptId: string) => {
+    if (!deptId) return;
+    try {
+      const q = query(
+        collection(db, 'teamWorkLogs'),
+        where('teamId', '==', deptId),
+        orderBy('date', 'desc'),
+        limit(1)
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        setPreviousLog({ id: snap.docs[0].id, ...snap.docs[0].data() } as TeamWorkLog);
+      }
+    } catch (error) {
+      console.error('Error loading previous team log:', error);
+    }
+  };
+
+  const handleCopyPreviousLog = () => {
+    if (previousLog) {
+      // Create a map of existing members to easily match them
+      const membersMap = new Map(teamMembers.map(m => [m.displayName, m]));
+      
+      // Map previous entries selectively
+      const copiedEntries = previousLog.entries.map(prevEntry => {
+        // Find if this person is still in the team
+        const member = membersMap.get(prevEntry.userName);
+        if (member) {
+          return {
+            userName: prevEntry.userName,
+            tasks: prevEntry.tasks.map(t => ({ ...t })),
+            clockOutTime: prevEntry.clockOutTime
+          };
+        }
+        return null;
+      }).filter(Boolean) as WorkLogEntry[];
+
+      if (copiedEntries.length > 0) {
+        // Also add members who weren't in the previous log as empty entries
+        const copiedNames = new Set(copiedEntries.map(e => e.userName));
+        const missingMembers = teamMembers
+          .filter(m => !copiedNames.has(m.displayName))
+          .map(m => ({
+            userName: m.displayName,
+            tasks: [{ content: '', hours: '' }],
+            clockOutTime: '18:00'
+          }));
+
+        setEntries([...copiedEntries, ...missingMembers]);
+        toast.success(`전일 데이터(${previousLog.date})를 불러왔습니다.`);
+      } else {
+        toast.error('불러올 수 있는 이전 데이터가 없습니다.');
+      }
+    } else {
+      toast.error('이전 기록이 없습니다.');
+    }
+  };
 
   const loadTeamMembers = async (deptName: string) => {
     if (!deptName) return;
@@ -151,35 +211,35 @@ export const WorkLog: React.FC = () => {
             variant="ghost" 
             size="icon" 
             onClick={() => navigate(-1)}
-            className="w-10 h-10 rounded-xl bg-white/5 text-white"
+            className="w-10 h-10 rounded-xl bg-muted text-foreground"
           >
             <ChevronLeft className="w-5 h-5" />
           </Button>
           <div>
-            <h1 className="text-xl font-black text-white">팀 일일작업일지</h1>
-            <p className="text-[10px] font-bold text-white/40">{teamName} | {logDate}</p>
+            <h1 className="text-xl font-black text-foreground">팀 일일작업일지</h1>
+            <p className="text-[10px] font-bold text-muted-foreground">{teamName} | {logDate}</p>
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="space-y-1.5 p-4 bg-white/5 rounded-2xl border border-white/5">
-          <label className="text-[10px] font-black text-white/40 uppercase ml-1">작업 일자</label>
+        <div className="space-y-1.5 p-4 bg-muted rounded-2xl border border-border">
+          <label className="text-[10px] font-black text-muted-foreground uppercase ml-1">작업 일자</label>
           <Input 
             type="date"
             value={logDate}
             onChange={(e) => setLogDate(e.target.value)}
-            className="bg-transparent border-none text-white font-black p-0 h-auto focus-visible:ring-0 text-lg"
+            className="bg-transparent border-none text-foreground font-black p-0 h-auto focus-visible:ring-0 text-lg"
           />
         </div>
-        <div className="space-y-1.5 p-4 bg-white/5 rounded-2xl border border-white/5">
-          <label className="text-[10px] font-black text-white/40 uppercase ml-1">팀 이름</label>
+        <div className="space-y-1.5 p-4 bg-muted rounded-2xl border border-border">
+          <label className="text-[10px] font-black text-muted-foreground uppercase ml-1">팀 이름</label>
           <Input 
             type="text"
             value={teamName}
             onChange={(e) => setTeamName(e.target.value)}
             placeholder="팀 이름을 입력하세요"
-            className="bg-transparent border-none text-white font-black p-0 h-auto focus-visible:ring-0 text-lg"
+            className="bg-transparent border-none text-foreground font-black p-0 h-auto focus-visible:ring-0 text-lg"
           />
         </div>
         <div className="flex items-center gap-4 p-4 bg-primary/5 rounded-2xl border border-primary/10">
@@ -188,14 +248,14 @@ export const WorkLog: React.FC = () => {
           </div>
           <div>
             <p className="text-[10px] font-black text-primary uppercase">총원</p>
-            <p className="text-xl font-black text-white">{entries.length}명</p>
+            <p className="text-xl font-black text-foreground">{entries.length}명</p>
           </div>
         </div>
       </div>
 
-      <Card className="bg-card border-white/5 rounded-[2rem] overflow-hidden shadow-2xl">
-        <CardHeader className="bg-white/5 p-6 border-b border-white/5 flex flex-row items-center justify-between">
-          <CardTitle className="text-lg font-black text-white flex items-center gap-2">
+      <Card className="bg-card border-border rounded-[2rem] overflow-hidden shadow-2xl">
+        <CardHeader className="bg-muted/50 p-6 border-b border-border flex flex-row items-center justify-between">
+          <CardTitle className="text-lg font-black text-foreground flex items-center gap-2">
             <TableIcon className="w-5 h-5 text-primary" />
             작업 내역 입력
           </CardTitle>
@@ -203,9 +263,19 @@ export const WorkLog: React.FC = () => {
             <Button 
               size="sm" 
               variant="outline" 
+              onClick={handleCopyPreviousLog}
+              disabled={!previousLog}
+              className="text-primary border-primary/20 hover:bg-primary/5 font-bold gap-1 rounded-xl text-[10px]"
+            >
+              <ClipboardList className="w-3 h-3" />
+              전일 데이터 복사
+            </Button>
+            <Button 
+              size="sm" 
+              variant="outline" 
               onClick={handleApplyFirstToAll}
               disabled={entries.length < 2}
-              className="text-white/40 border-white/10 hover:bg-white/5 font-bold gap-1 rounded-xl text-[10px]"
+              className="text-muted-foreground/60 border-border hover:bg-muted font-bold gap-1 rounded-xl text-[10px]"
             >
               <Save className="w-3 h-3" />
               첫 인원 내용 일괄복사
@@ -223,13 +293,13 @@ export const WorkLog: React.FC = () => {
         </CardHeader>
           <div className="space-y-4">
             {entries.length === 0 ? (
-              <div className="py-20 text-center border-2 border-dashed border-white/5 rounded-[2rem] bg-white/[0.02]">
-                <Users className="w-12 h-12 text-white/10 mx-auto mb-4" />
-                <p className="text-white/40 font-bold">인원을 추가하거나 멤버를 불러와주세요.</p>
+              <div className="py-20 text-center border-2 border-dashed border-border rounded-[2rem] bg-muted/20">
+                <Users className="w-12 h-12 text-muted-foreground/10 mx-auto mb-4" />
+                <p className="text-muted-foreground font-bold">인원을 추가하거나 멤버를 불러와주세요.</p>
               </div>
             ) : (
               entries.map((entry, idx) => (
-                <Card key={idx} className="bg-white/[0.03] border-white/5 rounded-3xl overflow-hidden shadow-sm transition-all hover:bg-white/[0.05] hover:border-primary/20 relative group">
+                <Card key={idx} className="bg-muted/30 border-border rounded-3xl overflow-hidden shadow-sm transition-all hover:bg-muted/50 hover:border-primary/20 relative group">
                   {/* Floating ID badge */}
                   <div className="absolute top-0 left-0 bg-primary/20 text-primary px-3 py-1 rounded-br-2xl text-[10px] font-black uppercase tracking-widest z-10">
                     NO. {idx + 1}
@@ -239,26 +309,26 @@ export const WorkLog: React.FC = () => {
                     {/* Compact Top Section: Name & Time */}
                     <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
                       <div className="flex-1 w-full space-y-2">
-                        <label className="text-[10px] font-black text-white/20 uppercase tracking-widest ml-1">작업자 성명</label>
+                        <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">작업자 성명</label>
                         <Input 
                           value={entry.userName}
                           onChange={(e) => handleUpdateEntry(idx, { userName: e.target.value })}
                           placeholder="성명 입력"
-                          className="bg-white/5 border-white/10 text-lg font-black text-white px-4 h-12 rounded-2xl focus:ring-primary/20 placeholder:text-white/10"
+                          className="bg-muted border-border text-lg font-black text-foreground px-4 h-12 rounded-2xl focus:ring-primary/20 placeholder:text-muted-foreground/30"
                         />
                       </div>
                       
                       <div className="w-full sm:w-40 space-y-2">
                         <div className="flex items-center justify-between ml-1">
-                          <label className="text-[10px] font-black text-white/20 uppercase tracking-widest">퇴근 시간</label>
+                          <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">퇴근 시간</label>
                         </div>
-                        <div className="flex items-center gap-3 px-4 h-12 bg-white/5 rounded-2xl border border-white/10">
-                          <Clock className="w-4 h-4 text-white/20" />
+                        <div className="flex items-center gap-3 px-4 h-12 bg-muted rounded-2xl border border-border">
+                          <Clock className="w-4 h-4 text-muted-foreground/40" />
                           <Input 
                             type="time"
                             value={entry.clockOutTime}
                             onChange={(e) => handleUpdateEntry(idx, { clockOutTime: e.target.value })}
-                            className="bg-transparent border-none text-sm font-bold text-white p-0 w-full focus-visible:ring-0"
+                            className="bg-transparent border-none text-sm font-bold text-foreground p-0 w-full focus-visible:ring-0"
                           />
                         </div>
                       </div>
@@ -267,7 +337,7 @@ export const WorkLog: React.FC = () => {
                         variant="ghost" 
                         size="icon" 
                         onClick={() => handleRemoveEntry(idx)}
-                        className="absolute top-2 right-2 w-10 h-10 text-white/5 hover:text-red-500 hover:bg-red-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-all"
+                        className="absolute top-2 right-2 w-10 h-10 text-muted-foreground/20 hover:text-red-500 hover:bg-red-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-all"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -275,23 +345,23 @@ export const WorkLog: React.FC = () => {
 
                     {/* Task Grid with improved layout */}
                     <div className="space-y-4">
-                      <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                      <div className="flex items-center justify-between border-b border-border pb-2">
                         <span className="text-[10px] font-black text-primary uppercase tracking-widest">세부 업무 기록</span>
-                        <span className="text-[9px] font-bold text-white/20 italic">최대 3개 항목</span>
+                        <span className="text-[9px] font-bold text-muted-foreground/40 italic">최대 3개 항목</span>
                       </div>
                       
                       <div className="space-y-3">
                         {entry.tasks.map((task, tIdx) => (
                           <div key={tIdx} className="flex gap-3">
-                            <div className="flex-1 bg-white/5 rounded-2xl border border-white/10 focus-within:border-primary/40 transition-all p-1">
+                            <div className="flex-1 bg-muted rounded-2xl border border-border focus-within:border-primary/40 transition-all p-1">
                               <Input 
                                 value={task.content}
                                 onChange={(e) => handleUpdateTask(idx, tIdx, 'content', e.target.value)}
                                 placeholder={`업무 상세 내용 ${tIdx + 1}`}
-                                className="bg-transparent border-none text-sm font-semibold text-white px-4 py-2.5 h-auto focus-visible:ring-0 placeholder:text-white/5"
+                                className="bg-transparent border-none text-sm font-semibold text-foreground px-4 py-2.5 h-auto focus-visible:ring-0 placeholder:text-muted-foreground/20"
                               />
                             </div>
-                            <div className="relative w-20 shrink-0 bg-white/5 rounded-2xl border border-white/10 focus-within:border-primary/40 transition-all p-1">
+                            <div className="relative w-20 shrink-0 bg-muted rounded-2xl border border-border focus-within:border-primary/40 transition-all p-1">
                               <div className="flex items-center justify-center h-full px-2">
                                 <Input 
                                   value={task.hours}
@@ -299,7 +369,7 @@ export const WorkLog: React.FC = () => {
                                   placeholder="0"
                                   className="bg-transparent border-none text-base font-black text-primary p-0 w-8 h-auto text-right focus-visible:ring-0"
                                 />
-                                <span className="text-[10px] font-black text-white/20 ml-1">H</span>
+                                <span className="text-[10px] font-black text-muted-foreground/40 ml-1">H</span>
                               </div>
                             </div>
                           </div>
@@ -310,7 +380,7 @@ export const WorkLog: React.FC = () => {
                             variant="ghost" 
                             size="sm"
                             onClick={() => handleAddTask(idx)}
-                            className="w-full h-10 border border-dashed border-white/5 bg-white/[0.01] text-white/20 hover:text-primary hover:border-primary/20 rounded-2xl font-bold text-[11px] gap-2 transition-all mt-2"
+                            className="w-full h-10 border border-dashed border-border bg-muted/20 text-muted-foreground font-bold text-[11px] gap-2 transition-all mt-2 rounded-2xl"
                           >
                             <Plus className="w-4 h-4" />
                             신규 업무 항목 추가
@@ -336,8 +406,8 @@ export const WorkLog: React.FC = () => {
         </Button>
       </div>
 
-      <div className="bg-white/5 rounded-2xl p-6 border border-white/5 space-y-3">
-        <div className="flex items-center gap-2 text-white/40">
+      <div className="bg-muted/50 rounded-2xl p-6 border border-border space-y-3">
+        <div className="flex items-center gap-2 text-muted-foreground">
           <FileText className="w-4 h-4" />
           <span className="text-xs font-black uppercase tracking-widest">작업일지 작성 안내</span>
         </div>
@@ -347,8 +417,8 @@ export const WorkLog: React.FC = () => {
               <FileText className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h4 className="font-bold text-white text-sm">팀원별 직접 입력</h4>
-              <p className="text-white/40 text-xs mt-1 leading-relaxed">
+              <h4 className="font-bold text-foreground text-sm">팀원별 직접 입력</h4>
+              <p className="text-muted-foreground text-xs mt-1 leading-relaxed">
                 팀원들의 성명을 확인하고 작업 내용과 시간(H)을 각각 입력해 주세요.
               </p>
             </div>
@@ -359,8 +429,8 @@ export const WorkLog: React.FC = () => {
               <Save className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h4 className="font-bold text-white text-sm">일괄 복사 기능</h4>
-              <p className="text-white/40 text-xs mt-1 leading-relaxed">
+              <h4 className="font-bold text-foreground text-sm">일괄 복사 기능</h4>
+              <p className="text-muted-foreground text-xs mt-1 leading-relaxed">
                 첫 번째 인원의 내용을 모두에게 동일하게 적용하려면 '일괄복사' 버튼을 사용하세요.
               </p>
             </div>

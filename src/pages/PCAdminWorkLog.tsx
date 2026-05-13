@@ -275,11 +275,11 @@ const PCAdminWorkLog: React.FC = () => {
                     )}
                   </div>
                   <Dialog>
-                    <DialogTrigger asChild>
+                    <DialogTrigger render={
                       <button className="text-blue-600 font-black text-xs flex items-center gap-1 hover:underline">
                         전체 보기 <ChevronRight className="w-4 h-4" />
                       </button>
-                    </DialogTrigger>
+                    } />
                     <DialogContent className="max-w-4xl p-0 overflow-hidden rounded-3xl border-none">
                       <DialogHeader className="p-8 bg-slate-900 text-white">
                         <DialogTitle className="text-2xl font-black">{log.teamName} 상세 작업일지</DialogTitle>

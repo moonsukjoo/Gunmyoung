@@ -85,9 +85,9 @@ const EnclosedSpaceMonitoring: React.FC = () => {
   }).filter(Boolean) as BeaconLog[];
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white pb-24 font-sans">
+    <div className="min-h-screen bg-background text-foreground pb-24 font-sans">
       {/* Header */}
-      <header className="p-6 pt-12 bg-gradient-to-b from-blue-900/20 to-transparent">
+      <header className="p-6 pt-12 bg-muted/30 border-b border-border">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <div className="w-2 h-6 bg-blue-500 rounded-full" />
@@ -98,27 +98,27 @@ const EnclosedSpaceMonitoring: React.FC = () => {
             <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">실시간</span>
           </div>
         </div>
-        <p className="text-gray-400 font-bold text-sm">잠수함 내부 작업자 위치 및 안전 상태</p>
+        <p className="text-muted-foreground font-bold text-sm">잠수함 내부 작업자 위치 및 안전 상태</p>
       </header>
 
       <div className="px-6 space-y-6">
         {/* Search */}
         <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/40" />
           <input 
             type="text" 
             placeholder="작업자 이름 검색..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl pl-12 pr-4 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+            className="w-full h-14 bg-muted border border-border rounded-2xl pl-12 pr-4 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-foreground"
           />
         </div>
 
         {/* Stats Summary */}
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white/5 p-5 rounded-[2rem] border border-white/10">
-            <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">현재 작업 인원</p>
-            <p className="text-2xl font-black">{activeWorkers.length}명</p>
+          <div className="bg-muted p-5 rounded-[2rem] border border-border">
+            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">현재 작업 인원</p>
+            <p className="text-2xl font-black text-foreground">{activeWorkers.length}명</p>
           </div>
           <div className="bg-rose-500/10 p-5 rounded-[2rem] border border-rose-500/20">
             <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1">위험 감지</p>
@@ -144,16 +144,16 @@ const EnclosedSpaceMonitoring: React.FC = () => {
                 <motion.div 
                   layout
                   key={worker.uid}
-                  className="bg-card p-5 rounded-[2.5rem] border border-white/5 shadow-xl relative overflow-hidden"
+                  className="bg-card p-5 rounded-[2.5rem] border border-border shadow-xl relative overflow-hidden"
                 >
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-white font-black text-xl">
+                      <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary font-black text-xl">
                         {worker.userName.charAt(0)}
                       </div>
                       <div>
-                        <h4 className="font-black text-white">{worker.userName}</h4>
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 mt-0.5">
+                        <h4 className="font-black text-foreground">{worker.userName}</h4>
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground mt-0.5">
                           <Clock className="w-3 h-3" />
                           <span>{format(new Date(worker.detectedAt), 'HH:mm:ss')} 감지</span>
                         </div>
@@ -167,7 +167,7 @@ const EnclosedSpaceMonitoring: React.FC = () => {
 
                   {/* Route Visualizer */}
                   <div className="relative pt-6">
-                    <div className="absolute top-[34px] left-0 right-0 h-0.5 bg-white/5" />
+                    <div className="absolute top-[34px] left-0 right-0 h-0.5 bg-muted" />
                     <div className="flex justify-between relative z-10">
                       {beacons
                         .filter(b => b.submarineName === subName)
@@ -178,11 +178,11 @@ const EnclosedSpaceMonitoring: React.FC = () => {
                             <div key={b.id} className="flex flex-col items-center gap-2">
                               <div className={cn(
                                 "w-4 h-4 rounded-full border-2 transition-all duration-500 transform",
-                                isHere ? "bg-blue-500 border-white scale-125 shadow-[0_0_10px_rgba(59,130,246,0.8)]" : "bg-zinc-800 border-white/10"
+                                isHere ? "bg-blue-500 border-foreground scale-125 shadow-[0_0_10px_rgba(59,130,246,0.8)]" : "bg-muted border-border"
                               )} />
                               <span className={cn(
                                 "text-[8px] font-black uppercase tracking-tighter text-center max-w-[40px] leading-tight",
-                                isHere ? "text-blue-400" : "text-gray-600"
+                                isHere ? "text-blue-500" : "text-muted-foreground/60"
                               )}>
                                 {b.location}
                               </span>
@@ -198,11 +198,11 @@ const EnclosedSpaceMonitoring: React.FC = () => {
               ))}
 
               {activeWorkers.length === 0 && (
-                <div className="py-20 text-center bg-white/5 rounded-[2.5rem] border border-dashed border-white/10">
-                  <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Activity className="w-8 h-8 text-white/10" />
+                <div className="py-20 text-center bg-muted/30 rounded-[2.5rem] border border-dashed border-border">
+                  <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Activity className="w-8 h-8 text-muted-foreground/20" />
                   </div>
-                  <p className="text-gray-500 font-bold text-sm">현재 탐지된 작업자가 없습니다.</p>
+                  <p className="text-muted-foreground font-bold text-sm">현재 탐지된 작업자가 없습니다.</p>
                 </div>
               )}
             </div>

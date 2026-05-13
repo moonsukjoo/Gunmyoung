@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { db } from '@/src/firebase';
+import { db } from '@/firebase';
 import { doc, onSnapshot, setDoc, updateDoc, increment, collection, query, where, getDocs } from 'firebase/firestore';
-import { EvacuationStatus, UserProfile } from '@/src/types';
-import { useAuth } from '@/src/components/AuthProvider';
+import { EvacuationStatus, UserProfile } from '@/types';
+import { useAuth } from '@/components/AuthProvider';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertTriangle, CheckCircle, Shield, Phone, X, Search, UserMinus } from 'lucide-react';
 import { Button } from '@/components/ui/button';

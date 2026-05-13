@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAuth } from '@/src/components/AuthProvider';
+import { useAuth } from '@/components/AuthProvider';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -31,19 +31,22 @@ import {
   Bell,
   Navigation,
   Activity,
-  FileText
+  FileText,
+  Sun,
+  Moon,
+  Info
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { updatePassword, signOut } from 'firebase/auth';
-import { auth, db, handleFirestoreError, OperationType } from '@/src/firebase';
+import { auth, db, handleFirestoreError, OperationType } from '@/firebase';
 import { doc, updateDoc, collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { toast } from 'sonner';
-import { TrainingResult } from '@/src/types';
+import { TrainingResult } from '@/types';
 import { format } from 'date-fns';
 import { motion } from 'framer-motion';
-import { PinKeypad } from '@/src/components/PinKeypad';
-import { requestNotificationPermission } from '@/src/services/notificationService';
+import { PinKeypad } from '@/components/PinKeypad';
+import { requestNotificationPermission } from '@/services/notificationService';
 
 export const MyPage: React.FC = () => {
   const { profile } = useAuth();
@@ -267,6 +270,17 @@ export const MyPage: React.FC = () => {
     }
   };
 
+  const toggleTheme = async () => {
+    if (!profile) return;
+    try {
+      const newValue = !profile.lightTheme;
+      await updateDoc(doc(db, 'users', profile.uid), { lightTheme: newValue });
+      toast.success(newValue ? '밝은 테마가 적용되었습니다.' : '어두운 테마가 적용되었습니다.');
+    } catch (error) {
+      toast.error('변경 실패');
+    }
+  };
+
   const handleToggleGhostGuard = async () => {
     if (!profile) return;
     setIsUpdating(true);
@@ -283,28 +297,38 @@ export const MyPage: React.FC = () => {
   };
 
   const menuItems = [
-    { label: '연차 내역', icon: CalendarDays, to: '/leave', color: 'text-blue-500', bgColor: 'bg-blue-500/10' },
-    { label: '현물 신청', icon: Wallet, to: '/redemption', color: 'text-emerald-400', bgColor: 'bg-emerald-400/10' },
-    { label: '월급 명세서', icon: FileText, to: '/mypage/payslip', color: 'text-rose-500', bgColor: 'bg-rose-500/10' },
-    { label: '엔터놀이터', icon: Trophy, to: '/entertainment', color: 'text-purple-500', bgColor: 'bg-purple-500/10' },
-    { label: '로또 번호 생성기', icon: Ticket, to: '/lotto', color: 'text-orange-500', bgColor: 'bg-orange-500/10' },
-    { label: '교육 이수증', icon: BookOpen, onClick: () => setIsExamHistoryOpen(true), color: 'text-emerald-500', bgColor: 'bg-emerald-500/10' },
-    { label: '간편 비밀번호', icon: Lock, onClick: () => setIsPinModalOpen(true), color: 'text-amber-500', bgColor: 'bg-amber-500/10' },
-  ];
+    { label: '연차 내역', icon: CalendarDays, to: '/leave', color: 'text-blue-600', bgColor: 'bg-blue-500/10' },
+    { label: '현물 신청', icon: Wallet, to: '/redemption', color: 'text-emerald-600', bgColor: 'bg-emerald-500/10' },
+    { label: '월급 명세서', icon: FileText, to: '/mypage/payslip', color: 'text-rose-600', bgColor: 'bg-rose-500/10' },
+    { label: '엔터놀이터', icon: Trophy, to: '/entertainment', color: 'text-purple-600', bgColor: 'bg-purple-500/10' },
+    { label: '로또 번호 생성기', icon: Ticket, to: '/lotto', color: 'text-orange-600', bgColor: 'bg-orange-500/10' },
+    { label: '교육 이수증', icon: BookOpen, onClick: () => setIsExamHistoryOpen(true), color: 'text-emerald-600', bgColor: 'bg-emerald-500/10' },
+    profile && !['사원', '조장'].includes(profile.position?.trim() || '') ? { label: '안전 지수 랭킹', icon: ShieldCheck, to: '/safety-leaderboard', color: 'text-amber-600', bgColor: 'bg-amber-500/10' } : null,
+    { label: '간편 비밀번호', icon: Lock, onClick: () => setIsPinModalOpen(true), color: 'text-amber-600', bgColor: 'bg-amber-500/10' },
+  ].filter(Boolean) as any[];
 
   return (
     <div className="space-y-4 pb-24 px-2">
-      <header className="py-4 flex items-center justify-between font-sans">
+      <header className="py-4 flex items-center justify-between font-sans px-2">
         <div>
-           <p className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em] mb-0.5">내 계정 정보</p>
-           <h2 className="text-2xl font-black tracking-tight text-white leading-tight">마이 페이지</h2>
+           <p className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-0.5">내 계정 정보</p>
+           <h2 className="text-2xl font-black tracking-tight text-foreground leading-tight">마이 페이지</h2>
         </div>
-        <button 
-          onClick={handleLogout}
-          className="w-10 h-10 bg-white/5 rounded-2xl flex items-center justify-center text-white/40 hover:text-rose-500 hover:bg-rose-500/10 transition-all active:scale-90"
-        >
-          <LogOut className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={toggleTheme}
+            className="w-10 h-10 bg-muted rounded-2xl flex items-center justify-center text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10 transition-all active:scale-90"
+            title={profile?.lightTheme ? "어두운 모드로 변경" : "밝은 모드로 변경"}
+          >
+            {profile?.lightTheme ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+          </button>
+          <button 
+            onClick={handleLogout}
+            className="w-10 h-10 bg-muted rounded-2xl flex items-center justify-center text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-all active:scale-90"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
+        </div>
       </header>
 
       {/* Emergency Status Alert Card */}
@@ -339,22 +363,22 @@ export const MyPage: React.FC = () => {
 
       {/* Compact Profile Section */}
       <div className="flex gap-3">
-        <Card className="flex-[1.5] border-none bg-gradient-to-br from-blue-600/10 to-blue-900/10 rounded-3xl border border-white/5 shadow-2xl relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-blue-500/20 transition-colors" />
+        <Card className="flex-[1.5] border-none bg-primary rounded-3xl border border-primary/10 shadow-2xl relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-white/20 transition-colors" />
           <CardContent className="p-4 flex flex-col items-center text-center gap-3">
             <div className="relative">
-              <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-xl font-black text-white shadow-xl rotate-3 group-hover:rotate-0 transition-transform">
+              <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-xl font-black text-white shadow-xl rotate-3 group-hover:rotate-0 transition-transform">
                 {profile?.displayName?.charAt(0)}
               </div>
-              <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-500 rounded-full border-4 border-[#121212] flex items-center justify-center">
+              <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-500 rounded-full border-4 border-primary flex items-center justify-center">
                 <Check className="w-3 h-3 text-white" />
               </div>
             </div>
               <div className="min-w-0 w-full px-2">
                 <h3 className="text-lg font-black text-white truncate">{profile?.displayName}</h3>
                 <div className="flex flex-col items-center gap-1 mt-1.5">
-                  <Badge variant="outline" className="bg-white/5 border-white/10 text-[9px] font-black px-1.5 py-0 h-5 rounded-md">
-                    {profile?.role === 'CEO' ? '대표이사' : 
+                  <Badge variant="outline" className="bg-white/10 border-white/20 text-[9px] font-black px-1.5 py-0 h-5 rounded-md text-white">
+                    {profile?.role === 'CEO' ? '대표' : 
                      profile?.role === 'DIRECTOR' ? '직장' :
                      profile?.role === 'GENERAL_MANAGER' ? '부장' :
                      profile?.role === 'SAFETY_MANAGER' ? '안전관리자' :
@@ -362,8 +386,8 @@ export const MyPage: React.FC = () => {
                      profile?.role === 'GROUP_LEADER' ? '조장' :
                      profile?.role === 'EMPLOYEE' ? '사원' : profile?.role || '사원'}
                   </Badge>
-                  {profile?.position && (
-                    <span className="text-[10px] font-bold text-white/40 uppercase tracking-tighter">
+                  {profile?.position && profile.role !== 'CEO' && (
+                    <span className="text-[10px] font-bold text-white/70 uppercase tracking-tighter truncate w-full block">
                       {profile.position.replace('대표이사 사무실', '').trim()}
                     </span>
                   )}
@@ -373,19 +397,19 @@ export const MyPage: React.FC = () => {
         </Card>
 
         <div className="flex-1 flex flex-col gap-2">
-          <Card className="flex-1 border-none bg-white/[0.03] rounded-3xl border border-white/5 p-3 flex flex-col justify-center items-center gap-1 group">
+          <Card className="flex-1 border border-border bg-card p-3 flex flex-col justify-center items-center gap-1 group shadow-sm">
              <div className="w-8 h-8 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-500 mb-1 group-hover:scale-110 transition-transform">
                <Wallet className="w-4 h-4" />
              </div>
-             <p className="text-sm font-black text-white">{(profile?.points || 0).toLocaleString()}</p>
-             <p className="text-[8px] font-black text-white/20 uppercase tracking-widest">포인트</p>
+             <p className="text-base font-black text-foreground">{(profile?.points || 0).toLocaleString()}</p>
+             <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">포인트</p>
           </Card>
-          <Card className="flex-1 border-none bg-white/[0.03] rounded-3xl border border-white/5 p-3 flex flex-col justify-center items-center gap-1 group">
+          <Card className="flex-1 border border-border bg-card p-3 flex flex-col justify-center items-center gap-1 group shadow-sm">
              <div className="w-8 h-8 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-500 mb-1 group-hover:scale-110 transition-transform">
                <CalendarDays className="w-4 h-4" />
              </div>
-             <p className="text-sm font-black text-white">{profile?.annualLeaveBalance || 0}일</p>
-             <p className="text-[8px] font-black text-white/20 uppercase tracking-widest">연차</p>
+             <p className="text-base font-black text-foreground">{profile?.annualLeaveBalance || 0}일</p>
+             <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">연차</p>
           </Card>
         </div>
       </div>
@@ -396,14 +420,14 @@ export const MyPage: React.FC = () => {
               <button 
                 key={idx} 
                 onClick={() => item.onClick ? item.onClick() : navigate(item.to!)}
-                className="flex items-center gap-3 p-3 bg-white/[0.02] border border-white/5 rounded-2xl text-left hover:bg-white/[0.05] transition-all group active:scale-95 shadow-sm"
+                className="flex items-center gap-3 p-3 bg-card border border-border rounded-2xl text-left hover:bg-muted transition-all group active:scale-95 shadow-sm"
               >
                 <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform shrink-0", item.bgColor)}>
                   <item.icon className={cn("w-5 h-5", item.color)} />
                 </div>
                 <div className="flex flex-col min-w-0">
-                  <span className="text-[11px] font-black text-white truncate">{item.label}</span>
-                  <span className="text-[8px] font-bold text-white/20">바로가기</span>
+                  <span className="text-[11px] font-black text-foreground truncate">{item.label}</span>
+                  <span className="text-[8px] font-bold text-muted-foreground/80">바로가기</span>
                 </div>
               </button>
             ))}
@@ -411,21 +435,21 @@ export const MyPage: React.FC = () => {
 
       {/* System Settings - 2x2 Grid Layout */}
       <div className="pt-2 space-y-4">
-        <h4 className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] px-1">기기 및 시스템 제어</h4>
+        <h4 className="text-[10px] font-black text-muted-foreground/80 uppercase tracking-[0.2em] px-1">기기 및 시스템 제어</h4>
         <div className="grid grid-cols-2 gap-3">
           <button 
             onClick={toggleElderlyMode}
             className={cn(
               "p-5 rounded-[2.5rem] border transition-all flex flex-col items-center gap-2 group",
-              profile?.elderlyMode ? "bg-blue-600/20 border-blue-500/30 shadow-lg shadow-blue-500/10" : "bg-white/[0.02] border-white/5 shadow-inner shadow-white/5"
+              profile?.elderlyMode ? "bg-blue-600/20 border-blue-500/30 shadow-lg shadow-blue-500/10" : "bg-card border-border shadow-inner"
             )}
           >
-            <div className={cn("w-10 h-10 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110", profile?.elderlyMode ? "bg-blue-500 text-white" : "bg-white/5 text-white/40")}>
+            <div className={cn("w-10 h-10 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110", profile?.elderlyMode ? "bg-blue-500 text-white" : "bg-muted text-muted-foreground")}>
               <Eye className="w-5 h-5" />
             </div>
             <div className="text-center">
-              <p className="text-[11px] font-black text-white">어르신 모드</p>
-              <p className={cn("text-[8px] font-black uppercase tracking-widest", profile?.elderlyMode ? "text-blue-400" : "text-white/20")}>{profile?.elderlyMode ? '운영 중' : '중지됨'}</p>
+              <p className="text-[11px] font-black text-foreground">어르신 모드</p>
+              <p className={cn("text-[8px] font-black uppercase tracking-widest", profile?.elderlyMode ? "text-blue-400" : "text-muted-foreground/80")}>{profile?.elderlyMode ? '운영 중' : '중지됨'}</p>
             </div>
           </button>
 
@@ -433,15 +457,15 @@ export const MyPage: React.FC = () => {
             onClick={handleRequestPermission}
             className={cn(
               "p-5 rounded-[2.5rem] border transition-all flex flex-col items-center gap-2 group",
-              notificationPermission === 'granted' ? "bg-emerald-600/20 border-emerald-500/30 shadow-lg shadow-emerald-500/10" : "bg-white/[0.02] border-white/5 shadow-inner shadow-white/5"
+              notificationPermission === 'granted' ? "bg-emerald-600/20 border-emerald-500/30 shadow-lg shadow-emerald-500/10" : "bg-card border-border shadow-inner"
             )}
           >
-            <div className={cn("w-10 h-10 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110", notificationPermission === 'granted' ? "bg-emerald-500 text-white" : "bg-white/5 text-white/40")}>
+            <div className={cn("w-10 h-10 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110", notificationPermission === 'granted' ? "bg-emerald-500 text-white" : "bg-muted text-muted-foreground")}>
               <Bell className="w-5 h-5" />
             </div>
             <div className="text-center">
-              <p className="text-[11px] font-black text-white">기기 알림</p>
-              <p className={cn("text-[8px] font-black uppercase tracking-widest", notificationPermission === 'granted' ? "text-emerald-400" : "text-white/20")}>{notificationPermission === 'granted' ? '허용됨' : '차단됨'}</p>
+              <p className="text-[11px] font-black text-foreground">기기 알림</p>
+              <p className={cn("text-[8px] font-black uppercase tracking-widest", notificationPermission === 'granted' ? "text-emerald-400" : "text-muted-foreground/80")}>{notificationPermission === 'granted' ? '허용됨' : '차단됨'}</p>
             </div>
           </button>
 
@@ -449,37 +473,52 @@ export const MyPage: React.FC = () => {
             onClick={handleToggleGhostGuard}
             className={cn(
               "p-5 rounded-[2.5rem] border transition-all flex flex-col items-center gap-2 group",
-              profile?.ghostGuardEnabled ? "bg-rose-600/20 border-rose-500/30 shadow-lg shadow-rose-500/10" : "bg-white/[0.02] border-white/5 shadow-inner shadow-white/5"
+              profile?.ghostGuardEnabled ? "bg-rose-600/20 border-rose-500/30 shadow-lg shadow-rose-500/10" : "bg-card border-border shadow-inner"
             )}
           >
-            <div className={cn("w-10 h-10 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110", profile?.ghostGuardEnabled ? "bg-rose-500 text-white" : "bg-white/5 text-white/40")}>
+            <div className={cn("w-10 h-10 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110", profile?.ghostGuardEnabled ? "bg-rose-500 text-white" : "bg-muted text-muted-foreground")}>
               <Activity className="w-5 h-5" />
             </div>
             <div className="text-center">
-              <p className="text-[11px] font-black text-white">유령 가드</p>
-              <p className={cn("text-[8px] font-black uppercase tracking-widest", profile?.ghostGuardEnabled ? "text-rose-400" : "text-white/20")}>{profile?.ghostGuardEnabled ? '작동 중' : '비활성'}</p>
+              <p className="text-[11px] font-black text-foreground">유령 가드</p>
+              <p className={cn("text-[8px] font-black uppercase tracking-widest", profile?.ghostGuardEnabled ? "text-rose-400" : "text-muted-foreground/80")}>{profile?.ghostGuardEnabled ? '작동 중' : '비활성'}</p>
             </div>
           </button>
 
           <button 
             onClick={handleCalibrateAltitude}
-            className="p-5 rounded-[2.5rem] border bg-white/[0.02] border-white/5 transition-all flex flex-col items-center gap-2 group shadow-inner shadow-white/5"
+            className="p-5 rounded-[2.5rem] border bg-card border-border transition-all flex flex-col items-center gap-2 group shadow-inner"
           >
-            <div className="w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center text-white/40 transition-transform group-hover:scale-110">
+            <div className="w-10 h-10 rounded-2xl bg-muted flex items-center justify-center text-muted-foreground transition-transform group-hover:scale-110">
               <Navigation className="w-5 h-5" />
             </div>
             <div className="text-center">
-              <p className="text-[11px] font-black text-white">고도 영점</p>
-              <p className="text-[8px] font-black text-white/20 uppercase tracking-widest">{(profile?.currentAltitude || 0).toFixed(1)}M 기준</p>
+              <p className="text-[11px] font-black text-foreground">고도 영점</p>
+              <p className="text-[10px] font-black text-primary uppercase tracking-widest bg-primary/10 px-2 py-0.5 rounded-full mt-1">{(profile?.currentAltitude || 0).toFixed(1)}M 기준</p>
             </div>
           </button>
         </div>
+
+        {/* Altitude Sensor Info Card */}
+        <Card className="bg-primary/5 border border-primary/20 rounded-3xl p-4 mt-2">
+          <div className="flex gap-3">
+            <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center text-primary shrink-0">
+              <Info className="w-4 h-4" />
+            </div>
+            <div className="space-y-1">
+              <h5 className="text-xs font-black text-foreground">기압계 센서 안내</h5>
+              <p className="text-[10px] font-bold text-muted-foreground leading-normal">
+                고소작업 모니터링은 기압계 센서를 사용합니다. 아이폰(iOS)은 [설정 {'>'} Safari {'>'} 동작 및 방향 접근]을 활성화해야 하며, 안드로이드는 브라우저 센서 권한이 필요합니다. 센서가 없는 기기는 고도 측정이 불가능합니다.
+              </p>
+            </div>
+          </div>
+        </Card>
       </div>
 
       <Dialog open={isPinModalOpen} onOpenChange={setIsPinModalOpen}>
-        <DialogContent className="bg-card border-none rounded-3xl text-white p-0 overflow-hidden max-w-sm">
+        <DialogContent className="bg-card border border-border rounded-3xl text-foreground p-0 overflow-hidden max-w-sm">
            <div className="p-8 flex flex-col items-center gap-6">
-              <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-primary">
+              <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary">
                  <Smartphone className="w-6 h-6" />
               </div>
               <div className="text-center space-y-1">
@@ -493,7 +532,7 @@ export const MyPage: React.FC = () => {
               <div className="flex gap-3">
                  {[...Array(6)].map((_, i) => {
                    const len = isReAuthPending ? reAuthPin.length : (pinStep === 1 ? newPin.length : confirmPin.length);
-                   return <div key={i} className={cn("w-3 h-3 rounded-full border-2", len > i ? "bg-primary border-primary shadow-[0_0_10px_rgba(0,122,255,0.5)]" : "bg-white/5 border-white/10")} />;
+                   return <div key={i} className={cn("w-3 h-3 rounded-full border-2", len > i ? "bg-primary border-primary shadow-[0_0_10px_rgba(49,130,246,0.5)]" : "bg-muted border-border")} />;
                  })}
               </div>
            </div>
@@ -518,19 +557,19 @@ export const MyPage: React.FC = () => {
       </Dialog>
 
       <Dialog open={isExamHistoryOpen} onOpenChange={setIsExamHistoryOpen}>
-        <DialogContent className="bg-card border-none rounded-3xl text-white p-0 overflow-hidden max-w-lg">
-           <DialogHeader className="p-8 pb-4">
+        <DialogContent className="bg-card border border-border rounded-3xl text-foreground p-0 overflow-hidden max-w-lg">
+           <DialogHeader className="p-8 pb-4 border-b border-border">
               <DialogTitle className="text-xl font-black">교육 이수 내역</DialogTitle>
            </DialogHeader>
            <div className="p-6 max-h-[60vh] overflow-y-auto space-y-2">
               {examHistory.map((res) => (
-                <div key={res.id} className="bg-white/5 p-4 rounded-2xl flex items-center justify-between">
+                <div key={res.id} className="bg-muted p-4 rounded-2xl flex items-center justify-between border border-border">
                    <div className="min-w-0">
-                      <h4 className="text-sm font-black text-white truncate">{res.trainingTitle}</h4>
+                      <h4 className="text-sm font-black text-foreground truncate">{res.trainingTitle}</h4>
                       <div className="flex items-center gap-2">
                         <p className="text-[10px] text-muted-foreground font-bold">{format(new Date(res.completedAt), 'yyyy.MM.dd')}</p>
                         <span className="text-[10px] text-primary font-black">{res.score}점</span>
-                        <span className="text-[10px] text-white/40 font-bold">{getRanking(res.id, res.trainingId)}</span>
+                        <span className="text-[10px] text-muted-foreground/40 font-bold">{getRanking(res.id, res.trainingId)}</span>
                       </div>
                    </div>
                    <Badge className={cn("rounded-lg font-black text-[10px] shrink-0", res.isPassed ? "bg-emerald-500/20 text-emerald-500" : "bg-red-500/20 text-red-500")}>
@@ -540,12 +579,12 @@ export const MyPage: React.FC = () => {
               ))}
               {examHistory.length === 0 && (
                 <div className="py-20 text-center opacity-20">
-                  <p className="text-xs font-black">이력 없습니다</p>
+                   <p className="text-xs font-black text-muted-foreground">이력 없습니다</p>
                 </div>
               )}
            </div>
-           <div className="p-6">
-              <Button className="w-full h-14 bg-white/5 text-white font-black rounded-2xl" onClick={() => setIsExamHistoryOpen(false)}>닫기</Button>
+           <div className="p-6 border-t border-border">
+              <Button className="w-full h-14 bg-muted text-foreground font-black rounded-2xl hover:bg-muted/80" onClick={() => setIsExamHistoryOpen(false)}>닫기</Button>
            </div>
         </DialogContent>
       </Dialog>

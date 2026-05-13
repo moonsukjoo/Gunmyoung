@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/src/components/AuthProvider';
-import { db } from '@/src/firebase';
-import { collection, addDoc, query, where, onSnapshot, orderBy, doc, updateDoc, increment } from 'firebase/firestore';
-import { RedemptionRequest } from '@/src/types';
+import { useAuth } from '@/components/AuthProvider';
+import { db } from '@/firebase';
+import { collection, addDoc, query, where, onSnapshot, orderBy, doc, updateDoc, increment, getDocs } from 'firebase/firestore';
+import { RedemptionRequest } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -61,6 +61,25 @@ export const Redemption: React.FC = () => {
         points: increment(-points)
       });
 
+      // 3. Notify Clerks and General Manager
+      const managersQuery = query(
+        collection(db, 'users'),
+        where('role', 'in', ['CLERK', 'GENERAL_MANAGER'])
+      );
+      const managersSnapshot = await getDocs(managersQuery);
+      for (const mDoc of managersSnapshot.docs) {
+        await addDoc(collection(db, 'notifications'), {
+          uid: mDoc.id,
+          title: '🎁 현물 신청 알림',
+          message: `${profile.displayName}님이 ${points}P 현물 신청을 하였습니다.`,
+          type: 'SYSTEM',
+          isRead: false,
+          createdAt: new Date().toISOString(),
+          fromUid: profile.uid,
+          fromName: profile.displayName
+        });
+      }
+
       toast.success('현물 신청이 완료되었습니다.');
       setPointsToRedeem('');
     } catch (error) {
@@ -72,35 +91,35 @@ export const Redemption: React.FC = () => {
   };
 
   const statusMap = {
-    'PENDING': { label: '대기중', color: 'text-amber-500', bgColor: 'bg-amber-500/10', icon: Clock },
-    'APPROVED': { label: '승인됨', color: 'text-blue-500', bgColor: 'bg-blue-500/10', icon: CheckCircle2 },
-    'REJECTED': { label: '반려됨', color: 'text-red-500', bgColor: 'bg-red-500/10', icon: XCircle },
-    'COMPLETED': { label: '지급완료', color: 'text-emerald-500', bgColor: 'bg-emerald-500/10', icon: CheckCircle2 },
+    'PENDING': { label: '대기중', color: 'text-amber-600', bgColor: 'bg-amber-500/10', icon: Clock },
+    'APPROVED': { label: '승인됨', color: 'text-blue-600', bgColor: 'bg-blue-500/10', icon: CheckCircle2 },
+    'REJECTED': { label: '반려됨', color: 'text-red-600', bgColor: 'bg-red-500/10', icon: XCircle },
+    'COMPLETED': { label: '지급완료', color: 'text-emerald-600', bgColor: 'bg-emerald-500/10', icon: CheckCircle2 },
   };
 
   return (
     <div className="space-y-6 pb-24 px-1">
       <header className="py-6">
-        <h2 className="text-3xl font-black tracking-tight text-white leading-tight">현물 신청</h2>
+        <h2 className="text-3xl font-black tracking-tight text-foreground leading-tight">현물 신청</h2>
         <p className="text-muted-foreground font-bold">보유 포인트를 현금으로 환전 신청하세요</p>
       </header>
 
       {/* Points Summary */}
-      <Card className="border-none shadow-none bg-card rounded-2xl overflow-hidden border border-white/5">
+      <Card className="border-none shadow-none bg-card rounded-2xl overflow-hidden border border-border">
         <CardContent className="p-8 flex flex-col items-center gap-4 text-center">
           <div className="w-16 h-16 bg-primary/10 rounded-3xl flex items-center justify-center text-primary">
             <Wallet className="w-8 h-8" />
           </div>
           <div className="space-y-1">
             <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest text-center">현재 보유 포인트</p>
-            <p className="text-4xl font-black text-white">{(profile?.points || 0).toLocaleString()}P</p>
+            <p className="text-4xl font-black text-foreground">{(profile?.points || 0).toLocaleString()}P</p>
             <p className="text-xs font-bold text-primary">환전 가능 금액: {((profile?.points || 0) * 5000).toLocaleString()}원</p>
           </div>
         </CardContent>
       </Card>
 
       {/* Form Section */}
-      <div className="bg-card p-6 rounded-2xl border border-white/5 space-y-6">
+      <div className="bg-card p-6 rounded-2xl border border-border space-y-6">
         <div className="space-y-4">
           <div className="space-y-2">
             <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">신청 포인트</label>
@@ -110,7 +129,7 @@ export const Redemption: React.FC = () => {
                 placeholder="환전할 포인트를 입력하세요"
                 value={pointsToRedeem}
                 onChange={e => setPointsToRedeem(e.target.value)}
-                className="h-16 bg-white/5 border-white/10 rounded-2xl text-xl font-black text-white placeholder:text-muted-foreground/30 pr-12"
+                className="h-16 bg-muted border-border rounded-2xl text-xl font-black text-foreground placeholder:text-muted-foreground/30 pr-12"
               />
               <span className="absolute right-4 top-1/2 -translate-y-1/2 font-black text-muted-foreground">P</span>
             </div>
@@ -123,7 +142,7 @@ export const Redemption: React.FC = () => {
 
           <div className="bg-amber-500/10 p-4 rounded-xl flex gap-3 border border-amber-500/20">
             <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
-            <p className="text-xs font-bold text-amber-200/70 leading-relaxed">
+            <p className="text-xs font-bold text-amber-700 dark:text-amber-200/70 leading-relaxed">
               신청 시 포인트가 즉시 차감됩니다. 실장님 승인 후 실제 현금으로 지급되며, 반려 시 포인트는 다시 복구됩니다.
             </p>
           </div>
@@ -156,7 +175,7 @@ export const Redemption: React.FC = () => {
                   layout
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-card p-5 rounded-2xl border border-white/5 flex items-center justify-between group active:scale-[0.99] transition-all"
+                  className="bg-card p-5 rounded-2xl border border-border flex items-center justify-between group active:scale-[0.99] transition-all"
                 >
                   <div className="flex gap-4">
                     <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shrink-0", statusInfo.bgColor)}>
@@ -164,16 +183,16 @@ export const Redemption: React.FC = () => {
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-black text-white">{req.pointsRequested.toLocaleString()}P 환전</span>
+                        <span className="text-sm font-black text-foreground">{req.pointsRequested.toLocaleString()}P 환전</span>
                         <Badge className={cn("rounded-lg font-black text-[9px] border-none px-1.5 h-4", statusInfo.bgColor, statusInfo.color)}>
                           {statusInfo.label}
                         </Badge>
                       </div>
                       <p className="text-[10px] text-muted-foreground font-bold">{format(new Date(req.createdAt), 'yyyy.MM.dd HH:mm')}</p>
-                      <p className="text-xs font-black text-white/50">{req.amount.toLocaleString()}원</p>
+                      <p className="text-xs font-black text-muted-foreground/60">{req.amount.toLocaleString()}원</p>
                     </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-white/10 group-hover:text-primary transition-colors" />
+                  <ChevronRight className="w-5 h-5 text-muted-foreground/30 group-hover:text-primary transition-colors" />
                 </motion.div>
               );
             })}
