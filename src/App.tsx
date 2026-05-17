@@ -114,7 +114,13 @@ function AppContent() {
       document.documentElement.classList.remove('light-theme');
       document.documentElement.style.setProperty('color-scheme', 'dark');
     }
-  }, [profile?.lightTheme]);
+
+    if (profile?.elderlyMode) {
+      document.documentElement.classList.add('elderly-mode');
+    } else {
+      document.documentElement.classList.remove('elderly-mode');
+    }
+  }, [profile?.lightTheme, profile?.elderlyMode]);
 
   return (
     <Router>

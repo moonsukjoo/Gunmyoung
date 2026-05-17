@@ -302,7 +302,7 @@ export const MyPage: React.FC = () => {
       title: '안전 및 업무',
       items: [
         { label: '작업지시서 작성', icon: ClipboardList, to: '/work-instruction-report', color: 'text-blue-600', bgColor: 'bg-blue-500/10', roles: ['TEAM_LEADER', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER', 'CEO'] },
-        { label: '일일 행적 관리', icon: Navigation, to: '/attendance', color: 'text-indigo-600', bgColor: 'bg-indigo-500/10' },
+        { label: '근태관리', icon: Navigation, to: '/attendance', color: 'text-indigo-600', bgColor: 'bg-indigo-500/10' },
         { label: '안전 보건 교육', icon: BookOpen, to: '/training', color: 'text-emerald-600', bgColor: 'bg-emerald-500/10' },
         { label: '교육 이수증', icon: Trophy, onClick: () => setIsExamHistoryOpen(true), color: 'text-amber-600', bgColor: 'bg-amber-500/10' },
       ]
@@ -331,8 +331,8 @@ export const MyPage: React.FC = () => {
     title: '관리자 전용',
     items: [
       { label: '작업지시 관리', icon: ClipboardList, to: '/work-instruction-mgmt', color: 'text-primary', bgColor: 'bg-primary/10' },
-      { label: '사용자 권한 관리', icon: Lock, to: '/pc-admin/personnel', color: 'text-rose-600', bgColor: 'bg-rose-500/10' },
-      { label: '통합 대시보드', icon: Activity, to: '/pc-admin/dashboard', color: 'text-indigo-600', bgColor: 'bg-indigo-500/10' },
+      { label: '사용자 권한 관리', icon: Lock, to: '/admin/pc/personnel', color: 'text-rose-600', bgColor: 'bg-rose-500/10' },
+      { label: '통합 대시보드', icon: Activity, to: '/admin/pc-dashboard', color: 'text-indigo-600', bgColor: 'bg-indigo-500/10' },
     ]
   };
 
@@ -469,7 +469,7 @@ export const MyPage: React.FC = () => {
         ))}
 
         {/* Admin Menu Section */}
-        {profile && ['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER'].includes(profile.role) && (
+        {profile && ['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER', 'TEAM_LEADER', 'GENERAL_AFFAIRS'].includes(profile.role) && (
           <div className="space-y-4 bg-muted/30 p-4 rounded-[2rem] border border-border/50">
             <h4 className="text-[11px] font-black text-rose-500/80 uppercase tracking-[0.2em] px-2 flex items-center gap-2">
               <Lock className="w-3 h-3" />

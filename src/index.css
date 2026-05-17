@@ -73,9 +73,20 @@
   @apply bg-muted-foreground/20 rounded-full;
 }
 
-/* Elderly Mode */
-html.elderly-mode { font-size: 140%; }
-html.elderly-mode body { font-weight: 700; }
+  /* Elderly Mode */
+  html.elderly-mode { font-size: 125%; }
+  html.elderly-mode body { font-weight: 700; }
+  html.elderly-mode [class*="text-["] { font-size: 1.1em !important; }
+
+  @keyframes marquee {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+  .animate-marquee {
+    display: flex;
+    width: 200%;
+    animation: marquee 25s linear infinite;
+  }
 
 /* DayPicker customization */
 .rdp { --rdp-accent-color: var(--primary); --rdp-background-color: var(--primary); }

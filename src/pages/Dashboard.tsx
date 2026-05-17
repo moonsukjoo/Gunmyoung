@@ -600,8 +600,20 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="w-full space-y-7 pb-32 px-4 overflow-x-hidden bg-background">
-      {/* 1. Header */}
-      <header className="pt-8 space-y-1.5">
+      {/* 1. Header & Banner */}
+      <header className="pt-8 space-y-3">
+        {bannerText && (
+          <div className="bg-primary/5 border-y border-primary/10 py-2.5 -mx-4 overflow-hidden">
+            <div className="flex whitespace-nowrap animate-marquee">
+              <p className="inline-block text-[11px] font-black text-primary px-4">
+                {bannerText} • Safety First • ALWAYS BE CAREFUL • {profile?.displayName}님 환영합니다 • {bannerText}
+              </p>
+              <p className="inline-block text-[11px] font-black text-primary px-4">
+                {bannerText} • Safety First • ALWAYS BE CAREFUL • {profile?.displayName}님 환영합니다 • {bannerText}
+              </p>
+            </div>
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <p className="text-[10px] font-black text-muted-foreground/50 uppercase tracking-[0.2em]">
             Safety First Dashboard
@@ -789,6 +801,28 @@ export const Dashboard: React.FC = () => {
                   <Users className="w-5 h-5" />
                 </div>
                 <span className="text-[11px] font-black text-foreground/80 leading-tight">팀 출근<br/>현황</span>
+              </button>
+            )}
+            {isManager && (
+              <button 
+                onClick={() => setIsNoticeDialogOpen(true)} 
+                className="flex items-center gap-3 p-4 bg-emerald-500/[0.03] border border-emerald-500/10 rounded-2xl text-left hover:bg-emerald-500/[0.06] transition-all"
+              >
+                <div className="w-9 h-9 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-400">
+                  <Megaphone className="w-5 h-5" />
+                </div>
+                <span className="text-[11px] font-black text-foreground/80 leading-tight">공지사항<br/>등록</span>
+              </button>
+            )}
+            {canReportAccident && (
+              <button 
+                onClick={() => navigate('/accidents')} 
+                className="flex items-center gap-3 p-4 bg-rose-500/[0.03] border border-rose-500/10 rounded-2xl text-left hover:bg-rose-500/[0.06] transition-all"
+              >
+                <div className="w-9 h-9 bg-rose-500/10 rounded-xl flex items-center justify-center text-rose-500">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <span className="text-[11px] font-black text-foreground/80 leading-tight">사고사례<br/>등록</span>
               </button>
             )}
             {canManageMeal && (
