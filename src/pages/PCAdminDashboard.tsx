@@ -13,6 +13,7 @@ import {
   Settings,
   Trophy,
   ClipboardList,
+  Lock,
   HardHat,
   CircleDollarSign,
   Radio
@@ -53,6 +54,7 @@ const PCAdminDashboard: React.FC = () => {
 
   const quickActions = [
     { id: 'personnel', label: '임직원 정보 관리', icon: Users, to: '/admin/pc/personnel' },
+    { id: 'permissions', label: '사용자 권한 관리', icon: Lock, to: '/pc-admin/personnel' }, // Assuming the personnel page handles roles/permissions
     { id: 'attendance', label: '근태 현황 총괄', icon: Clock, to: '/admin/pc/attendance' },
     { id: 'leave', label: '연차/휴가 결재', icon: CalendarDays, to: '/admin/pc/leave' },
     { id: 'payslip', label: '급여명세서 발행', icon: CircleDollarSign, to: '/admin/pc/payslip' },

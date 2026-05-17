@@ -30,6 +30,7 @@ export const Notices: React.FC = () => {
   const { profile } = useAuth();
   const [notices, setNotices] = useState<Notice[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [displayLimit, setDisplayLimit] = useState(5);
   const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [noticeToDelete, setNoticeToDelete] = useState<string | null>(null);
@@ -86,49 +87,64 @@ export const Notices: React.FC = () => {
       </div>
 
       <div className="space-y-2">
-        {filteredNotices.length > 0 ? filteredNotices.map((notice) => (
-          <div 
-            key={notice.id} 
-            className="bg-card p-5 rounded-2xl border border-border flex items-start gap-4 cursor-pointer active:scale-[0.98] transition-all"
-            onClick={() => {
-              setSelectedNotice(notice);
-              if (profile?.uid) {
-                grantRandomShipPart(profile.uid, '공지사항 상세 확인');
-              }
-            }}
-          >
-            <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center shrink-0">
-               <Megaphone className={cn("w-5 h-5", notice.isImportant ? "text-red-500" : "text-primary")} />
-            </div>
-            <div className="flex-1 space-y-1 overflow-hidden">
-               <div className="flex items-center justify-between">
-                  {notice.isImportant && (
-                    <Badge className="bg-red-500/20 text-red-500 border-none text-[8px] px-1.5 h-4 mb-1">URGENT</Badge>
-                  )}
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-muted-foreground">{format(new Date(notice.createdAt), 'MM.dd')}</span>
-                    {isAdmin && (
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="w-6 h-6 rounded-md text-white/20 hover:text-red-400 hover:bg-red-400/10 transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setNoticeToDelete(notice.id);
-                          setIsDeleteOpen(true);
-                        }}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
+        {filteredNotices.length > 0 ? (
+          <>
+            {filteredNotices.slice(0, displayLimit).map((notice) => (
+              <div 
+                key={notice.id} 
+                className="bg-card p-5 rounded-2xl border border-border flex items-start gap-4 cursor-pointer active:scale-[0.98] transition-all"
+                onClick={() => {
+                  setSelectedNotice(notice);
+                  if (profile?.uid) {
+                    grantRandomShipPart(profile.uid, '공지사항 상세 확인');
+                  }
+                }}
+              >
+                <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center shrink-0">
+                  <Megaphone className={cn("w-5 h-5", notice.isImportant ? "text-red-500" : "text-primary")} />
+                </div>
+                <div className="flex-1 space-y-1 overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    {notice.isImportant && (
+                      <Badge className="bg-red-500/20 text-red-500 border-none text-[8px] px-1.5 h-4 mb-1">URGENT</Badge>
                     )}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-muted-foreground">{format(new Date(notice.createdAt), 'MM.dd')}</span>
+                      {isAdmin && (
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="w-6 h-6 rounded-md text-white/20 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setNoticeToDelete(notice.id);
+                            setIsDeleteOpen(true);
+                          }}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
-               </div>
-               <h4 className="text-base font-black text-foreground tracking-tight truncate">{notice.title}</h4>
-               <p className="text-xs text-muted-foreground font-bold line-clamp-1">{notice.content}</p>
-            </div>
-            <ChevronRight className="w-5 h-5 text-muted-foreground/30 self-center" />
-          </div>
-        )) : (
+                  <h4 className="text-base font-black text-foreground tracking-tight truncate">{notice.title}</h4>
+                  <p className="text-xs text-muted-foreground font-bold line-clamp-1">{notice.content}</p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-muted-foreground/30 self-center" />
+              </div>
+            ))}
+            
+            {filteredNotices.length > displayLimit && (
+              <Button 
+                variant="ghost" 
+                className="w-full h-14 bg-muted hover:bg-muted/80 text-muted-foreground font-black rounded-2xl group transition-all"
+                onClick={() => setDisplayLimit(prev => prev + 5)}
+              >
+                더 보기
+                <ChevronRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+              </Button>
+            )}
+          </>
+        ) : (
           <div className="py-20 text-center opacity-30">
             <Megaphone className="w-16 h-16 mx-auto mb-4" />
             <p className="font-black text-sm">공지사항이 없습니다</p>

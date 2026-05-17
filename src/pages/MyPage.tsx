@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   Building2,
   Lock,
+  ClipboardList,
   Smartphone,
   RefreshCw,
   Eye,
@@ -296,22 +297,50 @@ export const MyPage: React.FC = () => {
     }
   };
 
-  const menuItems = [
-    { label: '연차 내역', icon: CalendarDays, to: '/leave', color: 'text-blue-600', bgColor: 'bg-blue-500/10' },
-    { label: '현물 신청', icon: Wallet, to: '/redemption', color: 'text-emerald-600', bgColor: 'bg-emerald-500/10' },
-    { label: '월급 명세서', icon: FileText, to: '/mypage/payslip', color: 'text-rose-600', bgColor: 'bg-rose-500/10' },
-    { label: '엔터놀이터', icon: Trophy, to: '/entertainment', color: 'text-purple-600', bgColor: 'bg-purple-500/10' },
-    { label: '로또 번호 생성기', icon: Ticket, to: '/lotto', color: 'text-orange-600', bgColor: 'bg-orange-500/10' },
-    { label: '교육 이수증', icon: BookOpen, onClick: () => setIsExamHistoryOpen(true), color: 'text-emerald-600', bgColor: 'bg-emerald-500/10' },
-    profile && !['사원', '조장'].includes(profile.position?.trim() || '') ? { label: '안전 지수 랭킹', icon: ShieldCheck, to: '/safety-leaderboard', color: 'text-amber-600', bgColor: 'bg-amber-500/10' } : null,
-    { label: '간편 비밀번호', icon: Lock, onClick: () => setIsPinModalOpen(true), color: 'text-amber-600', bgColor: 'bg-amber-500/10' },
-  ].filter(Boolean) as any[];
+  const categories = [
+    {
+      title: '안전 및 업무',
+      items: [
+        { label: '작업지시서 작성', icon: ClipboardList, to: '/work-instruction-report', color: 'text-blue-600', bgColor: 'bg-blue-500/10', roles: ['TEAM_LEADER', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER', 'CEO'] },
+        { label: '일일 행적 관리', icon: Navigation, to: '/attendance', color: 'text-indigo-600', bgColor: 'bg-indigo-500/10' },
+        { label: '안전 보건 교육', icon: BookOpen, to: '/training', color: 'text-emerald-600', bgColor: 'bg-emerald-500/10' },
+        { label: '교육 이수증', icon: Trophy, onClick: () => setIsExamHistoryOpen(true), color: 'text-amber-600', bgColor: 'bg-amber-500/10' },
+      ]
+    },
+    {
+      title: '인사 및 복리후생',
+      items: [
+        { label: '연차 신청/내역', icon: CalendarDays, to: '/leave', color: 'text-purple-600', bgColor: 'bg-purple-500/10' },
+        { label: '월급 명세서', icon: FileText, to: '/mypage/payslip', color: 'text-rose-600', bgColor: 'bg-rose-500/10' },
+        { label: '현물 보상 신청', icon: Wallet, to: '/redemption', color: 'text-orange-600', bgColor: 'bg-orange-500/10' },
+        { label: '포상 및 칭찬', icon: ShieldCheck, to: '/praise', color: 'text-pink-600', bgColor: 'bg-pink-500/10' },
+      ]
+    },
+    {
+      title: '시스템 및 편의',
+      items: [
+        { label: '공지사항', icon: Bell, to: '/notices', color: 'text-blue-500', bgColor: 'bg-blue-500/10' },
+        { label: '로또 생성기', icon: Ticket, to: '/lotto', color: 'text-amber-500', bgColor: 'bg-amber-500/10' },
+        { label: '엔터놀이터', icon: Trophy, to: '/entertainment', color: 'text-purple-500', bgColor: 'bg-purple-500/10' },
+        { label: '비밀번호 변경', icon: Lock, onClick: () => setIsPinModalOpen(true), color: 'text-slate-500', bgColor: 'bg-slate-500/10' },
+      ]
+    }
+  ];
+
+  const adminMenu = {
+    title: '관리자 전용',
+    items: [
+      { label: '작업지시 관리', icon: ClipboardList, to: '/work-instruction-mgmt', color: 'text-primary', bgColor: 'bg-primary/10' },
+      { label: '사용자 권한 관리', icon: Lock, to: '/pc-admin/personnel', color: 'text-rose-600', bgColor: 'bg-rose-500/10' },
+      { label: '통합 대시보드', icon: Activity, to: '/pc-admin/dashboard', color: 'text-indigo-600', bgColor: 'bg-indigo-500/10' },
+    ]
+  };
 
   return (
-    <div className="space-y-4 pb-24 px-2">
-      <header className="py-4 flex items-center justify-between font-sans px-2">
+    <div className="space-y-6 pb-24 px-2">
+      <header className="py-2 flex items-center justify-between font-sans px-2">
         <div>
-           <p className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-0.5">내 계정 정보</p>
+           <p className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-0.5">KM HRM SYSTEM</p>
            <h2 className="text-2xl font-black tracking-tight text-foreground leading-tight">마이 페이지</h2>
         </div>
         <div className="flex items-center gap-2">
@@ -401,47 +430,81 @@ export const MyPage: React.FC = () => {
              <div className="w-8 h-8 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-500 mb-1 group-hover:scale-110 transition-transform">
                <Wallet className="w-4 h-4" />
              </div>
-             <p className="text-base font-black text-foreground">{(profile?.points || 0).toLocaleString()}</p>
-             <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">포인트</p>
+             <p className="text-sm font-black text-foreground">{(profile?.points || 0).toLocaleString()}</p>
+             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">포인트</p>
           </Card>
           <Card className="flex-1 border border-border bg-card p-3 flex flex-col justify-center items-center gap-1 group shadow-sm">
              <div className="w-8 h-8 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-500 mb-1 group-hover:scale-110 transition-transform">
                <CalendarDays className="w-4 h-4" />
              </div>
-             <p className="text-base font-black text-foreground">{profile?.annualLeaveBalance || 0}일</p>
-             <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">연차</p>
+             <p className="text-sm font-black text-foreground">{profile?.annualLeaveBalance || 0}일</p>
+             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">연차</p>
           </Card>
         </div>
       </div>
 
-          {/* Compact Quick Menu Grid */}
-          <div className="grid grid-cols-2 gap-2">
-            {menuItems.map((item, idx) => (
-              <button 
-                key={idx} 
-                onClick={() => item.onClick ? item.onClick() : navigate(item.to!)}
-                className="flex items-center gap-3 p-3 bg-card border border-border rounded-2xl text-left hover:bg-muted transition-all group active:scale-95 shadow-sm"
-              >
-                <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform shrink-0", item.bgColor)}>
-                  <item.icon className={cn("w-5 h-5", item.color)} />
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-[11px] font-black text-foreground truncate">{item.label}</span>
-                  <span className="text-[8px] font-bold text-muted-foreground/80">바로가기</span>
-                </div>
-              </button>
-            ))}
+      {/* Reorganized Categorized Menu */}
+      <div className="space-y-8 mt-4">
+        {categories.map((category, idx) => (
+          <div key={idx} className="space-y-4">
+            <h4 className="text-[11px] font-black text-muted-foreground/60 uppercase tracking-[0.2em] px-2 flex items-center gap-2">
+              <span className="w-1 h-1 bg-primary rounded-full"></span>
+              {category.title}
+            </h4>
+            <div className="grid grid-cols-2 gap-2">
+              {category.items.filter(item => !item.roles || item.roles.includes(profile?.role)).map((item, i) => (
+                <button 
+                  key={i} 
+                  onClick={() => item.onClick ? item.onClick() : navigate(item.to!)}
+                  className="flex items-center gap-3 p-3 bg-card border border-border rounded-2xl text-left hover:bg-muted transition-all active:scale-95 shadow-sm group"
+                >
+                  <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform shrink-0", item.bgColor)}>
+                    <item.icon className={cn("w-4 h-5", item.color)} />
+                  </div>
+                  <span className="text-[11px] font-black text-foreground leading-tight">{item.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
+        ))}
 
-      {/* System Settings - 2x2 Grid Layout */}
-      <div className="pt-2 space-y-4">
+        {/* Admin Menu Section */}
+        {profile && ['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER'].includes(profile.role) && (
+          <div className="space-y-4 bg-muted/30 p-4 rounded-[2rem] border border-border/50">
+            <h4 className="text-[11px] font-black text-rose-500/80 uppercase tracking-[0.2em] px-2 flex items-center gap-2">
+              <Lock className="w-3 h-3" />
+              {adminMenu.title}
+            </h4>
+            <div className="grid grid-cols-1 gap-2">
+              {adminMenu.items.map((item, i) => (
+                <button 
+                  key={i} 
+                  onClick={() => navigate(item.to!)}
+                  className="flex items-center justify-between p-4 bg-card border border-border rounded-2xl text-left hover:bg-muted transition-all active:scale-98 shadow-sm group"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shadow-inner", item.bgColor)}>
+                      <item.icon className={cn("w-5 h-5", item.color)} />
+                    </div>
+                    <span className="text-sm font-black text-foreground">{item.label}</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:translate-x-1 transition-transform" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* System Settings - Fixed Bottom Grid */}
+      <div className="pt-4 space-y-4">
         <h4 className="text-[10px] font-black text-muted-foreground/80 uppercase tracking-[0.2em] px-1">기기 및 시스템 제어</h4>
         <div className="grid grid-cols-2 gap-3">
           <button 
             onClick={toggleElderlyMode}
             className={cn(
-              "p-5 rounded-[2.5rem] border transition-all flex flex-col items-center gap-2 group",
-              profile?.elderlyMode ? "bg-blue-600/20 border-blue-500/30 shadow-lg shadow-blue-500/10" : "bg-card border-border shadow-inner"
+              "p-4 md:p-5 rounded-[2.5rem] border transition-all flex flex-col items-center gap-2 group",
+              profile?.elderlyMode ? "bg-blue-600/20 border-blue-500/30 shadow-lg" : "bg-card border-border"
             )}
           >
             <div className={cn("w-10 h-10 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110", profile?.elderlyMode ? "bg-blue-500 text-white" : "bg-muted text-muted-foreground")}>

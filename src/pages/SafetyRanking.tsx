@@ -271,18 +271,18 @@ export const SafetyRanking: React.FC = () => {
 
             <div className="space-y-2">
               {filteredUsers.map((user, idx) => (
-                <div key={user.uid} className="bg-card p-5 rounded-2xl border border-white/5 flex items-center justify-between">
+                <div key={user.uid} className="bg-card p-5 rounded-2xl border border-border flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className={cn(
                       "w-10 h-10 rounded-xl flex items-center justify-center font-black",
-                      idx === 0 ? "bg-amber-500/20 text-amber-600 shadow-amber-500/10 shadow-lg" : "bg-muted text-muted-foreground"
+                      idx === 0 ? "bg-amber-500/20 text-amber-700 dark:text-amber-500 shadow-amber-500/10 shadow-lg" : "bg-muted text-muted-foreground"
                     )}>
                       {idx < 3 ? <Trophy className="w-5 h-5" /> : (idx + 1)}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-base font-black text-foreground">{user.displayName}</span>
-                        <Badge variant="outline" className="text-[9px] font-black bg-muted border-none opacity-60">
+                        <Badge variant="outline" className="text-[9px] font-black bg-muted border-none opacity-80">
                            {user.departmentName}
                         </Badge>
                       </div>
@@ -291,9 +291,9 @@ export const SafetyRanking: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right">
-                      <div className={cn("text-xl font-black", (user.safetyScore ?? 100) >= 90 ? "text-emerald-500" : "text-amber-600")}>
+                      <div className={cn("text-xl font-black", (user.safetyScore ?? 100) >= 100 ? "text-emerald-500" : "text-amber-700 dark:text-amber-500")}>
                         {user.safetyScore ?? 100}
-                        <span className="text-[10px] ml-1 opacity-40">pts</span>
+                        <span className="text-[10px] ml-1 opacity-60">pts</span>
                       </div>
                     </div>
                     {isAdmin && (

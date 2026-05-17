@@ -33,10 +33,12 @@ import {
   FileBox,
   CheckCircle2,
   XCircle,
+  ArrowRightLeft,
   MapPin,
   RefreshCw,
   FileBarChart,
-  Utensils
+  Utensils,
+  Lock
 } from 'lucide-react';
 import { db } from '@/firebase';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, limit, orderBy, getDocs, Timestamp } from 'firebase/firestore';
@@ -175,7 +177,7 @@ export const Dashboard: React.FC = () => {
     const noticeQ = query(
       collection(db, 'notices'),
       orderBy('createdAt', 'desc'),
-      limit(3)
+      limit(5)
     );
 
     const unsubscribeNotices = onSnapshot(noticeQ, (snapshot) => {
@@ -597,305 +599,272 @@ export const Dashboard: React.FC = () => {
   const workingDays = profile?.joinedAt ? differenceInDays(new Date(), new Date(profile.joinedAt)) + 1 : null;
 
   return (
-    <div className="w-full space-y-6 pb-24 px-2 overflow-x-hidden">
-      {/* Greeting Header */}
-      <div className="py-6 space-y-1">
-        <p className="text-muted-foreground font-black text-xs uppercase tracking-widest">
-          {profile?.displayName}님, 반가워요!
-        </p>
-        <h1 className="text-2xl font-black text-foreground tracking-tight leading-tight">
-          {bannerText}
-        </h1>
-      </div>
-
-      {/* Health Management Quick Action (for Team Leaders/Admins) */}
-      {canWriteHealth && (
-        <Card 
-          className="bg-emerald-600 border border-emerald-500/20 rounded-3xl p-5 overflow-hidden relative cursor-pointer active:scale-[0.98] transition-all group hover:bg-emerald-700 shadow-xl shadow-emerald-900/20"
-          onClick={() => navigate('/health-mgmt')}
-        >
-          <div className="absolute top-0 right-0 p-5 opacity-20 group-hover:opacity-30 transition-opacity">
-            <Activity className="w-16 h-16 text-white" />
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-white shadow-lg">
-              <Activity className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="text-lg font-black text-white">매일 보건 이상무 보고하기</h3>
-              <p className="text-[10px] font-bold text-white/70 uppercase tracking-widest">실시간 건강 상태 체크</p>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {/* Core Services Section */}
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          {/* Quick Attendance */}
-          {!todayAttendance ? (
-            <Card 
-              className="bg-blue-600 border-none rounded-3xl p-4 cursor-pointer active:scale-95 transition-all shadow-lg shadow-blue-900/20 group hover:bg-blue-700 h-32 flex flex-col justify-between"
-              onClick={handleClockIn}
-            >
-              <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-xl flex items-center justify-center text-white group-hover:scale-110 transition-transform">
-                <Clock className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-[9px] font-black text-white/60 uppercase tracking-tighter">실시간 체크</p>
-                <h3 className="text-base font-black text-white">출근하기</h3>
-              </div>
-            </Card>
-          ) : !todayAttendance.clockOut ? (
-            <Card 
-              className="bg-rose-600 border-none rounded-3xl p-4 cursor-pointer active:scale-95 transition-all shadow-lg shadow-rose-900/20 group hover:bg-rose-700 h-32 flex flex-col justify-between"
-              onClick={handleClockOut}
-            >
-              <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-xl flex items-center justify-center text-white group-hover:scale-110 transition-transform">
-                <Clock className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-[9px] font-black text-white/60 uppercase tracking-tighter">근무 종료</p>
-                <h3 className="text-base font-black text-white">퇴근하기</h3>
-              </div>
-            </Card>
-          ) : (
-            <Card className="bg-muted border border-border rounded-3xl p-4 opacity-50 shadow-inner h-32 flex flex-col justify-between">
-               <div className="w-10 h-10 bg-background/50 rounded-xl flex items-center justify-center text-muted-foreground">
-                 <CheckCircle className="w-5 h-5" />
-               </div>
-               <h3 className="text-sm font-black text-muted-foreground leading-tight">오늘 근무<br/>종료됨</h3>
-            </Card>
+    <div className="w-full space-y-7 pb-32 px-4 overflow-x-hidden bg-background">
+      {/* 1. Header */}
+      <header className="pt-8 space-y-1.5">
+        <div className="flex items-center gap-2">
+          <p className="text-[10px] font-black text-muted-foreground/50 uppercase tracking-[0.2em]">
+            Safety First Dashboard
+          </p>
+          <div className="h-px flex-1 bg-border/30" />
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="text-2xl font-black text-foreground tracking-tighter leading-tight flex-1">
+            {profile?.displayName}님, <br/>
+            오늘도 <span className="text-primary">안전하게</span> 작업하세요!
+          </h1>
+          {workingDays && (
+             <div className="shrink-0 flex flex-col items-end">
+               <Badge variant="secondary" className="rounded-xl font-black text-[11px] py-1 bg-primary/10 text-primary border-none">
+                 D+{workingDays}
+               </Badge>
+             </div>
           )}
-
-          {/* Personal Work Log */}
-          <Card 
-            className="bg-[#122b2b] border-none rounded-3xl p-4 cursor-pointer hover:bg-[#1a3a3a] transition-all group shadow-lg shadow-black/20 h-32 flex flex-col justify-between"
-            onClick={() => navigate('/personal-work-log')}
-          >
-            <div className="w-10 h-10 bg-emerald-500/20 backdrop-blur-md rounded-xl flex items-center justify-center text-emerald-400 shadow-sm group-hover:scale-110 transition-transform">
-              <ClipboardList className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-[9px] font-black text-emerald-400/40 uppercase tracking-tighter">기록 관리</p>
-              <h3 className="text-base font-black text-white">작업일지</h3>
-            </div>
-          </Card>
         </div>
+      </header>
 
-        {/* Second Row */}
-        <div className="grid grid-cols-2 gap-3">
-          {/* Meal Request */}
+      {/* 2. Core Operational Actions */}
+      <section className="grid grid-cols-2 gap-3">
+        {/* Attendance */}
+        {!todayAttendance ? (
           <Card 
-            className="bg-[#2b1b12] border-none rounded-3xl p-4 cursor-pointer hover:bg-[#3a2a1a] transition-all group shadow-lg shadow-black/20 h-32 flex flex-col justify-between"
-            onClick={() => navigate('/meal-request')}
+            className="bg-blue-600 border-none rounded-[2rem] p-4 cursor-pointer active:scale-95 transition-all shadow-lg shadow-blue-500/20 h-32 flex flex-col justify-between relative overflow-hidden"
+            onClick={handleClockIn}
           >
-            <div className="w-10 h-10 bg-orange-500/20 backdrop-blur-md rounded-xl flex items-center justify-center text-orange-400 shadow-sm group-hover:scale-110 transition-transform">
-              <Utensils className="w-5 h-5" />
+            <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-white">
+              <Clock className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-[9px] font-black text-orange-400/40 uppercase tracking-tighter">현장 식사</p>
-              <h3 className="text-base font-black text-white">식사신청</h3>
+              <p className="text-[8px] font-black text-white/40 uppercase tracking-widest leading-none mb-1">Check-In</p>
+              <h3 className="text-lg font-black text-white">출근하기</h3>
             </div>
           </Card>
-
-          {/* Training */}
+        ) : !todayAttendance.clockOut ? (
           <Card 
-            className="bg-[#1b122b] border-none rounded-3xl p-4 cursor-pointer hover:bg-[#2a1a3a] transition-all group shadow-lg shadow-black/20 h-32 flex flex-col justify-between"
-            onClick={() => navigate('/training')}
+            className="bg-rose-600 border-none rounded-[2rem] p-4 cursor-pointer active:scale-95 transition-all shadow-lg shadow-rose-500/20 h-32 flex flex-col justify-between relative overflow-hidden"
+            onClick={handleClockOut}
           >
-            <div className="w-10 h-10 bg-purple-500/20 backdrop-blur-md rounded-xl flex items-center justify-center text-purple-400 shadow-sm group-hover:scale-110 transition-transform">
-              <BookOpen className="w-5 h-5" />
+            <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-white">
+              <Clock className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-[9px] font-black text-purple-400/40 uppercase tracking-tighter">온라인 교육</p>
-              <h3 className="text-base font-black text-white">교육센터</h3>
+              <p className="text-[8px] font-black text-white/40 uppercase tracking-widest leading-none mb-1">Check-Out</p>
+              <h3 className="text-lg font-black text-white">퇴근하기</h3>
             </div>
           </Card>
-        </div>
-
-        {/* Safety Ranking Link - Moved here as requested */}
-        {profile && !['사원', '조장'].includes(profile.position?.trim() || '') && (
-          <Card 
-            className="bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-500/10 rounded-3xl p-5 cursor-pointer active:scale-[0.98] transition-all group hover:bg-amber-500/20 relative overflow-hidden"
-            onClick={() => navigate('/safety-leaderboard')}
-          >
-            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-              <Trophy className="w-20 h-20 text-amber-500" />
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-amber-500/20 rounded-2xl flex items-center justify-center text-amber-600 shadow-lg group-hover:scale-110 transition-transform">
-                <Trophy className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-lg font-black text-foreground">안전 지수 랭킹 확인</h3>
-                <div className="flex items-center gap-2">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">누가 가장 안전할까요?</p>
-                  <div className="flex -space-x-2">
-                     {[1, 2, 3].map(i => (
-                       <div key={i} className="w-4 h-4 rounded-full border-2 border-background bg-muted text-[8px] flex items-center justify-center font-black">
-                         {i}
-                       </div>
-                     ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+        ) : (
+          <Card className="bg-muted/40 border border-border/50 rounded-[2rem] p-4 h-32 flex flex-col justify-between">
+             <div className="w-10 h-10 bg-background/50 rounded-2xl flex items-center justify-center text-muted-foreground/30">
+               <CheckCircle className="w-5 h-5" />
+             </div>
+             <h3 className="text-xs font-black text-muted-foreground/40 leading-tight">오늘의 근무가<br/>종료되었습니다</h3>
           </Card>
         )}
-      </div>
 
-      {/* Management & Admin Hub */}
+        {/* Safety Check */}
+        <Card 
+          className="bg-[#2a261a] border-none rounded-[2rem] p-4 cursor-pointer hover:bg-[#342f20] transition-all group shadow-lg h-32 flex flex-col justify-between relative overflow-hidden"
+          onClick={() => navigate('/work-instruction')}
+        >
+          <div className="w-10 h-10 bg-amber-500/10 backdrop-blur-md rounded-2xl flex items-center justify-center text-amber-500">
+            <ClipboardList className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-[8px] font-black text-amber-500/30 uppercase tracking-widest leading-none mb-1">Compliance</p>
+            <h3 className="text-lg font-black text-white">작업지시·점검</h3>
+          </div>
+        </Card>
+      </section>
+
+      {/* 3. Services Layout (Compact Grid) */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between px-1">
+          <h4 className="text-[11px] font-black text-muted-foreground/60 uppercase tracking-[0.2em] flex items-center gap-2">
+            <Sparkles className="w-3 h-3 text-primary" /> 업무 및 편의 서비스
+          </h4>
+        </div>
+        
+        <div className="grid grid-cols-4 gap-y-6 gap-x-2">
+          {[
+            { label: '작업일지', icon: ClipboardList, to: '/personal-work-log', color: 'bg-emerald-500/10 text-emerald-600' },
+            { label: '식사신청', icon: Utensils, to: '/meal-request', color: 'bg-orange-500/10 text-orange-600' },
+            { label: '보건보고', icon: Activity, to: '/health-mgmt', color: 'bg-rose-500/10 text-rose-600' },
+            { label: '교육센터', icon: BookOpen, to: '/training', color: 'bg-purple-500/10 text-purple-600' },
+            { label: '칭찬하기', icon: Heart, to: '/praise-feed', color: 'bg-pink-500/10 text-pink-600' },
+            { label: '선박게임', icon: Ship, to: '/ship-assembly', color: 'bg-blue-500/10 text-blue-600' },
+            { label: '안전랭킹', icon: Trophy, to: '/safety-leaderboard', color: 'bg-amber-500/10 text-amber-600' },
+            { label: '연차신청', icon: CalendarDays, to: '/leave', color: 'bg-indigo-500/10 text-indigo-600' },
+          ].map((item, idx) => (
+            <button 
+              key={idx}
+              onClick={() => navigate(item.to)}
+              className="flex flex-col items-center gap-2 group active:scale-90 transition-all text-center"
+            >
+              <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center transition-all", item.color)}>
+                <item.icon className={cn("w-6 h-6", item.label === '칭찬하기' && "fill-current")} />
+              </div>
+              <span className="text-[10px] font-bold text-foreground/70 tracking-tighter leading-tight break-keep px-1">{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* 4. Notice Section */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between px-1">
+          <h4 className="text-[11px] font-black text-muted-foreground/60 uppercase tracking-[0.2em] flex items-center gap-2">
+            <Megaphone className="w-3 h-3" /> 최근 공지사항
+          </h4>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-7 text-[10px] font-black text-primary hover:bg-primary/5 rounded-full"
+            onClick={() => navigate('/notices')}
+          >
+            더보기 <ChevronRight className="w-3 h-3 ml-1" />
+          </Button>
+        </div>
+        <Card className="bg-card border border-border/50 rounded-[2rem] overflow-hidden shadow-sm">
+          <div className="divide-y divide-border/30">
+            {recentNotices.length > 0 ? (
+              recentNotices.map((notice) => (
+                <div 
+                  key={notice.id} 
+                  className="p-4 hover:bg-muted/40 active:bg-muted transition-colors cursor-pointer group"
+                  onClick={() => setSelectedNotice(notice)}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        {notice.isImportant && (
+                          <Badge className="bg-rose-500 hover:bg-rose-600 text-[8px] font-black h-4 px-1.5 rounded-sm shrink-0">URGENT</Badge>
+                        )}
+                        <h3 className="text-xs font-bold text-foreground truncate group-hover:text-primary transition-colors">
+                          {notice.title}
+                        </h3>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground/60 line-clamp-1">
+                        {notice.content}
+                      </p>
+                    </div>
+                    <span className="text-[9px] font-medium text-muted-foreground/30 whitespace-nowrap mt-1">
+                      {format(new Date(notice.createdAt), 'MM/dd')}
+                    </span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="py-10 text-center text-muted-foreground/30 font-bold text-xs uppercase tracking-widest">
+                No recent notices
+              </div>
+            )}
+          </div>
+        </Card>
+      </section>
+
+      {/* 5. Special Admin Features (Manager/Supervisor only) */}
       {(isSupervisor || isManager || canManageMeal) && (
-        <div className="space-y-4 pt-4 border-t border-border">
-          <div className="flex items-center justify-between px-2">
-            <div className="flex items-center gap-2 bg-muted px-3 py-1 rounded-full border border-border">
-              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-              <span className="text-[9px] font-black text-muted-foreground/80 uppercase">시스템 활성</span>
-            </div>
-          </div>
-
-          {/* High Priority Management Cards */}
-          <div className="grid grid-cols-1 gap-2">
+        <section className="space-y-4 pt-4 border-t border-border/30">
+          <h4 className="text-[10px] font-black text-rose-500 uppercase tracking-[0.2em] px-1 flex items-center gap-2">
+            <Lock className="w-3 h-3" /> 관리 지원 모듈
+          </h4>
+          <div className="grid grid-cols-2 gap-2">
             {isSupervisor && (
-              <Card 
-                className="bg-emerald-600/10 border border-emerald-500/20 rounded-3xl p-4 flex items-center gap-4 group cursor-pointer hover:bg-emerald-600/15 transition-all shadow-lg" 
-                onClick={() => navigate('/work-log-mgmt')}
+              <button 
+                onClick={() => navigate('/work-instruction-mgmt')} 
+                className="flex items-center gap-3 p-4 bg-rose-500/[0.03] border border-rose-500/10 rounded-2xl text-left hover:bg-rose-500/[0.06] transition-all"
               >
-                <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-white shadow-lg shrink-0">
-                  <CheckCircle2 className="w-6 h-6" />
+                <div className="w-9 h-9 bg-rose-500/10 rounded-xl flex items-center justify-center text-rose-500">
+                  <ShieldCheck className="w-5 h-5" />
                 </div>
-                <div className="flex-1">
-                  <h3 className="text-sm font-black text-foreground text-left leading-tight">팀원 작업일지 승인</h3>
-                </div>
-                <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
-                  <ChevronRight className="w-4 h-4" />
-                </div>
-              </Card>
+                <span className="text-[11px] font-black text-foreground/80 leading-tight">작업지시<br/>관리</span>
+              </button>
             )}
-
+            {isManager && (
+              <button 
+                onClick={fetchTeamAttendance} 
+                className="flex items-center gap-3 p-4 bg-blue-500/[0.03] border border-blue-500/10 rounded-2xl text-left hover:bg-blue-500/[0.06] transition-all"
+              >
+                <div className="w-9 h-9 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-500">
+                  <Users className="w-5 h-5" />
+                </div>
+                <span className="text-[11px] font-black text-foreground/80 leading-tight">팀 출근<br/>현황</span>
+              </button>
+            )}
             {canManageMeal && (
-              <Card 
-                className="bg-blue-600/10 border border-blue-500/20 rounded-3xl p-4 flex items-center gap-4 group cursor-pointer hover:bg-blue-600/15 transition-all shadow-lg" 
-                onClick={() => navigate('/meal-mgmt')}
+              <button 
+                onClick={() => navigate('/meal-mgmt')} 
+                className="col-span-2 flex items-center justify-between p-4 bg-card border border-border/50 rounded-2xl hover:bg-muted transition-all"
               >
-                <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shrink-0">
-                  <Utensils className="w-6 h-6" />
+                <div className="flex items-center gap-4">
+                  <div className="w-9 h-9 bg-orange-500/10 rounded-xl flex items-center justify-center text-orange-500">
+                    <Utensils className="w-4 h-4" />
+                  </div>
+                  <span className="text-[11px] font-black text-foreground/80">식사·간식 신청 내역 관리</span>
                 </div>
-                <div className="flex-1">
-                  <h3 className="text-sm font-black text-foreground text-left leading-tight">식사·간식 신청 관리</h3>
-                </div>
-                <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500">
-                  <ChevronRight className="w-4 h-4" />
-                </div>
-              </Card>
+                <ChevronRight className="w-4 h-4 text-muted-foreground/30" />
+              </button>
             )}
           </div>
-
-      {/* Quick Actions Grid for Managers */}
-      {isManager && (
-        <div className="space-y-3">
-          <h4 className="text-[10px] font-black text-muted-foreground/60 uppercase tracking-[0.2em] px-1">관리자 빠른 작업</h4>
-          <div className="grid grid-cols-2 gap-3">
-            <button 
-              onClick={() => setIsNoticeDialogOpen(true)}
-              className="flex flex-col items-center justify-center gap-3 p-5 bg-card border border-border rounded-[2rem] hover:bg-muted active:scale-95 transition-all group"
-            >
-              <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
-                <Megaphone className="w-5 h-5" />
-              </div>
-              <span className="text-[11px] font-black text-foreground/90">공지 등록</span>
-            </button>
-
-            <button 
-              onClick={() => navigate('/accidents')}
-              className="flex flex-col items-center justify-center gap-3 p-5 bg-card border border-border rounded-[2rem] hover:bg-muted active:scale-95 transition-all group"
-            >
-              <div className="w-10 h-10 bg-destructive/10 rounded-xl flex items-center justify-center text-destructive group-hover:scale-110 transition-transform">
-                <ShieldAlert className="w-5 h-5" />
-              </div>
-              <span className="text-[11px] font-black text-foreground/90">사고 사례 등록</span>
-            </button>
-
-            <button 
-              onClick={fetchTeamAttendance}
-              className="flex flex-col items-center justify-center gap-3 p-5 bg-card border border-border rounded-[2rem] hover:bg-muted active:scale-95 transition-all group"
-            >
-              <div className="w-10 h-10 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform">
-                <Users className="w-5 h-5" />
-              </div>
-              <span className="text-[11px] font-black text-foreground/90">출근 현황</span>
-            </button>
-            
-            <button 
-              onClick={() => navigate('/admin/reports')}
-              className="flex flex-col items-center justify-center gap-3 p-5 bg-accent/10 border border-accent/20 rounded-[2rem] hover:bg-accent/20 active:scale-95 transition-all group"
-            >
-              <div className="w-10 h-10 bg-accent/20 rounded-xl flex items-center justify-center text-accent group-hover:scale-110 transition-transform">
-                <FileBarChart className="w-5 h-5" />
-              </div>
-              <span className="text-[11px] font-black text-foreground/80">통합 보고서</span>
-            </button>
-          </div>
-        </div>
-      )}
-        </div>
+        </section>
       )}
 
-
-      {/* Quick Links Panel (Consolidated Secondary Features) */}
-      <div className="grid grid-cols-4 sm:grid-cols-4 gap-2">
-        <Card 
-          className="bg-card border border-border rounded-2xl p-3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-muted transition-all text-center"
-          onClick={() => navigate('/praise-feed')}
-        >
-          <div className="w-8 h-8 bg-pink-500/10 rounded-xl flex items-center justify-center text-pink-500">
-            <Heart className="w-4 h-4 fill-pink-500" />
-          </div>
-          <span className="text-[10px] font-black text-muted-foreground/70">칭찬합시다</span>
-        </Card>
-
-        <Card 
-          className="bg-card border border-border rounded-2xl p-3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-muted transition-all text-center"
-          onClick={() => navigate('/safety-score')}
-        >
-          <div className="w-8 h-8 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-500">
-            <ShieldCheck className="w-4 h-4" />
-          </div>
-          <span className="text-[10px] font-black text-muted-foreground/70">안전점수</span>
-        </Card>
-
-        <Card 
-          className="bg-card border border-border rounded-2xl p-3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-muted transition-all text-center"
-          onClick={() => navigate('/ship-assembly')}
-        >
-          <div className="w-8 h-8 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-500">
-            <Ship className="w-4 h-4" />
-          </div>
-          <span className="text-[10px] font-black text-muted-foreground/70">선박게임</span>
-        </Card>
-
-        <Card 
-          className="bg-card border border-border rounded-2xl p-3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-muted transition-all text-center"
-          onClick={() => navigate('/accidents')}
-        >
-          <div className="w-8 h-8 bg-rose-500/10 rounded-xl flex items-center justify-center text-rose-500">
-            <AlertTriangle className="w-4 h-4" />
-          </div>
-          <span className="text-[10px] font-black text-muted-foreground/70">사고사례</span>
-        </Card>
-      </div>
-
-      {/* Footer Navigation Tabs */}
-      <div className="bg-muted border border-border p-2 rounded-[2rem] flex justify-between gap-1 mt-4">
-        <Button variant="ghost" className="flex-1 rounded-2xl text-[10px] font-black text-muted-foreground/80 hover:text-foreground" onClick={() => navigate('/notices')}>공지사항</Button>
-        <div className="w-px h-4 bg-border self-center" />
-        <Button variant="ghost" className="flex-1 rounded-2xl text-[10px] font-black text-muted-foreground/80 hover:text-foreground" onClick={() => navigate('/accidents')}>사고사례</Button>
-        <div className="w-px h-4 bg-border self-center" />
-        <Button variant="ghost" className="flex-1 rounded-2xl text-[10px] font-black text-muted-foreground/80 hover:text-foreground" onClick={() => navigate('/leave')}>연차신청</Button>
+      {/* Fixed Bottom Quick Navigator */}
+      <div className="fixed bottom-6 left-4 right-4 z-40">
+        <nav className="bg-background/80 backdrop-blur-xl border border-border/50 p-2 rounded-[2.5rem] flex justify-between gap-1 shadow-2xl ring-1 ring-black/5">
+          <Button 
+            variant="ghost" 
+            className="flex-1 rounded-full h-11 text-[10px] font-black text-muted-foreground/60 hover:text-foreground active:bg-muted transition-all" 
+            onClick={() => navigate('/notices')}
+          >
+            📢 공지사항
+          </Button>
+          <div className="w-px h-4 bg-border/50 self-center" />
+          <Button 
+            variant="ghost" 
+            className="flex-1 rounded-full h-11 text-[10px] font-black text-muted-foreground/60 hover:text-foreground active:bg-muted transition-all" 
+            onClick={() => navigate('/accidents')}
+          >
+            ⚠️ 사고사례
+          </Button>
+          <div className="w-px h-4 bg-border/50 self-center" />
+          <Button 
+            variant="ghost" 
+            className="flex-1 rounded-full h-11 text-[10px] font-black text-muted-foreground/60 hover:text-foreground active:bg-muted transition-all" 
+            onClick={() => navigate('/leave')}
+          >
+            📅 연차신청
+          </Button>
+        </nav>
       </div>
 
       {/* Dialogs */}
+      <Dialog open={!!selectedNotice} onOpenChange={() => setSelectedNotice(null)}>
+        <DialogContent className="bg-card border-border rounded-[2.5rem] max-w-lg w-[95%] p-0 overflow-hidden text-foreground">
+          <DialogHeader className="p-8 pb-6 bg-muted/50 border-b border-border">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center">
+                <Megaphone className="w-6 h-6 text-primary" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-black tracking-tight">{selectedNotice?.title}</DialogTitle>
+                <DialogDescription className="text-muted-foreground/60 font-bold text-xs uppercase tracking-widest mt-1">
+                  작성일: {selectedNotice && format(new Date(selectedNotice.createdAt), 'yyyy.MM.dd HH:mm')}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="p-8 max-h-[60dvh] overflow-y-auto no-scrollbar">
+            <div className="text-sm leading-relaxed text-foreground/80 whitespace-pre-wrap font-medium">
+              {selectedNotice?.content}
+            </div>
+          </div>
+          <DialogFooter className="p-8 pt-4 bg-muted/50 border-t border-border">
+            <Button className="w-full h-12 rounded-xl font-black bg-foreground text-background hover:bg-foreground/90" onClick={() => setSelectedNotice(null)}>확인</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isPresenceDialogOpen} onOpenChange={setIsPresenceDialogOpen}>
         <DialogContent className="bg-card border border-border rounded-[2.5rem] shadow-2xl max-w-lg w-[95%] p-0 overflow-hidden flex flex-col max-h-[90dvh] text-foreground">
           <DialogHeader className="p-8 pb-6 bg-muted/50 border-b border-border shrink-0">

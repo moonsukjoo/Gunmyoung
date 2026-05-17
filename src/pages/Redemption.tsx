@@ -91,7 +91,7 @@ export const Redemption: React.FC = () => {
   };
 
   const statusMap = {
-    'PENDING': { label: '대기중', color: 'text-amber-600', bgColor: 'bg-amber-500/10', icon: Clock },
+    'PENDING': { label: '대기중', color: 'text-amber-700 dark:text-amber-400', bgColor: 'bg-amber-500/10', icon: Clock },
     'APPROVED': { label: '승인됨', color: 'text-blue-600', bgColor: 'bg-blue-500/10', icon: CheckCircle2 },
     'REJECTED': { label: '반려됨', color: 'text-red-600', bgColor: 'bg-red-500/10', icon: XCircle },
     'COMPLETED': { label: '지급완료', color: 'text-emerald-600', bgColor: 'bg-emerald-500/10', icon: CheckCircle2 },

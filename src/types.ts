@@ -167,6 +167,54 @@ export interface LeaveRequest {
   createdAt: string;
 }
 
+export interface WorkInstructionReport {
+  id?: string;
+  teamId: string;
+  teamName: string;
+  date: string; // yyyy-MM-dd
+  dayOfWeek: string;
+  supervisorName: string; // 관리감독자
+  safetyManagerName: string; // 안전보건관리책임자
+  tbmContent: string;
+  
+  workerInstructions: {
+    no: number;
+    workerUid: string;
+    workerName: string;
+    instruction: string;
+    changedInstruction?: string;
+    startTime: string;
+    endTime: string;
+    memo?: string;
+    hazardSubmitted: boolean;
+    healthStatus: 'NORMAL' | 'GOOD' | 'BAD';
+    signBeforeUrl?: string; // Digital signature URL or base64
+    signAfterUrl?: string; // Digital signature URL or base64
+  }[];
+
+  safetyChecks: {
+    category: string;
+    items: {
+      no: number;
+      text: string;
+      result: 'O' | 'X' | 'N/A';
+    }[];
+  }[];
+
+  hazardAssessments: {
+    no: number;
+    hazardFactor: string;
+    safetyMethod: string;
+    actionContent: string;
+    remarks: string;
+  }[];
+
+  createdAt: string;
+  createdByUid: string;
+  createdByName: string;
+  status: 'PENDING' | 'APPROVED';
+}
+
 export interface Notice {
   id: string;
   title: string;

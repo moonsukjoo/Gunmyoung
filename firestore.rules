@@ -323,6 +323,16 @@ service cloud.firestore {
       allow write: if isSafetyManager();
     }
 
+    match /workInstructionReports/{reportId} {
+      allow read: if isAuthenticated();
+      allow create: if isHRManager();
+      allow update: if isAuthenticated() && (
+        isHRManager() || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getProfile().departmentId == resource.data.teamId)
+      );
+      allow delete: if isHRManager();
+    }
+
     match /beaconLogs/{logId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();

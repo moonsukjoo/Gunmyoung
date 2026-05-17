@@ -469,9 +469,83 @@
         "approvedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "userName", "quantity", "deliveryDate", "status", "createdAt"]
+    },
+    "WorkInstructionReport": {
+      "title": "Work Instruction Report",
+      "description": "Daily integrated work instruction and safety check report for a team",
+      "type": "object",
+      "properties": {
+        "teamId": { "type": "string" },
+        "teamName": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "dayOfWeek": { "type": "string" },
+        "supervisorName": { "type": "string" },
+        "safetyManagerName": { "type": "string" },
+        "tbmContent": { "type": "string" },
+        "workerInstructions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "no": { "type": "number" },
+              "workerUid": { "type": "string" },
+              "workerName": { "type": "string" },
+              "instruction": { "type": "string" },
+              "startTime": { "type": "string" },
+              "endTime": { "type": "string" },
+              "hazardSubmitted": { "type": "boolean" },
+              "healthStatus": { "type": "string", "enum": ["GOOD", "NORMAL", "BAD"] },
+              "signBeforeUrl": { "type": "string" },
+              "signAfterUrl": { "type": "string" }
+            }
+          }
+        },
+        "safetyChecks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "category": { "type": "string" },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "no": { "type": "number" },
+                    "item": { "type": "string" },
+                    "result": { "type": "string", "enum": ["O", "X", "N/A"] }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "hazardAssessments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "no": { "type": "number" },
+              "hazardFactor": { "type": "string" },
+              "safetyMethod": { "type": "string" },
+              "actionContent": { "type": "string" },
+              "remarks": { "type": "string" }
+            }
+          }
+        },
+        "status": { "type": "string", "enum": ["PENDING", "APPROVED"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdByUid": { "type": "string" },
+        "createdByName": { "type": "string" }
+      },
+      "required": ["teamId", "date", "status", "createdAt", "createdByUid"]
     }
   },
   "firestore": {
+    "/workInstructionReports/{reportId}": {
+      "schema": "WorkInstructionReport",
+      "description": "Daily work instruction reports"
+    },
     "/lunchRequests/{requestId}": {
       "schema": "LunchRequest",
       "description": "Individual lunch requests"

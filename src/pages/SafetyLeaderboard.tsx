@@ -202,9 +202,9 @@ export const SafetyLeaderboard: React.FC = () => {
               <div className="flex items-center gap-4">
                 <div className={cn(
                   "w-10 h-10 rounded-xl flex items-center justify-center font-black transition-all group-hover:scale-105",
-                  idx === 0 ? "bg-amber-500/20 text-amber-600 shadow-amber-500/10 shadow-lg" : 
-                  idx === 1 ? "bg-slate-300/30 text-slate-600" :
-                  idx === 2 ? "bg-orange-300/30 text-orange-600" :
+                  idx === 0 ? "bg-amber-500/20 text-amber-700 dark:text-amber-500 shadow-amber-500/10 shadow-lg" : 
+                  idx === 1 ? "bg-slate-300/30 text-slate-700 dark:text-slate-400" :
+                  idx === 2 ? "bg-orange-300/30 text-orange-700 dark:text-orange-600" :
                   "bg-muted text-muted-foreground"
                 )}>
                   {idx < 3 ? (
@@ -216,7 +216,7 @@ export const SafetyLeaderboard: React.FC = () => {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-base font-black text-foreground">{user.displayName}</span>
-                    <Badge variant="outline" className="text-[9px] font-black bg-muted border-none opacity-60">
+                    <Badge variant="outline" className="text-[9px] font-black bg-muted border-none opacity-80">
                        {user.departmentName || '소속 없음'}
                     </Badge>
                   </div>
@@ -232,7 +232,7 @@ export const SafetyLeaderboard: React.FC = () => {
                   "text-rose-500"
                 )}>
                   {user.safetyScore ?? 100}
-                  <span className="text-[10px] ml-1 opacity-40 uppercase">pts</span>
+                  <span className="text-[10px] ml-1 opacity-60 uppercase">pts</span>
                 </div>
               </div>
             </motion.div>

@@ -6,6 +6,7 @@ import {
   ShieldCheck, 
   CircleDollarSign, 
   ClipboardList, 
+  Lock,
   HardHat, 
   BarChart3, 
   Bell, 
@@ -88,6 +89,7 @@ const PCAdminLayout: React.FC<PCAdminLayoutProps> = ({ children, title }) => {
       group: '인사 및 근태',
       items: [
         { id: 'personnel', label: '임직원 정보 관리', icon: Users, to: '/admin/pc/personnel' },
+        { id: 'permissions', label: '사용자 권한 관리', icon: Lock, to: '/pc-admin/personnel' },
         { id: 'attendance', label: '근태 현황 총괄', icon: Clock, to: '/admin/pc/attendance' },
         { id: 'leave', label: '연차/휴가 결재', icon: CalendarDays, to: '/admin/pc/leave' },
         { id: 'payslip', label: '급여명세서 발행', icon: CircleDollarSign, to: '/admin/pc/payslip' },

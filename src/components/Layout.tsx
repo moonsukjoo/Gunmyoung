@@ -67,6 +67,17 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const [isSOSDialogOpen, setIsSOSDialogOpen] = useState(false);
   const [isSOSLoading, setIsSOSLoading] = useState(false);
 
+  const lightTheme = profile?.lightTheme;
+
+  useEffect(() => {
+    // Apply light-theme class to body to ensure backgrounds and scrollbars update
+    if (lightTheme) {
+      document.body.classList.add('light-theme');
+    } else {
+      document.body.classList.remove('light-theme');
+    }
+  }, [lightTheme]);
+
   useEffect(() => {
     if (!profile) return;
     const q = query(
