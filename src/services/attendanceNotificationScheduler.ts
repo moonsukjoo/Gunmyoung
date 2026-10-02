@@ -226,7 +226,8 @@ export const syncAttendanceNotificationSchedules = async (
  */
 export const checkAndTriggerScheduledAttendanceAlerts = async (
   attendance: Attendance | null,
-  customSchedule?: EmployeeWorkScheduleSettings | null
+  customSchedule?: EmployeeWorkScheduleSettings | null,
+  onAlertTriggered?: (type: 'morning' | 'evening_17' | 'evening_18' | 'evening_19') => void
 ): Promise<void> => {
   const now = new Date();
   const currentHour = now.getHours();
@@ -260,13 +261,18 @@ export const checkAndTriggerScheduledAttendanceAlerts = async (
         } catch (e) {}
 
         await sendPushNotification(`⏰ [건명기업] ${todayHours.workStartTime} 출근 체크 알림`, {
-          body: `오늘 예정 출근시각은 ${todayHours.workStartTime}입니다. 사업장 진입 시 자동 출근이 등록됩니다.`,
+          body: `오늘 예정 출근시각은 ${todayHours.workStartTime}입니다. 출근 체크를 완료해 주세요.`,
           tag: 'attendance-morning-checkin-reminder',
           requireInteraction: true,
           data: { url: '/attendance' }
         });
         if (navigator.vibrate) {
           navigator.vibrate([300, 100, 300, 100, 500]);
+        }
+
+        // 🛰️ Trigger one-shot GPS query on morning check-in alarm
+        if (onAlertTriggered) {
+          onAlertTriggered('morning');
         }
       }
     }
@@ -285,11 +291,11 @@ export const checkAndTriggerScheduledAttendanceAlerts = async (
   // 2. Check Evening Alerts (17:00, 18:00, 19:00)
   if (isClockedIn && !isClockedOut) {
     if (currentHour === 17 && currentMinute >= 0 && currentMinute <= 55) {
-      await triggerEveningAlertIfPending('evening_1700', todayStr);
+      await triggerEveningAlertIfPending('evening_1700', todayStr, onAlertTriggered);
     } else if (currentHour === 18 && currentMinute >= 0 && currentMinute <= 55) {
-      await triggerEveningAlertIfPending('evening_1800', todayStr);
+      await triggerEveningAlertIfPending('evening_1800', todayStr, onAlertTriggered);
     } else if (currentHour === 19 && currentMinute >= 0 && currentMinute <= 55) {
-      await triggerEveningAlertIfPending('evening_1900', todayStr);
+      await triggerEveningAlertIfPending('evening_1900', todayStr, onAlertTriggered);
     }
   }
 };
@@ -299,7 +305,8 @@ export const checkAndTriggerScheduledAttendanceAlerts = async (
  */
 const triggerEveningAlertIfPending = async (
   scheduleId: 'evening_1700' | 'evening_1800' | 'evening_1900',
-  todayStr: string
+  todayStr: string,
+  onAlertTriggered?: (type: 'morning' | 'evening_17' | 'evening_18' | 'evening_19') => void
 ) => {
   const sentKey = `attendance_alert_sent_${todayStr}_${scheduleId}`;
   let alreadySent = false;
@@ -322,6 +329,12 @@ const triggerEveningAlertIfPending = async (
       });
       if (navigator.vibrate) {
         navigator.vibrate([400, 150, 400, 150, 600]);
+      }
+
+      // 🛰️ Trigger one-shot GPS query on afternoon/evening check-out alarm
+      if (onAlertTriggered) {
+        const alertType = scheduleId === 'evening_1700' ? 'evening_17' : scheduleId === 'evening_1800' ? 'evening_18' : 'evening_19';
+        onAlertTriggered(alertType);
       }
     }
   }

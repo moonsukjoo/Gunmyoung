@@ -50,43 +50,72 @@ export const DashboardStatusBar: React.FC<DashboardStatusBarProps> = ({
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-2 bg-card/60 backdrop-blur-md border border-border/50 rounded-2xl p-2 sm:p-2.5 px-3 shadow-xs">
-        {/* Left: GPS & 15-Minute Retention Indicator Badge */}
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-          {isLocationRetentionActive ? (
-            <button
-              type="button"
-              onClick={() => setIsRetentionModalOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-700 dark:text-amber-300 font-black text-xs hover:bg-amber-500/25 transition-all cursor-pointer shadow-xs animate-pulse"
-              title="클릭하여 상세 정보 확인"
-            >
-              <span className="relative flex h-2 w-2 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
-              </span>
-              <span>위치 유지 모드 ({retentionRemainingMinutes}분)</span>
-              <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-amber-500/50 bg-amber-500/20 text-amber-800 dark:text-amber-200 font-black">
-                신호보호
-              </Badge>
-              <Info className="w-3 h-3 text-amber-600 dark:text-amber-400 ml-0.5 opacity-80" />
-            </button>
-          ) : isInsideCheckInZone ? (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 font-black text-xs">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse shrink-0" />
-              <span>사업장 버퍼권 ({formattedDist} • 정상)</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted/60 border border-border/60 text-muted-foreground font-black text-xs">
-              <MapPin className="w-3 h-3 text-muted-foreground/70 shrink-0" />
-              <span>사업장 외 ({formattedDist})</span>
-            </div>
+      {/* Balanced 2-Column Status Bar (Left: Workplace GPS / Right: Safety Sensor) */}
+      <div className="grid grid-cols-2 gap-2">
+        {/* Left: GPS & Workplace Geofence Status */}
+        <div 
+          onClick={() => {
+            if (isLocationRetentionActive) {
+              setIsRetentionModalOpen(true);
+            }
+          }}
+          className={cn(
+            "relative flex items-center justify-between p-2.5 rounded-2xl bg-card/75 backdrop-blur-md border border-border/70 shadow-2xs transition-all",
+            isLocationRetentionActive && "border-amber-500/40 bg-amber-500/5 cursor-pointer hover:bg-amber-500/10"
           )}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            {/* Status Pulse Indicator */}
+            <span className="relative flex h-2.5 w-2.5 shrink-0">
+              <span className={cn(
+                "animate-ping absolute inline-flex h-full w-full rounded-full opacity-75",
+                isLocationRetentionActive 
+                  ? "bg-amber-400" 
+                  : isInsideCheckInZone 
+                    ? "bg-emerald-400" 
+                    : "bg-muted-foreground"
+              )} />
+              <span className={cn(
+                "relative inline-flex rounded-full h-2.5 w-2.5",
+                isLocationRetentionActive 
+                  ? "bg-amber-500" 
+                  : isInsideCheckInZone 
+                    ? "bg-emerald-500" 
+                    : "bg-muted-foreground/60"
+              )} />
+            </span>
 
+            <div className="min-w-0">
+              <div className="flex items-center gap-1">
+                <p className="text-xs font-black text-foreground truncate whitespace-nowrap break-keep">
+                  {isLocationRetentionActive 
+                    ? `위치유지 (${retentionRemainingMinutes}분)` 
+                    : isInsideCheckInZone 
+                      ? "사업장 버퍼권" 
+                      : "사업장 외"}
+                </p>
+                {isLocationRetentionActive && (
+                  <Info className="w-3 h-3 text-amber-500 shrink-0" />
+                )}
+              </div>
+              <p className="text-[10px] font-bold text-muted-foreground truncate">
+                {isLocationRetentionActive 
+                  ? "신호 소실 방어" 
+                  : isInsideCheckInZone 
+                    ? `${formattedDist} • 정상` 
+                    : `${formattedDist} • 인식대기`}
+              </p>
+            </div>
+          </div>
+
+          {/* GPS Single-Refresh Button */}
           <Button
+            type="button"
             variant="ghost"
             size="icon"
-            className="h-6 w-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
-            onClick={() => {
+            className="h-6 w-6 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 shrink-0 ml-1 cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
               refreshLocation();
               toast.info('GPS 위치를 새로고침했습니다.');
             }}
@@ -96,37 +125,61 @@ export const DashboardStatusBar: React.FC<DashboardStatusBarProps> = ({
           </Button>
         </div>
 
-        {/* Right: Sensor Status Chip */}
-        <div className="flex items-center gap-1.5 ml-auto">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted/50 border border-border/40 text-[11px] font-bold">
-            <span className={cn("w-2 h-2 rounded-full shrink-0", isMonitoring ? "bg-emerald-500 animate-pulse" : "bg-red-500")} />
-            <span className={isMonitoring ? "text-emerald-600 dark:text-emerald-400 font-black" : "text-red-500 font-bold"}>
-              {isMonitoring ? "안전센서 ON" : "센서 OFF"}
+        {/* Right: Safety Sensor & Test Controller */}
+        <div className="flex items-center justify-between p-2.5 rounded-2xl bg-card/75 backdrop-blur-md border border-border/70 shadow-2xs">
+          <div className="flex items-center gap-2 min-w-0">
+            {/* Sensor Status Dot */}
+            <span className="relative flex h-2.5 w-2.5 shrink-0">
+              {isMonitoring && (
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              )}
+              <span className={cn(
+                "relative inline-flex rounded-full h-2.5 w-2.5",
+                isMonitoring ? "bg-emerald-500" : "bg-red-500"
+              )} />
             </span>
-            {!isMonitoring ? (
-              <button
-                type="button"
-                onClick={startMonitoring}
-                className="ml-1 text-[10px] text-primary hover:underline font-black cursor-pointer"
-              >
-                켜기
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  if ((window as any).simulateSafetySensor) {
-                    (window as any).simulateSafetySensor('IMPACT');
-                  } else {
-                    toast.error('센서 기능이 준비되지 않았습니다.');
-                  }
-                }}
-                className="ml-1 text-[10px] text-amber-600 dark:text-amber-400 hover:underline font-black cursor-pointer"
-              >
-                테스트
-              </button>
-            )}
+
+            <div className="min-w-0">
+              <p className={cn(
+                "text-xs font-black truncate whitespace-nowrap break-keep",
+                isMonitoring ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"
+              )}>
+                {isMonitoring ? "안전센서 ON" : "센서 OFF"}
+              </p>
+              <p className="text-[10px] font-bold text-muted-foreground truncate">
+                {isMonitoring ? "낙상·충격 감지" : "센서 비활성"}
+              </p>
+            </div>
           </div>
+
+          {/* Test / Enable Button */}
+          {isMonitoring ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if ((window as any).simulateSafetySensor) {
+                  (window as any).simulateSafetySensor('IMPACT');
+                } else {
+                  toast.error('센서 기능이 준비되지 않았습니다.');
+                }
+              }}
+              className="h-6 px-2 text-[10px] font-black rounded-lg border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 shrink-0 ml-1 cursor-pointer whitespace-nowrap break-keep shadow-2xs"
+            >
+              테스트
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={startMonitoring}
+              className="h-6 px-2 text-[10px] font-black rounded-lg border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 shrink-0 ml-1 cursor-pointer whitespace-nowrap break-keep shadow-2xs"
+            >
+              켜기
+            </Button>
+          )}
         </div>
       </div>
 

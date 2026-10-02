@@ -196,8 +196,10 @@ function BackButtonHandler() {
 function AppContent() {
   const { profile } = useAuth();
   
-  // Request Geolocation permissions automatically on app startup
+  // Request Geolocation permissions automatically on app startup ONLY after authentication
   useEffect(() => {
+    if (!profile?.uid) return;
+
     const requestInitialLocationPermission = async () => {
       try {
         if (Capacitor.isNativePlatform()) {
@@ -207,7 +209,7 @@ function AppContent() {
             await Geolocation.requestPermissions();
           }
         } else {
-          // Web Browers: prompt for location permission gently with a dummy fast query
+          // Web Browsers: prompt for location permission gently with a dummy fast query
           if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
               () => {},
@@ -221,8 +223,13 @@ function AppContent() {
       }
     };
 
-    requestInitialLocationPermission();
-  }, []);
+    // Small delay to let UI mount smoothly without freezing initial paint
+    const timer = setTimeout(() => {
+      requestInitialLocationPermission();
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [profile?.uid]);
   
   useLayoutEffect(() => {
     if (profile?.lightTheme) {

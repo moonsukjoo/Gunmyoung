@@ -145,10 +145,12 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
   const lastEntryPushTimeRef = useRef<number>(0);
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Request push notification permission on initial mount
+  // Request push notification permission only after user authentication
   useEffect(() => {
-    requestNotificationPermission().catch(() => {});
-  }, []);
+    if (profile?.uid) {
+      requestNotificationPermission().catch(() => {});
+    }
+  }, [profile?.uid]);
 
   // 1. Listen to global location settings in Firestore
   useEffect(() => {
@@ -292,33 +294,17 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
     });
   }, [handlePositionUpdate, handlePositionError]);
 
-  // Dynamic Watcher: Switches between High-Accuracy (Foreground) and Low-Power Battery Saver (Background)
-  const startWatcher = useCallback((isFg: boolean) => {
-    if (!navigator.geolocation) return;
-
-    if (watchIdRef.current !== null) {
+  // Zero-Battery On-Demand Location Handler: eliminates continuous GPS GNSS chip drain
+  const startWatcher = useCallback((_isFg: boolean) => {
+    // Continuous watchPosition is completely disabled to achieve 0% standby battery consumption.
+    // Location is queried on-demand when morning/evening attendance alerts fire or on user check-in/out actions.
+    if (watchIdRef.current !== null && navigator.geolocation) {
       try {
         navigator.geolocation.clearWatch(watchIdRef.current);
       } catch (e) {}
       watchIdRef.current = null;
     }
-
-    try {
-      // Foreground: High Accuracy (10s max age to avoid continuous hardware GNSS lock)
-      // Background: Low Power mode (disables high accuracy chip, uses 60s cache, saves ~80% GPS battery)
-      const watchOptions: PositionOptions = isFg
-        ? { enableHighAccuracy: true, timeout: 20000, maximumAge: 10000 }
-        : { enableHighAccuracy: false, timeout: 35000, maximumAge: 60000 };
-
-      watchIdRef.current = navigator.geolocation.watchPosition(
-        handlePositionUpdate,
-        handlePositionError,
-        watchOptions
-      );
-    } catch (e) {
-      console.warn('Failed to start watchPosition', e);
-    }
-  }, [handlePositionUpdate, handlePositionError]);
+  }, []);
 
   /**
    * Helper to accurately determine the first workplace exit timestamp.
@@ -446,8 +432,14 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
       }
     }
 
-    // 4. Trigger scheduled attendance push alerts check (07:30 check-in, 17:00 / 18:00 / 19:00 check-out)
-    checkAndTriggerScheduledAttendanceAlerts(todayAttendance, employeeSchedule).catch(() => {});
+    // 4. Trigger scheduled attendance push alerts check and on-demand GPS measurement on alarm
+    checkAndTriggerScheduledAttendanceAlerts(
+      todayAttendance,
+      employeeSchedule,
+      (_type) => {
+        refreshLocation({ forceHighAccuracy: true }).catch(() => {});
+      }
+    ).catch(() => {});
 
     setLastSyncTime(Date.now());
   }, [startWatcher, refreshLocation, todayAttendance, locationSettings, specialDates, profile?.uid, currentLocation, distanceToCenter, determineFirstExitSince, pendingExitState, employeeSchedule]);
@@ -455,15 +447,27 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
   const handleAppBackgrounded = useCallback(() => {
     isForegroundRef.current = false;
     setIsForeground(false);
-    // Switch to battery-optimized background watcher
     startWatcher(false);
   }, [startWatcher]);
 
   // Lifecycle listeners for Foreground/Background transitions (Web + Capacitor)
   useEffect(() => {
-    // Initial start
+    if (!profile?.uid) return;
+
+    // Initial start: zero-battery on-demand mode (clear any active GNSS watchers)
     startWatcher(isForegroundRef.current);
     refreshLocation({ forceHighAccuracy: true });
+
+    // Periodic 1-minute light check for morning/evening alarm arrival
+    const intervalTimer = setInterval(() => {
+      checkAndTriggerScheduledAttendanceAlerts(
+        todayAttendance,
+        employeeSchedule,
+        (_type) => {
+          refreshLocation({ forceHighAccuracy: true }).catch(() => {});
+        }
+      ).catch(() => {});
+    }, 60000);
 
     // 1. Web visibilitychange (Tab switch, browser minimization, screen on/off)
     const handleVisibilityChange = () => {
@@ -518,6 +522,7 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
     }
 
     return () => {
+      clearInterval(intervalTimer);
       if (watchIdRef.current !== null) {
         try {
           navigator.geolocation.clearWatch(watchIdRef.current);

@@ -120,6 +120,7 @@ export const Attendance: React.FC = () => {
   const [historyData, setHistoryData] = useState<AttendanceType[]>([]);
   const [isLocationSettingOpen, setIsLocationSettingOpen] = useState(false);
   const [isSavingLocation, setIsSavingLocation] = useState(false);
+  const [activeTab, setActiveTab] = useState<'CHECK_IN' | 'HISTORY' | 'OVERTIME_ALERT'>('CHECK_IN');
 
   // Overtime Predictor State (Selected date from calendar or today)
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date>(new Date());
@@ -423,652 +424,710 @@ export const Attendance: React.FC = () => {
         `}</style>
       </header>
 
-      {/* 🛡️ Location Retention Mode Active Banner (위치 유지 모드 가동 중) */}
-      {isLocationRetentionActive && providerTodayAttendance?.clockIn && !providerTodayAttendance?.clockOut && !pendingExitState && (
-        <div className="bg-emerald-500/10 border-2 border-emerald-500/40 rounded-3xl p-4.5 space-y-2 text-foreground animate-in fade-in duration-300 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-sm animate-pulse">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
-                    🛡️ 위치 유지 모드(Location Retention) 가동 중
-                  </span>
-                  <Badge className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-none font-black text-[10px] py-0.5 px-2">
-                    최소 {locationRetentionMinutes || 15}분 유효성 보존
-                  </Badge>
-                </div>
-                <p className="text-xs font-bold text-foreground mt-0.5">
-                  사업장 반경 500m 허용 오차 버퍼 내에 확인되었으므로, 건물/선체 진입 또는 일시적인 GPS 수신 불가 시에도 오퇴근 처리되지 않고 정상 출근이 안전하게 유지됩니다.
-                </p>
-                <div className="flex items-center gap-2 mt-1 text-[11px] font-bold text-muted-foreground">
-                  <span>⏱️ 위치 유효성 보존 잔여 시간: 약 <strong className="text-emerald-600 dark:text-emerald-400">{retentionRemainingMinutes}분</strong></span>
-                  <span>•</span>
-                  <span>500m 지오펜싱 허용 오차 버퍼 적용 중</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 🗂️ Attendance Sub-Menu Navigation Tabs */}
+      <div className="bg-card border border-border/60 p-1 rounded-2xl flex items-center gap-1 shadow-xs">
+        <button
+          type="button"
+          onClick={() => setActiveTab('CHECK_IN')}
+          className={cn(
+            "flex-1 py-2 px-1.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap",
+            activeTab === 'CHECK_IN'
+              ? "bg-primary text-primary-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Clock className="w-3.5 h-3.5 shrink-0" />
+          <span>출퇴근 체크</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('HISTORY')}
+          className={cn(
+            "flex-1 py-2 px-1.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap",
+            activeTab === 'HISTORY'
+              ? "bg-primary text-primary-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <CalendarIcon className="w-3.5 h-3.5 shrink-0" />
+          <span>근무기록·달력</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('OVERTIME_ALERT')}
+          className={cn(
+            "flex-1 py-2 px-1.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap",
+            activeTab === 'OVERTIME_ALERT'
+              ? "bg-primary text-primary-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Calculator className="w-3.5 h-3.5 shrink-0" />
+          <span>잔업·알림</span>
+        </button>
+      </div>
 
-      {/* Departure Pending Alert Banner */}
-      {pendingExitState && (
-        <div className="bg-amber-500/10 border-2 border-amber-500/40 rounded-3xl p-4.5 space-y-3 relative overflow-hidden shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm animate-pulse">
-                <AlertTriangle className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider">
-                    사업장 2km(+500m 버퍼) 이탈 감지 (퇴근 대기 상태)
-                  </span>
-                </div>
-                <p className="text-sm font-black text-foreground mt-0.5">
-                  자동 퇴근 확정까지 남은 시간:{' '}
-                  <span className="text-amber-600 dark:text-amber-400 font-mono text-base">
-                    {Math.floor(pendingExitState.remainingSeconds / 60)}분 {pendingExitState.remainingSeconds % 60}초
-                  </span>
-                </p>
-                <div className="flex items-center gap-1.5 mt-1 text-[11px] font-bold text-amber-700/90 dark:text-amber-300/90">
-                  <span>📍 최초 이탈 시각:</span>
-                  <span className="font-mono bg-amber-500/20 px-1.5 py-0.5 rounded text-foreground font-black">
-                    {format(new Date(pendingExitState.exitSince), 'HH:mm')}
-                  </span>
-                  <span>(퇴근 확정 시 이 시각으로 등록됨)</span>
-                </div>
-              </div>
-            </div>
-            <Badge variant="outline" className="border-amber-500/30 text-amber-600 bg-amber-500/10 shrink-0 font-black">
-              대기 중
-            </Badge>
-          </div>
-          
-          <div className="w-full bg-amber-500/20 h-2.5 rounded-full overflow-hidden">
-            <div 
-              className="bg-amber-500 h-full rounded-full transition-all duration-1000 ease-linear"
-              style={{ width: `${pendingExitState.progressPercent}%` }}
-            />
-          </div>
-
-          <div className="flex items-center justify-between text-[11px] text-muted-foreground font-bold pt-0.5">
-            <span>💡 2시간 이내에 사업장 인근으로 복귀 시 출근 상태가 정상 유지됩니다.</span>
-          </div>
-        </div>
-      )}
-
-      {/* GPS Geofence & Auto Attendance Live Status */}
-      <Card className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.03)]">
-        <CardContent className="p-4.5 space-y-3.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="relative flex items-center justify-center">
-                <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full" />
-                <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping absolute" />
-              </div>
-              <span className="text-xs font-black text-foreground">GPS 위치 기반 자동 출퇴근</span>
-              <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-none text-[9px] font-black py-0 px-2">
-                포그라운드 즉시 동기화
-              </Badge>
-              <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-none text-[9px] font-black py-0 px-2">
-                500m 버퍼 · 15분 유지모드
-              </Badge>
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => refreshLocation()}
-                className="w-7 h-7 text-muted-foreground hover:text-foreground rounded-lg"
-                title="GPS 위치 새로고침"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-              </Button>
-              {isAdminUser && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setIsLocationSettingOpen(true)}
-                  className="w-7 h-7 text-muted-foreground hover:text-foreground rounded-lg"
-                  title="출퇴근 위치 기준점 설정"
-                >
-                  <Sliders className="w-3.5 h-3.5" />
-                </Button>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            <div className="bg-muted/40 rounded-2xl p-3 border border-border/40 flex items-center justify-between">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
-                  <Navigation className="w-4 h-4" />
-                </div>
-                <div className="truncate">
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase">사업장 기준점 거리</p>
-                  <p className="text-sm font-black text-foreground truncate">
-                    {distanceToCenter !== null ? formatDistance(distanceToCenter) : '측정 중...'}
-                  </p>
-                </div>
-              </div>
-
-              <div>
-                {distanceToCenter !== null ? (
-                  isInsideCheckInZone ? (
-                    <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-none font-black text-[10px]">
-                      🟢 반경 1km+500m 버퍼 (출근 구역)
-                    </Badge>
-                  ) : distanceToCenter < ((locationSettings?.checkOutRadius || 2000) + (geofenceBufferMeters || 500)) ? (
-                    <Badge className="bg-blue-500/15 text-blue-600 dark:text-blue-400 border-none font-black text-[10px]">
-                      🔵 1.5~2.5km (근무 인정)
-                    </Badge>
-                  ) : (
-                    <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-none font-black text-[10px]">
-                      🟠 2.5km 초과 (이탈 대기)
-                    </Badge>
-                  )
-                ) : (
-                  <Badge variant="outline" className="text-[10px] font-bold">
-                    GPS 수신 중
-                  </Badge>
-                )}
-              </div>
-            </div>
-
-            <div className="bg-muted/40 rounded-2xl p-3 border border-border/40 flex items-center justify-between">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
-                  <ShieldCheck className="w-4 h-4" />
-                </div>
-                <div className="truncate">
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase">근무 시간 기본 규칙</p>
-                  <p className="text-xs font-black text-foreground truncate">
-                    08:00 ~ 17:00 (점심 12-13시 제외)
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Action: Register Current Location as Reference Point */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-1 border-t border-border/40">
-            <div className="text-[11px] font-bold text-muted-foreground flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
-              <span>기준점: {locationSettings?.centerLat ? `${locationSettings.centerLat.toFixed(5)}, ${locationSettings.centerLng.toFixed(5)}` : '미설정'}</span>
-            </div>
-
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={async () => {
-                setIsSavingLocation(true);
-                await saveCurrentLocationAsBasePoint();
-                setIsSavingLocation(false);
-              }}
-              disabled={isSavingLocation}
-              className="h-8 text-xs font-black bg-primary/5 hover:bg-primary/10 text-primary border-primary/20 rounded-xl flex items-center gap-1.5"
-            >
-              <MapPin className="w-3.5 h-3.5" />
-              {isSavingLocation ? '기준점 저장 중...' : '📍 현재 위치를 기준점으로 등록'}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Clocking Unit */}
-      <Card className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.03)] relative">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-[50px] -mr-12 -mt-12" />
-        <CardContent className="p-5 space-y-5 relative z-10">
-           <div className="flex flex-col items-center gap-1.5">
-              <div className="flex items-center gap-2 px-3 py-1 bg-muted rounded-full border border-border/45">
-                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
-                <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest">실시간 근무 모니터링</span>
-              </div>
-              <span className="text-4xl font-black text-foreground tabular-nums tracking-tighter drop-shadow-sm font-mono">{format(now, 'HH:mm:ss')}</span>
-           </div>
-           
-           <div className="grid grid-cols-2 gap-3.5">
-              <button 
-                disabled={!!todayAttendance?.clockIn}
-                onClick={handleClockIn}
-                className={cn(
-                  "h-18 rounded-2xl flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 shadow-md border-b-[4px] cursor-pointer",
-                  todayAttendance?.clockIn 
-                    ? "bg-muted text-muted-foreground/30 border-border"
-                    : "bg-blue-600 text-white border-blue-700 hover:bg-blue-500 hover:border-blue-600 shadow-blue-500/10"
-                )}
-              >
-                <LogIn className="w-5 h-5" />
-                <span className="font-black text-xs">출근 완료</span>
-              </button>
-
-              <button 
-                disabled={!todayAttendance?.clockIn || !!todayAttendance?.clockOut}
-                onClick={handleClockOut}
-                className={cn(
-                  "h-18 rounded-2xl flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 shadow-md border-b-[4px] cursor-pointer",
-                  (!todayAttendance?.clockIn || !!todayAttendance?.clockOut)
-                    ? "bg-muted text-muted-foreground/30 border-border"
-                    : "bg-rose-600 text-white border-rose-700 hover:bg-rose-500 hover:border-rose-600 shadow-rose-500/10"
-                )}
-              >
-                <LogOut className="w-5 h-5" />
-                <span className="font-black text-xs">퇴근 완료</span>
-              </button>
-           </div>
-
-           {todayAttendance?.clockIn && (
-             <div className="space-y-2.5">
-               <div className="bg-muted/60 backdrop-blur-sm rounded-2xl p-3.5 flex justify-between items-center border border-border/50">
-                  <div className="flex gap-6">
-                     <div className="flex flex-col">
-                        <span className="text-[9px] font-black text-muted-foreground/50 uppercase">출근 시각</span>
-                        <span className="text-xs font-black text-blue-500">{format(parseISO(todayAttendance.clockIn), 'HH:mm')}</span>
-                     </div>
-                     {todayAttendance.clockOut && (
-                        <div className="flex flex-col">
-                           <span className="text-[9px] font-black text-muted-foreground/50 uppercase">퇴근 시각</span>
-                           <span className="text-xs font-black text-rose-500">{format(parseISO(todayAttendance.clockOut), 'HH:mm')}</span>
-                        </div>
-                     )}
+      {/* ================= TAB 1: 📌 출퇴근 체크 (Check-in & Location Live) ================= */}
+      {activeTab === 'CHECK_IN' && (
+        <div className="space-y-3 animate-in fade-in duration-200">
+          {/* 🛡️ Location Retention Mode Active Banner (위치 유지 모드 가동 중) */}
+          {isLocationRetentionActive && providerTodayAttendance?.clockIn && !providerTodayAttendance?.clockOut && !pendingExitState && (
+            <div className="bg-emerald-500/10 border-2 border-emerald-500/40 rounded-3xl p-4.5 space-y-2 text-foreground shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-sm animate-pulse">
+                    <ShieldCheck className="w-5 h-5" />
                   </div>
-                  {todayAttendance.clockIn && !todayAttendance.clockOut && (
-                    <Badge className="bg-emerald-500/15 text-emerald-500 border-none px-3 py-1 font-black animate-pulse rounded-xl">
-                      현재 근무 중
-                    </Badge>
-                  )}
-                  {todayAttendance.clockIn && todayAttendance.clockOut && (
-                    <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 px-3 py-1 font-black rounded-xl flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                      퇴근 확정됨
-                    </Badge>
-                  )}
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                        🛡️ 위치 유지 모드(Location Retention) 가동 중
+                      </span>
+                      <Badge className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-none font-black text-[10px] py-0.5 px-2">
+                        최소 {locationRetentionMinutes || 15}분 유효성 보존
+                      </Badge>
+                    </div>
+                    <p className="text-xs font-bold text-foreground mt-0.5">
+                      사업장 반경 500m 허용 오차 버퍼 내에 확인되었으므로, 건물/선체 진입 또는 일시적인 GPS 수신 불가 시에도 오퇴근 처리되지 않고 정상 출근이 안전하게 유지됩니다.
+                    </p>
+                    <div className="flex items-center gap-2 mt-1 text-[11px] font-bold text-muted-foreground">
+                      <span>⏱️ 위치 유효성 보존 잔여 시간: 약 <strong className="text-emerald-600 dark:text-emerald-400">{retentionRemainingMinutes}분</strong></span>
+                      <span>•</span>
+                      <span>500m 지오펜싱 허용 오차 버퍼 적용 중</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Departure Pending Alert Banner */}
+          {pendingExitState && (
+            <div className="bg-amber-500/10 border-2 border-amber-500/40 rounded-3xl p-4.5 space-y-3 relative overflow-hidden shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm animate-pulse">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider">
+                        사업장 2km(+500m 버퍼) 이탈 감지 (퇴근 대기 상태)
+                      </span>
+                    </div>
+                    <p className="text-sm font-black text-foreground mt-0.5">
+                      자동 퇴근 확정까지 남은 시간:{' '}
+                      <span className="text-amber-600 dark:text-amber-400 font-mono text-base">
+                        {Math.floor(pendingExitState.remainingSeconds / 60)}분 {pendingExitState.remainingSeconds % 60}초
+                      </span>
+                    </p>
+                    <div className="flex items-center gap-1.5 mt-1 text-[11px] font-bold text-amber-700/90 dark:text-amber-300/90">
+                      <span>📍 최초 이탈 시각:</span>
+                      <span className="font-mono bg-amber-500/20 px-1.5 py-0.5 rounded text-foreground font-black">
+                        {format(new Date(pendingExitState.exitSince), 'HH:mm')}
+                      </span>
+                      <span>(퇴근 확정 시 이 시각으로 등록됨)</span>
+                    </div>
+                  </div>
+                </div>
+                <Badge variant="outline" className="border-amber-500/30 text-amber-600 bg-amber-500/10 shrink-0 font-black">
+                  대기 중
+                </Badge>
+              </div>
+              
+              <div className="w-full bg-amber-500/20 h-2.5 rounded-full overflow-hidden">
+                <div 
+                  className="bg-amber-500 h-full rounded-full transition-all duration-1000 ease-linear"
+                  style={{ width: `${pendingExitState.progressPercent}%` }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground font-bold pt-0.5">
+                <span>💡 2시간 이내에 사업장 인근으로 복귀 시 출근 상태가 정상 유지됩니다.</span>
+              </div>
+            </div>
+          )}
+
+          {/* Clocking Unit */}
+          <Card className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.03)] relative">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-[50px] -mr-12 -mt-12" />
+            <CardContent className="p-5 space-y-5 relative z-10">
+               <div className="flex flex-col items-center gap-1.5">
+                  <div className="flex items-center gap-2 px-3 py-1 bg-muted rounded-full border border-border/45">
+                    <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
+                    <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest">실시간 근무 모니터링</span>
+                  </div>
+                  <span className="text-4xl font-black text-foreground tabular-nums tracking-tighter drop-shadow-sm font-mono">{format(now, 'HH:mm:ss')}</span>
+               </div>
+               
+               <div className="grid grid-cols-2 gap-3.5">
+                  <button 
+                    disabled={!!todayAttendance?.clockIn}
+                    onClick={handleClockIn}
+                    className={cn(
+                      "h-18 rounded-2xl flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 shadow-md border-b-[4px] cursor-pointer",
+                      todayAttendance?.clockIn 
+                        ? "bg-muted text-muted-foreground/30 border-border"
+                        : "bg-blue-600 text-white border-blue-700 hover:bg-blue-500 hover:border-blue-600 shadow-blue-500/10"
+                    )}
+                  >
+                    <LogIn className="w-5 h-5" />
+                    <span className="font-black text-xs">출근 완료</span>
+                  </button>
+
+                  <button 
+                    disabled={!todayAttendance?.clockIn || !!todayAttendance?.clockOut}
+                    onClick={handleClockOut}
+                    className={cn(
+                      "h-18 rounded-2xl flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 shadow-md border-b-[4px] cursor-pointer",
+                      (!todayAttendance?.clockIn || !!todayAttendance?.clockOut)
+                        ? "bg-muted text-muted-foreground/30 border-border"
+                        : "bg-rose-600 text-white border-rose-700 hover:bg-rose-500 hover:border-rose-600 shadow-rose-500/10"
+                    )}
+                  >
+                    <LogOut className="w-5 h-5" />
+                    <span className="font-black text-xs">퇴근 완료</span>
+                  </button>
                </div>
 
-               {/* Accidental Clock-out Recovery Banner & 1-Click Restore Button */}
-               {todayAttendance.clockIn && todayAttendance.clockOut && todayAttendance.date === todayStr && (
-                 <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 flex flex-col sm:flex-row items-center justify-between gap-2.5">
-                   <div className="flex items-center gap-2 text-xs">
-                     <span className="text-amber-500 font-bold">⚠️ 아직 근무 중이거나 오작동으로 퇴근되었나요?</span>
+               {todayAttendance?.clockIn && (
+                 <div className="space-y-2.5">
+                   <div className="bg-muted/60 backdrop-blur-sm rounded-2xl p-3.5 flex justify-between items-center border border-border/50">
+                      <div className="flex gap-6">
+                         <div className="flex flex-col">
+                            <span className="text-[9px] font-black text-muted-foreground/50 uppercase">출근 시각</span>
+                            <span className="text-xs font-black text-blue-500">{format(parseISO(todayAttendance.clockIn), 'HH:mm')}</span>
+                         </div>
+                         {todayAttendance.clockOut && (
+                            <div className="flex flex-col">
+                               <span className="text-[9px] font-black text-muted-foreground/50 uppercase">퇴근 시각</span>
+                               <span className="text-xs font-black text-rose-500">{format(parseISO(todayAttendance.clockOut), 'HH:mm')}</span>
+                            </div>
+                         )}
+                      </div>
+                      {todayAttendance.clockIn && !todayAttendance.clockOut && (
+                        <Badge className="bg-emerald-500/15 text-emerald-500 border-none px-3 py-1 font-black animate-pulse rounded-xl">
+                          현재 근무 중
+                        </Badge>
+                      )}
+                      {todayAttendance.clockIn && todayAttendance.clockOut && (
+                        <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 px-3 py-1 font-black rounded-xl flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                          퇴근 확정됨
+                        </Badge>
+                      )}
                    </div>
-                   <Button
-                     type="button"
-                     size="sm"
-                     variant="outline"
-                     onClick={async () => {
-                       await restoreTodayAttendance();
-                     }}
-                     className="h-8 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-700 dark:text-amber-300 font-black text-xs border-amber-500/40 w-full sm:w-auto"
-                   >
-                     🔄 계속 근무 중으로 복원
-                   </Button>
+
+                   {/* Accidental Clock-out Recovery Banner & 1-Click Restore Button */}
+                   {todayAttendance.clockIn && todayAttendance.clockOut && todayAttendance.date === todayStr && (
+                     <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 flex flex-col sm:flex-row items-center justify-between gap-2.5">
+                       <div className="flex items-center gap-2 text-xs">
+                         <span className="text-amber-500 font-bold">⚠️ 아직 근무 중이거나 오작동으로 퇴근되었나요?</span>
+                       </div>
+                       <Button
+                         type="button"
+                         size="sm"
+                         variant="outline"
+                         onClick={async () => {
+                           await restoreTodayAttendance();
+                         }}
+                         className="h-8 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-700 dark:text-amber-300 font-black text-xs border-amber-500/40 w-full sm:w-auto"
+                       >
+                         🔄 계속 근무 중으로 복원
+                       </Button>
+                     </div>
+                   )}
                  </div>
                )}
-             </div>
-           )}
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
 
-      {/* Smart Timed Push Notification Card (07:30 / 17:00 / 18:00 / 19:00) */}
-      <Card className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.03)]">
-        <CardContent className="p-4.5 space-y-3.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                <BellRing className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="text-xs font-black text-foreground">스마트 출퇴근 알림 (배터리 0% 절약형)</h3>
-                <p className="text-[10px] font-bold text-muted-foreground">정해진 시간에만 푸시 발송 / 출퇴근 완료 시 당일 알림 자동 해제</p>
-              </div>
-            </div>
-            <Badge variant="outline" className="text-[10px] font-black border-primary/20 bg-primary/5 text-primary">
-              자동 스케줄
-            </Badge>
-          </div>
+          {/* GPS Geofence & Auto Attendance Live Status */}
+          <Card className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.03)]">
+            <CardContent className="p-4.5 space-y-3.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="relative flex items-center justify-center">
+                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full" />
+                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping absolute" />
+                  </div>
+                  <span className="text-xs font-black text-foreground">GPS 위치 기반 자동 출퇴근</span>
+                  <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-none text-[9px] font-black py-0 px-2">
+                    포그라운드 즉시 동기화
+                  </Badge>
+                  <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-none text-[9px] font-black py-0 px-2">
+                    500m 버퍼 · 15분 유지모드
+                  </Badge>
+                </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {getTodayAttendanceAlertStatus(todayAttendance).map((item) => {
-              const isMorning = item.type === 'morning';
-              const IconComp = isMorning ? Sun : item.type === 'evening_17' ? Sunset : Moon;
-              return (
-                <div
-                  key={item.id}
-                  className={cn(
-                    "p-3 rounded-2xl border transition-all flex flex-col justify-between gap-2.5",
-                    item.isSuppressed
-                      ? "bg-muted/30 border-border/40 opacity-75"
-                      : "bg-background border-border/80 shadow-xs"
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => refreshLocation()}
+                    className="w-7 h-7 text-muted-foreground hover:text-foreground rounded-lg"
+                    title="GPS 위치 새로고침"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </Button>
+                  {isAdminUser && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setIsLocationSettingOpen(true)}
+                      className="w-7 h-7 text-muted-foreground hover:text-foreground rounded-lg"
+                      title="출퇴근 위치 기준점 설정"
+                    >
+                      <Sliders className="w-3.5 h-3.5" />
+                    </Button>
                   )}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className={cn(
-                        "w-7 h-7 rounded-lg flex items-center justify-center shrink-0",
-                        isMorning ? "bg-amber-500/10 text-amber-500" : "bg-blue-500/10 text-blue-500"
-                      )}>
-                        <IconComp className="w-3.5 h-3.5" />
-                      </div>
-                      <div className="truncate">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono text-xs font-black text-foreground">{item.timeStr}</span>
-                          <span className="text-[11px] font-bold text-foreground truncate">{item.label}</span>
-                        </div>
-                        <p className="text-[10px] font-medium text-muted-foreground truncate">
-                          {item.isSuppressed ? item.suppressReason : item.body}
-                        </p>
-                      </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="bg-muted/40 rounded-2xl p-3 border border-border/40 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
+                      <Navigation className="w-4 h-4" />
+                    </div>
+                    <div className="truncate">
+                      <p className="text-[9px] font-bold text-muted-foreground uppercase">사업장 기준점 거리</p>
+                      <p className="text-sm font-black text-foreground truncate">
+                        {distanceToCenter !== null ? formatDistance(distanceToCenter) : '측정 중...'}
+                      </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between pt-1 border-t border-border/30">
-                    <span className="text-[9px] font-bold">
-                      {item.isSuppressed ? (
-                        <span className="text-emerald-500 flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3" />
-                          {item.suppressReason}
-                        </span>
+                  <div>
+                    {distanceToCenter !== null ? (
+                      isInsideCheckInZone ? (
+                        <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-none font-black text-[10px]">
+                          🟢 반경 1km+500m 버퍼 (출근 구역)
+                        </Badge>
+                      ) : distanceToCenter < ((locationSettings?.checkOutRadius || 2000) + (geofenceBufferMeters || 500)) ? (
+                        <Badge className="bg-blue-500/15 text-blue-600 dark:text-blue-400 border-none font-black text-[10px]">
+                          🔵 1.5~2.5km (근무 인정)
+                        </Badge>
                       ) : (
-                        <span className="text-primary flex items-center gap-1">
-                          <Bell className="w-3 h-3" />
-                          시간 도래 시 알림 발송
-                        </span>
-                      )}
-                    </span>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        testTriggerAttendanceAlert(item.type);
-                        toast.info(`[${item.timeStr}] 푸시 알림을 테스트 발송했습니다.`);
-                      }}
-                      className="text-[10px] font-bold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1 px-2 py-0.5 rounded-lg bg-muted hover:bg-muted/80"
-                    >
-                      테스트
-                    </button>
+                        <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-none font-black text-[10px]">
+                          🟠 2.5km 초과 (이탈 대기)
+                        </Badge>
+                      )
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] font-bold">
+                        GPS 수신 중
+                      </Badge>
+                    )}
                   </div>
                 </div>
-              );
-            })}
-          </div>
 
-          <div className="bg-muted/40 rounded-2xl p-2.5 text-[11px] font-medium text-muted-foreground flex items-center gap-2">
-            <Info className="w-4 h-4 text-primary shrink-0" />
-            <span>
-              💡 <strong>출근 체크 완료 시</strong> 07:30 알림이 자동 해제되며, <strong>퇴근 체크 완료 시</strong> 17:00·18:00·19:00 알림이 당일 모두 자동 차단됩니다.
-            </span>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-2 gap-3.5">
-         <div className="bg-card border border-border/50 p-4 rounded-3xl flex flex-col gap-1 items-start shadow-[0_2px_12px_rgba(0,0,0,0.01)] relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-16 h-16 bg-blue-500/5 rounded-full blur-xl group-hover:bg-blue-500/10 transition-colors" />
-            <div className="w-8 h-8 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-500 mb-1 border border-blue-500/10">
-              <Clock className="w-4 h-4" />
-            </div>
-            <span className="text-[8px] font-black text-blue-500/80 uppercase tracking-widest leading-none">이달의 누적 근무</span>
-            <span className="text-xl font-black text-foreground">{stats.total.toFixed(0)}<span className="text-[10px] font-bold text-muted-foreground/40 ml-0.5 font-sans">H</span></span>
-         </div>
-         <div className="bg-card border border-border/50 p-4 rounded-3xl flex flex-col gap-1 items-start shadow-[0_2px_12px_rgba(0,0,0,0.01)] relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-16 h-16 bg-amber-500/5 rounded-full blur-xl group-hover:bg-amber-500/10 transition-colors" />
-            <div className="w-8 h-8 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-500 mb-1 border border-amber-500/10">
-              <Activity className="w-4 h-4" />
-            </div>
-            <span className="text-[8px] font-black text-amber-600/80 uppercase tracking-widest leading-none">초과 근무 시간</span>
-            <span className="text-xl font-black text-amber-600">{stats.ot.toFixed(0)}<span className="text-[10px] font-bold text-amber-600/40 ml-0.5 font-sans">H</span></span>
-         </div>
-      </div>
-
-      <Card className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.01)]">
-         <CardContent className="p-4">
-            <div className="flex items-center gap-1.5 mb-3">
-               <Activity className="w-3.5 h-3.5 text-primary" />
-               <span className="text-xs font-black text-foreground">최근 근무 트렌드</span>
-            </div>
-            <div className="h-[140px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill: 'var(--muted-foreground)', opacity: 0.5, fontSize: 10}} />
-                  <Tooltip cursor={{fill: 'var(--muted)', opacity: 0.2}} contentStyle={{backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px', fontSize: '10px'}} />
-                  <Bar dataKey="hours" fill="var(--primary)" radius={[6, 6, 0, 0]} barSize={12} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-         </CardContent>
-      </Card>
-
-      {/* Overtime Rules & Realtime Overtime Predictor Widget */}
-      <Card className="bg-card border border-border/60 rounded-3xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.03)]">
-        <CardContent className="p-4.5 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-black">
-                <Calculator className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-xs font-black text-foreground">실시간 잔업 예측기</h3>
-                  <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-none text-[9px] font-black py-0 px-2">
-                    1시간 단위 인정
-                  </Badge>
+                <div className="bg-muted/40 rounded-2xl p-3 border border-border/40 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+                      <ShieldCheck className="w-4 h-4" />
+                    </div>
+                    <div className="truncate">
+                      <p className="text-[9px] font-bold text-muted-foreground uppercase">근무 시간 기본 규칙</p>
+                      <p className="text-xs font-black text-foreground truncate">
+                        08:00 ~ 17:00 (점심 12-13시 제외)
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-[10px] font-bold text-muted-foreground">
-                  캘린더 날짜를 클릭하여 해당 일자의 예상 잔업 및 인정 시간을 시뮬레이션하세요.
-                </p>
               </div>
-            </div>
 
-            <Badge variant="outline" className="text-[10px] font-mono font-black border-border">
-              {format(selectedCalendarDate, 'MM.dd(EEE)', { locale: ko })}
-            </Badge>
-          </div>
+              {/* Quick Action: Register Current Location as Reference Point */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-1 border-t border-border/40">
+                <div className="text-[11px] font-bold text-muted-foreground flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <span>기준점: {locationSettings?.centerLat ? `${locationSettings.centerLat.toFixed(5)}, ${locationSettings.centerLng.toFixed(5)}` : '미설정'}</span>
+                </div>
 
-          {/* Quick Info Bar for Overtime Policy */}
-          <div className="bg-muted/40 rounded-2xl p-3 border border-border/40 text-[11px] space-y-1.5">
-            <div className="flex items-center justify-between text-muted-foreground">
-              <span className="font-bold flex items-center gap-1">
-                <Info className="w-3.5 h-3.5 text-blue-500" />
-                잔업 산정 공식 (강화 기준)
-              </span>
-              <span className="font-mono font-bold text-[10px] text-foreground">
-                08:00~17:40(0h) / 18:00 이후 1시간당 1h
-              </span>
-            </div>
-            <div className="grid grid-cols-3 gap-2 pt-1 text-center font-bold text-[10px]">
-              <div className="bg-background/80 rounded-xl p-1.5 border border-border/50">
-                <p className="text-muted-foreground/80">~17:40 퇴근</p>
-                <p className="text-foreground font-black">잔업 0시간</p>
-              </div>
-              <div className="bg-background/80 rounded-xl p-1.5 border border-amber-500/30 text-amber-600 dark:text-amber-400">
-                <p className="opacity-80">18:00 퇴근</p>
-                <p className="font-black">잔업 1.0시간</p>
-              </div>
-              <div className="bg-background/80 rounded-xl p-1.5 border border-primary/30 text-primary">
-                <p className="opacity-80">19:00 퇴근</p>
-                <p className="font-black">잔업 2.0시간</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Predictor Controls */}
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between text-xs font-black text-foreground">
-              <span>퇴근 예정 시각 선택</span>
-              <span className="font-mono text-primary text-sm font-black">{simulatedExitTime}</span>
-            </div>
-
-            {/* Quick Preset Buttons */}
-            <div className="grid grid-cols-5 gap-1.5">
-              {[
-                { label: '17:00 (정시)', time: '17:00' },
-                { label: '17:40 (0h)', time: '17:40' },
-                { label: '18:00 (1h)', time: '18:00' },
-                { label: '19:00 (2h)', time: '19:00' },
-                { label: '20:00 (3h)', time: '20:00' },
-              ].map((item) => (
-                <button
-                  key={item.time}
-                  type="button"
-                  onClick={() => setSimulatedExitTime(item.time)}
-                  className={cn(
-                    "h-8 rounded-xl text-[10px] font-black transition-all border cursor-pointer",
-                    simulatedExitTime === item.time
-                      ? "bg-primary text-primary-foreground border-primary shadow-sm scale-[1.02]"
-                      : "bg-background text-foreground/80 border-border hover:bg-muted/70"
-                  )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={async () => {
+                    setIsSavingLocation(true);
+                    await saveCurrentLocationAsBasePoint();
+                    setIsSavingLocation(false);
+                  }}
+                  disabled={isSavingLocation}
+                  className="h-8 text-xs font-black bg-primary/5 hover:bg-primary/10 text-primary border-primary/20 rounded-xl flex items-center gap-1.5"
                 >
-                  {item.time}
-                </button>
-              ))}
-            </div>
-
-            {/* Direct Slider & Time Input */}
-            <div className="flex items-center gap-3 pt-1">
-              <input
-                type="time"
-                value={simulatedExitTime}
-                onChange={(e) => setSimulatedExitTime(e.target.value)}
-                className="h-9 px-3 rounded-xl bg-background border border-border text-xs font-mono font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-primary shrink-0"
-              />
-              <div className="flex-1 bg-muted/60 rounded-xl px-3 py-2 border border-border/40 flex items-center justify-between">
-                <span className="text-[11px] font-bold text-muted-foreground">
-                  {isSelectedDateToday ? '오늘 출근 기준' : `${format(selectedCalendarDate, 'MM/dd')} 일자 시뮬레이션`}
-                </span>
-                <span className="text-[11px] font-black text-foreground">
-                  출근: {selectedDateAttendance?.clockIn ? format(parseISO(selectedDateAttendance.clockIn), 'HH:mm') : '08:00 (기본)'}
-                </span>
+                  <MapPin className="w-3.5 h-3.5" />
+                  {isSavingLocation ? '기준점 저장 중...' : '📍 현재 위치를 기준점으로 등록'}
+                </Button>
               </div>
-            </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ================= TAB 2: 📅 근무 기록 & 캘린더 (History & Calendar) ================= */}
+      {activeTab === 'HISTORY' && (
+        <div className="space-y-3 animate-in fade-in duration-200">
+          <div className="grid grid-cols-2 gap-3.5">
+             <div className="bg-card border border-border/50 p-4 rounded-3xl flex flex-col gap-1 items-start shadow-[0_2px_12px_rgba(0,0,0,0.01)] relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-16 h-16 bg-blue-500/5 rounded-full blur-xl group-hover:bg-blue-500/10 transition-colors" />
+                <div className="w-8 h-8 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-500 mb-1 border border-blue-500/10">
+                  <Clock className="w-4 h-4" />
+                </div>
+                <span className="text-[8px] font-black text-blue-500/80 uppercase tracking-widest leading-none">이달의 누적 근무</span>
+                <span className="text-xl font-black text-foreground">{stats.total.toFixed(0)}<span className="text-[10px] font-bold text-muted-foreground/40 ml-0.5 font-sans">H</span></span>
+             </div>
+             <div className="bg-card border border-border/50 p-4 rounded-3xl flex flex-col gap-1 items-start shadow-[0_2px_12px_rgba(0,0,0,0.01)] relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-16 h-16 bg-amber-500/5 rounded-full blur-xl group-hover:bg-amber-500/10 transition-colors" />
+                <div className="w-8 h-8 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-500 mb-1 border border-amber-500/10">
+                  <Activity className="w-4 h-4" />
+                </div>
+                <span className="text-[8px] font-black text-amber-600/80 uppercase tracking-widest leading-none">초과 근무 시간</span>
+                <span className="text-xl font-black text-amber-600">{stats.ot.toFixed(0)}<span className="text-[10px] font-bold text-amber-600/40 ml-0.5 font-sans">H</span></span>
+             </div>
           </div>
 
-          {/* Simulation Output Card */}
-          <div className="bg-gradient-to-br from-amber-500/10 via-primary/5 to-transparent p-3.5 rounded-2xl border border-amber-500/25 space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-amber-500" />
-                <span className="text-xs font-black text-foreground">예상 근무 및 잔업 결과</span>
-              </div>
-              {predictedOvertimeResult.isSpecial && (
-                <Badge className="bg-red-500/15 text-red-500 border-none text-[9px] font-black">
-                  휴일/특근 1.5배 가산 적용
+          <Card className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.01)]">
+             <CardContent className="p-4">
+                <div className="flex items-center gap-1.5 mb-3">
+                   <Activity className="w-3.5 h-3.5 text-primary" />
+                   <span className="text-xs font-black text-foreground">최근 근무 트렌드</span>
+                </div>
+                <div className="h-[140px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData}>
+                      <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill: 'var(--muted-foreground)', opacity: 0.5, fontSize: 10}} />
+                      <Tooltip cursor={{fill: 'var(--muted)', opacity: 0.2}} contentStyle={{backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px', fontSize: '10px'}} />
+                      <Bar dataKey="hours" fill="var(--primary)" radius={[6, 6, 0, 0]} barSize={12} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+             </CardContent>
+          </Card>
+
+          {/* Calendar Card with integrated date selection indicator */}
+          <Card className="border-none shadow-none bg-card rounded-2xl overflow-hidden border border-border">
+            <CardContent className="p-3 pt-5">
+               <div className="flex items-center justify-between px-2 pb-2 mb-2 border-b border-border/40">
+                 <div className="flex items-center gap-2">
+                   <CalendarIcon className="w-3.5 h-3.5 text-primary" />
+                   <span className="text-xs font-black text-foreground">출퇴근 캘린더 (날짜 선택 가능)</span>
+                 </div>
+                 <div className="text-[10px] font-bold text-muted-foreground">
+                   선택일: <span className="text-primary font-black">{format(selectedCalendarDate, 'yyyy.MM.dd')}</span>
+                 </div>
+               </div>
+               <style>{`
+                 .rdp { --rdp-cell-size: 34px; margin: 0 auto; width: 100%; }
+                 .rdp-caption_label { color: var(--foreground); font-weight: 900; }
+                 .rdp-nav_button { color: var(--muted-foreground); opacity: 0.8; }
+                 .rdp-head_cell { color: var(--muted-foreground); opacity: 0.6; font-size: 10px; font-weight: 900; }
+               `}</style>
+               <DayPicker 
+                  mode="single" 
+                  selected={selectedCalendarDate}
+                  onSelect={(date) => {
+                    if (date) setSelectedCalendarDate(date);
+                  }}
+                  month={month} 
+                  onMonthChange={setMonth} 
+                  locale={ko} 
+                  components={{ Day: CustomDay }}
+               />
+            </CardContent>
+          </Card>
+
+          {/* Daily History List */}
+          <div className="space-y-3">
+             <div className="flex items-center justify-between px-2">
+                <div className="flex items-center gap-2">
+                   <Clock className="w-3.5 h-3.5 text-primary" />
+                   <span className="text-xs font-black text-foreground">상세 내역 (최근 5건)</span>
+                </div>
+                <Button 
+                   variant="ghost" 
+                   size="sm" 
+                   className="text-[10px] font-black text-primary hover:text-primary/80 h-auto p-0"
+                   onClick={() => {
+                      setHistoryMonth(month);
+                      setIsHistoryOpen(true);
+                   }}
+                >
+                   더보기
+                </Button>
+             </div>
+             <div className="space-y-2">
+                {[...attendanceData]
+                  .sort((a, b) => b.date.localeCompare(a.date))
+                  .slice(0, 5)
+                  .map((att) => (
+                   <div key={att.id} className="bg-card p-3 rounded-xl border border-border flex items-center justify-between">
+                      <div className="flex flex-col">
+                         <span className="text-[11px] font-black text-foreground">{format(parseISO(att.date), 'MM월 dd일 (EEEE)', { locale: ko })}</span>
+                         <div className="flex gap-2 text-[9px] font-bold text-muted-foreground mt-0.5">
+                            <span>{att.clockIn ? format(parseISO(att.clockIn), 'HH:mm') : '--:--'}</span>
+                            <span>-</span>
+                            <span>{att.clockOut ? format(parseISO(att.clockOut), 'HH:mm') : (att.date === todayStr ? '근무중' : '--:--')}</span>
+                         </div>
+                      </div>
+                      <div className="text-right">
+                         <div className="flex flex-col items-end">
+                            <span className="text-xs font-black text-foreground">
+                               기본 {att.workHours ? `${att.workHours.toFixed(1)}시간` : (att.clockIn && !att.clockOut && att.date === todayStr ? '계산중' : '0시간')}
+                            </span>
+                            {att.overtimeHours > 0 && (
+                               <span className="text-[9px] font-black text-primary">잔업 {att.overtimeHours.toFixed(1)}시간</span>
+                            )}
+                         </div>
+                      </div>
+                   </div>
+                ))}
+                {attendanceData.length === 0 && (
+                   <div className="py-10 text-center opacity-20">
+                      <p className="text-xs font-black">내역이 없습니다</p>
+                   </div>
+                )}
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= TAB 3: ⚡ 잔업 예측 & 스마트 알림 (Overtime & Alerts) ================= */}
+      {activeTab === 'OVERTIME_ALERT' && (
+        <div className="space-y-3 animate-in fade-in duration-200">
+          {/* Overtime Rules & Realtime Overtime Predictor Widget */}
+          <Card className="bg-card border border-border/60 rounded-3xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.03)]">
+            <CardContent className="p-4.5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-black">
+                    <Calculator className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-xs font-black text-foreground">실시간 잔업 예측기</h3>
+                      <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-none text-[9px] font-black py-0 px-2">
+                        1시간 단위 인정
+                      </Badge>
+                    </div>
+                    <p className="text-[10px] font-bold text-muted-foreground">
+                      캘린더 날짜를 클릭하여 해당 일자의 예상 잔업 및 인정 시간을 시뮬레이션하세요.
+                    </p>
+                  </div>
+                </div>
+
+                <Badge variant="outline" className="text-[10px] font-mono font-black border-border">
+                  {format(selectedCalendarDate, 'MM.dd(EEE)', { locale: ko })}
                 </Badge>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <div className="bg-background/90 rounded-xl p-2.5 border border-border/60">
-                <p className="text-[9px] font-bold text-muted-foreground uppercase">예상 기본 근무</p>
-                <p className="text-lg font-black text-foreground mt-0.5">
-                  {predictedOvertimeResult.workHours.toFixed(1)}
-                  <span className="text-xs font-bold text-muted-foreground ml-1">시간</span>
-                </p>
               </div>
-              <div className="bg-background/90 rounded-xl p-2.5 border border-amber-500/40">
-                <p className="text-[9px] font-bold text-amber-600 dark:text-amber-400 uppercase">예상 잔업 시간</p>
-                <p className="text-lg font-black text-amber-600 dark:text-amber-400 mt-0.5">
-                  {predictedOvertimeResult.overtimeHours.toFixed(1)}
-                  <span className="text-xs font-bold text-amber-600/70 ml-1">시간</span>
-                </p>
-              </div>
-            </div>
 
-            <p className="text-[10px] font-bold text-muted-foreground leading-tight pt-1">
-              💡 {predictedOvertimeResult.otStatusText}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Calendar Card with integrated date selection indicator */}
-      <Card className="border-none shadow-none bg-card rounded-2xl overflow-hidden border border-border">
-        <CardContent className="p-3 pt-5">
-           <div className="flex items-center justify-between px-2 pb-2 mb-2 border-b border-border/40">
-             <div className="flex items-center gap-2">
-               <CalendarIcon className="w-3.5 h-3.5 text-primary" />
-               <span className="text-xs font-black text-foreground">출퇴근 캘린더 (날짜 선택 가능)</span>
-             </div>
-             <div className="text-[10px] font-bold text-muted-foreground">
-               선택일: <span className="text-primary font-black">{format(selectedCalendarDate, 'yyyy.MM.dd')}</span>
-             </div>
-           </div>
-           <style>{`
-             .rdp { --rdp-cell-size: 34px; margin: 0 auto; width: 100%; }
-             .rdp-caption_label { color: var(--foreground); font-weight: 900; }
-             .rdp-nav_button { color: var(--muted-foreground); opacity: 0.8; }
-             .rdp-head_cell { color: var(--muted-foreground); opacity: 0.6; font-size: 10px; font-weight: 900; }
-           `}</style>
-           <DayPicker 
-              mode="single" 
-              selected={selectedCalendarDate}
-              onSelect={(date) => {
-                if (date) setSelectedCalendarDate(date);
-              }}
-              month={month} 
-              onMonthChange={setMonth} 
-              locale={ko} 
-              components={{ Day: CustomDay }}
-           />
-        </CardContent>
-      </Card>
-
-      {/* Daily History List */}
-      <div className="space-y-3">
-         <div className="flex items-center justify-between px-2">
-            <div className="flex items-center gap-2">
-               <Clock className="w-3.5 h-3.5 text-primary" />
-               <span className="text-xs font-black text-foreground">상세 내역 (최근 5건)</span>
-            </div>
-            <Button 
-               variant="ghost" 
-               size="sm" 
-               className="text-[10px] font-black text-primary hover:text-primary/80 h-auto p-0"
-               onClick={() => {
-                  setHistoryMonth(month);
-                  setIsHistoryOpen(true);
-               }}
-            >
-               더보기
-            </Button>
-         </div>
-         <div className="space-y-2">
-            {[...attendanceData]
-              .sort((a, b) => b.date.localeCompare(a.date))
-              .slice(0, 5)
-              .map((att) => (
-               <div key={att.id} className="bg-card p-3 rounded-xl border border-border flex items-center justify-between">
-                  <div className="flex flex-col">
-                     <span className="text-[11px] font-black text-foreground">{format(parseISO(att.date), 'MM월 dd일 (EEEE)', { locale: ko })}</span>
-                     <div className="flex gap-2 text-[9px] font-bold text-muted-foreground mt-0.5">
-                        <span>{att.clockIn ? format(parseISO(att.clockIn), 'HH:mm') : '--:--'}</span>
-                        <span>-</span>
-                        <span>{att.clockOut ? format(parseISO(att.clockOut), 'HH:mm') : (att.date === todayStr ? '근무중' : '--:--')}</span>
-                     </div>
+              {/* Quick Info Bar for Overtime Policy */}
+              <div className="bg-muted/40 rounded-2xl p-3 border border-border/40 text-[11px] space-y-1.5">
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span className="font-bold flex items-center gap-1">
+                    <Info className="w-3.5 h-3.5 text-blue-500" />
+                    잔업 산정 공식 (강화 기준)
+                  </span>
+                  <span className="font-mono font-bold text-[10px] text-foreground">
+                    08:00~17:40(0h) / 18:00 이후 1시간당 1h
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 pt-1 text-center font-bold text-[10px]">
+                  <div className="bg-background/80 rounded-xl p-1.5 border border-border/50">
+                    <p className="text-muted-foreground/80">~17:40 퇴근</p>
+                    <p className="text-foreground font-black">잔업 0시간</p>
                   </div>
-                  <div className="text-right">
-                     <div className="flex flex-col items-end">
-                        <span className="text-xs font-black text-foreground">
-                           기본 {att.workHours ? `${att.workHours.toFixed(1)}시간` : (att.clockIn && !att.clockOut && att.date === todayStr ? '계산중' : '0시간')}
+                  <div className="bg-background/80 rounded-xl p-1.5 border border-amber-500/30 text-amber-600 dark:text-amber-400">
+                    <p className="opacity-80">18:00 퇴근</p>
+                    <p className="font-black">잔업 1.0시간</p>
+                  </div>
+                  <div className="bg-background/80 rounded-xl p-1.5 border border-primary/30 text-primary">
+                    <p className="opacity-80">19:00 퇴근</p>
+                    <p className="font-black">잔업 2.0시간</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Predictor Controls */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between text-xs font-black text-foreground">
+                  <span>퇴근 예정 시각 선택</span>
+                  <span className="font-mono text-primary text-sm font-black">{simulatedExitTime}</span>
+                </div>
+
+                {/* Quick Preset Buttons */}
+                <div className="grid grid-cols-5 gap-1.5">
+                  {[
+                    { label: '17:00 (정시)', time: '17:00' },
+                    { label: '17:40 (0h)', time: '17:40' },
+                    { label: '18:00 (1h)', time: '18:00' },
+                    { label: '19:00 (2h)', time: '19:00' },
+                    { label: '20:00 (3h)', time: '20:00' },
+                  ].map((item) => (
+                    <button
+                      key={item.time}
+                      type="button"
+                      onClick={() => setSimulatedExitTime(item.time)}
+                      className={cn(
+                        "h-8 rounded-xl text-[10px] font-black transition-all border cursor-pointer",
+                        simulatedExitTime === item.time
+                          ? "bg-primary text-primary-foreground border-primary shadow-sm scale-[1.02]"
+                          : "bg-background text-foreground/80 border-border hover:bg-muted/70"
+                      )}
+                    >
+                      {item.time}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Direct Slider & Time Input */}
+                <div className="flex items-center gap-3 pt-1">
+                  <input
+                    type="time"
+                    value={simulatedExitTime}
+                    onChange={(e) => setSimulatedExitTime(e.target.value)}
+                    className="h-9 px-3 rounded-xl bg-background border border-border text-xs font-mono font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-primary shrink-0"
+                  />
+                  <div className="flex-1 bg-muted/60 rounded-xl px-3 py-2 border border-border/40 flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-muted-foreground">
+                      {isSelectedDateToday ? '오늘 출근 기준' : `${format(selectedCalendarDate, 'MM/dd')} 일자 시뮬레이션`}
+                    </span>
+                    <span className="text-[11px] font-black text-foreground">
+                      출근: {selectedDateAttendance?.clockIn ? format(parseISO(selectedDateAttendance.clockIn), 'HH:mm') : '08:00 (기본)'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Simulation Output Card */}
+              <div className="bg-gradient-to-br from-amber-500/10 via-primary/5 to-transparent p-3.5 rounded-2xl border border-amber-500/25 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-amber-500" />
+                    <span className="text-xs font-black text-foreground">예상 근무 및 잔업 결과</span>
+                  </div>
+                  {predictedOvertimeResult.isSpecial && (
+                    <Badge className="bg-red-500/15 text-red-500 border-none text-[9px] font-black">
+                      휴일/특근 1.5배 가산 적용
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div className="bg-background/90 rounded-xl p-2.5 border border-border/60">
+                    <p className="text-[9px] font-bold text-muted-foreground uppercase">예상 기본 근무</p>
+                    <p className="text-lg font-black text-foreground mt-0.5">
+                      {predictedOvertimeResult.workHours.toFixed(1)}
+                      <span className="text-xs font-bold text-muted-foreground ml-1">시간</span>
+                    </p>
+                  </div>
+                  <div className="bg-background/90 rounded-xl p-2.5 border border-amber-500/40">
+                    <p className="text-[9px] font-bold text-amber-600 dark:text-amber-400 uppercase">예상 잔업 시간</p>
+                    <p className="text-lg font-black text-amber-600 dark:text-amber-400 mt-0.5">
+                      {predictedOvertimeResult.overtimeHours.toFixed(1)}
+                      <span className="text-xs font-bold text-amber-600/70 ml-1">시간</span>
+                    </p>
+                  </div>
+                </div>
+
+                <p className="text-[10px] font-bold text-muted-foreground leading-tight pt-1">
+                  💡 {predictedOvertimeResult.otStatusText}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Smart Timed Push Notification Card (07:30 / 17:00 / 18:00 / 19:00) */}
+          <Card className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.03)]">
+            <CardContent className="p-4.5 space-y-3.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                    <BellRing className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black text-foreground">스마트 출퇴근 알림 (배터리 0% 절약형)</h3>
+                    <p className="text-[10px] font-bold text-muted-foreground">정해진 시간에만 푸시 발송 / 출퇴근 완료 시 당일 알림 자동 해제</p>
+                  </div>
+                </div>
+                <Badge variant="outline" className="text-[10px] font-black border-primary/20 bg-primary/5 text-primary">
+                  자동 스케줄
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {getTodayAttendanceAlertStatus(todayAttendance).map((item) => {
+                  const isMorning = item.type === 'morning';
+                  const IconComp = isMorning ? Sun : item.type === 'evening_17' ? Sunset : Moon;
+                  return (
+                    <div
+                      key={item.id}
+                      className={cn(
+                        "p-3 rounded-2xl border transition-all flex flex-col justify-between gap-2.5",
+                        item.isSuppressed
+                          ? "bg-muted/30 border-border/40 opacity-75"
+                          : "bg-background border-border/80 shadow-xs"
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className={cn(
+                            "w-7 h-7 rounded-lg flex items-center justify-center shrink-0",
+                            isMorning ? "bg-amber-500/10 text-amber-500" : "bg-blue-500/10 text-blue-500"
+                          )}>
+                            <IconComp className="w-3.5 h-3.5" />
+                          </div>
+                          <div className="truncate">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono text-xs font-black text-foreground">{item.timeStr}</span>
+                              <span className="text-[11px] font-bold text-foreground truncate">{item.label}</span>
+                            </div>
+                            <p className="text-[10px] font-medium text-muted-foreground truncate">
+                              {item.isSuppressed ? item.suppressReason : item.body}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1 border-t border-border/30">
+                        <span className="text-[9px] font-bold">
+                          {item.isSuppressed ? (
+                            <span className="text-emerald-500 flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" />
+                              {item.suppressReason}
+                            </span>
+                          ) : (
+                            <span className="text-primary flex items-center gap-1">
+                              <Bell className="w-3 h-3" />
+                              시간 도래 시 알림 발송
+                            </span>
+                          )}
                         </span>
-                        {att.overtimeHours > 0 && (
-                           <span className="text-[9px] font-black text-primary">잔업 {att.overtimeHours.toFixed(1)}시간</span>
-                        )}
-                     </div>
-                  </div>
-               </div>
-            ))}
-            {attendanceData.length === 0 && (
-               <div className="py-10 text-center opacity-20">
-                  <p className="text-xs font-black">내역이 없습니다</p>
-               </div>
-            )}
-         </div>
-      </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            testTriggerAttendanceAlert(item.type);
+                            toast.info(`[${item.timeStr}] 푸시 알림을 테스트 발송했습니다.`);
+                          }}
+                          className="text-[10px] font-bold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1 px-2 py-0.5 rounded-lg bg-muted hover:bg-muted/80"
+                        >
+                          테스트
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="bg-muted/40 rounded-2xl p-2.5 text-[11px] font-medium text-muted-foreground flex items-center gap-2">
+                <Info className="w-4 h-4 text-primary shrink-0" />
+                <span>
+                  💡 <strong>출근 체크 완료 시</strong> 07:30 알림이 자동 해제되며, <strong>퇴근 체크 완료 시</strong> 17:00·18:00·19:00 알림이 당일 모두 자동 차단됩니다.
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Full History Dialog */}
       <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>

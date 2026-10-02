@@ -41,74 +41,76 @@ export const DailyBriefingCard: React.FC<DailyBriefingCardProps> = ({
     <section className="space-y-2.5">
       {/* Tab Selector Header */}
       <div className="flex items-center justify-between gap-2 px-1">
-        <div className="flex items-center bg-muted/60 p-1 rounded-2xl gap-1">
+        <div className="flex-1 flex items-center bg-muted/70 p-1 rounded-2xl gap-1">
           <button
             type="button"
             onClick={() => setBriefingTab('NOTICES')}
             className={cn(
-              "px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer",
+              "flex-1 py-1.5 px-1.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap text-center flex items-center justify-center gap-1",
               briefingTab === 'NOTICES'
                 ? "bg-card text-foreground shadow-xs border border-border/60"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
-            📢 공지사항 ({recentNotices.length})
+            <span>📢 공지사항</span>
+            <span className="text-[10px] font-bold opacity-75">({recentNotices.length})</span>
           </button>
           <button
             type="button"
             onClick={() => setBriefingTab('ACCIDENTS')}
             className={cn(
-              "px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer",
+              "flex-1 py-1.5 px-1.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap text-center flex items-center justify-center gap-1",
               briefingTab === 'ACCIDENTS'
                 ? "bg-card text-foreground shadow-xs border border-border/60"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
-            ⚠️ 사고사례 ({recentAccidents.length})
+            <span>⚠️ 사고사례</span>
+            <span className="text-[10px] font-bold opacity-75">({recentAccidents.length})</span>
           </button>
           <button
             type="button"
             onClick={() => setBriefingTab('PRAISE')}
             className={cn(
-              "px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer",
+              "flex-1 py-1.5 px-1.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap text-center flex items-center justify-center gap-1",
               briefingTab === 'PRAISE'
                 ? "bg-card text-foreground shadow-xs border border-border/60"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
-            👑 칭찬왕
+            <span>👑 칭찬왕</span>
           </button>
         </div>
 
-        <div>
+        <div className="shrink-0">
           {briefingTab === 'NOTICES' && (
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 text-xs font-bold text-muted-foreground hover:text-primary rounded-lg px-2 cursor-pointer"
+              className="h-7 text-[11px] font-black text-muted-foreground hover:text-primary rounded-lg px-2 cursor-pointer whitespace-nowrap"
               onClick={() => navigate('/notices')}
             >
-              전체보기 <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
+              더보기 <ChevronRight className="w-3 h-3 ml-0.5" />
             </Button>
           )}
           {briefingTab === 'ACCIDENTS' && (
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 text-xs font-bold text-muted-foreground hover:text-primary rounded-lg px-2 cursor-pointer"
+              className="h-7 text-[11px] font-black text-muted-foreground hover:text-primary rounded-lg px-2 cursor-pointer whitespace-nowrap"
               onClick={() => navigate('/accidents')}
             >
-              전체보기 <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
+              더보기 <ChevronRight className="w-3 h-3 ml-0.5" />
             </Button>
           )}
           {briefingTab === 'PRAISE' && (
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 text-xs font-bold text-primary hover:text-primary rounded-lg px-2 cursor-pointer"
+              className="h-7 text-[11px] font-black text-primary hover:text-primary rounded-lg px-2 cursor-pointer whitespace-nowrap"
               onClick={() => navigate('/praise-feed')}
             >
-              칭찬하기 <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
+              칭찬하기 <ChevronRight className="w-3 h-3 ml-0.5" />
             </Button>
           )}
         </div>
