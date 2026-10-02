@@ -1,13 +1,61 @@
 import express from "express";
 import path from "path";
 import nodemailer from "nodemailer";
+import admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
+import fs from "fs";
 
 const app = express();
 const PORT = 3000;
 
+let firestoreDb: any;
+
+// Initialize Firebase Admin SDK
+try {
+  const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+  if (fs.existsSync(configPath)) {
+    const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    admin.initializeApp({
+      projectId: firebaseConfig.projectId
+    });
+    console.log("Firebase Admin initialized for project:", firebaseConfig.projectId);
+    
+    const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
+    firestoreDb = getFirestore(undefined, dbId);
+  } else {
+    admin.initializeApp();
+    console.log("Firebase Admin initialized using default credentials");
+    firestoreDb = getFirestore();
+  }
+} catch (error) {
+  console.error("Firebase Admin initialization error:", error);
+}
+
 // Set maximum request body sizes to accept large PDF or Excel Base64 payloads
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+// Admin Auth User Reset API Endpoint
+app.post("/api/auth/reset-user", async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ success: false, error: "이메일이 누락되었습니다." });
+  }
+
+  try {
+    const userRecord = await admin.auth().getUserByEmail(email.toLowerCase().trim());
+    await admin.auth().deleteUser(userRecord.uid);
+    console.log(`Successfully deleted Firebase Auth user with email: ${email} (UID: ${userRecord.uid})`);
+    return res.json({ success: true, message: "Firebase Auth 계정이 삭제되었습니다. 로그인 시 자동 재생성됩니다." });
+  } catch (error: any) {
+    if (error.code === "auth/user-not-found" || error.code === "user-not-found") {
+      console.log(`Auth user for email ${email} not found. No action needed.`);
+      return res.json({ success: true, message: "이미 Auth 계정이 존재하지 않습니다." });
+    }
+    console.error("Failed to delete Auth user:", error);
+    return res.status(500).json({ success: false, error: error.message || "Auth 계정 삭제 실패" });
+  }
+});
 
 // Real Email sending API Endpoint
 app.post("/api/send-email", async (req, res) => {

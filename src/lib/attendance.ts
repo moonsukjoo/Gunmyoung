@@ -9,8 +9,17 @@ export interface AttendanceStats {
 /**
  * Calculates work hours and overtime based on:
  * - Regular work: 08:00 - 17:00 (Max 8h)
- * - Lunch: 12:00 - 13:00 (excluded)
- * - OT Multiplier: 1.5x for time after 17:00
+ * - Lunch: 12:00 - 13:00 (1 hour excluded)
+ * - Break/Dinner: 17:00 - 18:00 (Excluded from regular & overtime)
+ * - Overtime rule:
+ *   - 08:00 ~ 17:40 -> 0시간 잔업
+ *   - 17:40 ~ 17:59 -> 0시간 잔업
+ *   - 18:00 이후부터 1시간 단위(60분)로 잔업 인정:
+ *     - 18:00 -> 1.0h OT (60m)
+ *     - 18:59 -> 1.0h OT (1시간 단위 절삭)
+ *     - 19:00 -> 2.0h OT (120m)
+ *     - 20:00 -> 3.0h OT (180m)
+ *     - 21:00 -> 4.0h OT (240m)
  * - Holiday & Weekend Multiplier: 1.5x multiplier on workHours and overtimeHours for Sat, Sun, public holidays, or custom 1.5x dates
  */
 export function calculateAttendanceHours(
@@ -43,9 +52,9 @@ export function calculateAttendanceHours(
   const coreEnd = getDayTime(inDate, 17, 0);
   const lunchStart = getDayTime(inDate, 12, 0);
   const lunchEnd = getDayTime(inDate, 13, 0);
+  const overtimeStart1800 = getDayTime(inDate, 18, 0);
 
-  // 1. Regular Hours Calculation
-  // We only count time between 08:00 and 17:00
+  // 1. Regular Hours Calculation (08:00 ~ 17:00, minus 12:00~13:00 lunch)
   const regOverlapStart = new Date(Math.max(inDate.getTime(), coreStart.getTime()));
   const regOverlapEnd = new Date(Math.min(outDate.getTime(), coreEnd.getTime()));
   
@@ -67,17 +76,17 @@ export function calculateAttendanceHours(
   
   const rawWorkHours = Math.max(0, regularMinutes / 60);
 
-  // 2. Overtime Hours Calculation (Time after 17:00)
-  let overtimeMinutes = 0;
-  if (outDate > coreEnd) {
-    // If clocked in before 17:00, OT starts at 17:00. If clocked in after 17:00, OT starts at clock-in.
-    const otStart = new Date(Math.max(inDate.getTime(), coreStart.getTime(), coreEnd.getTime()));
-    overtimeMinutes = Math.max(0, differenceInMinutes(outDate, otStart));
+  // 2. Overtime Hours Calculation (08:00~17:40은 0시간, 18:00 이후부터 1시간 단위 인정)
+  let rawOvertimeHours = 0;
+  if (outDate >= overtimeStart1800) {
+    // Overtime calculated from 17:00 baseline in 60-minute blocks starting at 18:00 (18:00 = 1h, 19:00 = 2h, etc.)
+    const minutesAfter1700 = differenceInMinutes(outDate, coreEnd);
+    // e.g. 18:00 is 60m -> 1 hour; 18:40 is 100m -> 1 hour; 19:00 is 120m -> 2 hours
+    const fullHours = Math.floor(minutesAfter1700 / 60);
+    rawOvertimeHours = Math.max(0, fullHours);
   }
   
-  const rawOvertimeHours = overtimeMinutes / 60;
-
-  // Return hours and apply multiplier (round to 1 decimal place to support dynamic halves like 4.5, 7.5 etc.)
+  // Return hours and apply multiplier (round to 1 decimal place)
   const workHours = Math.floor((rawWorkHours * multiplier) * 10) / 10;
   const overtimeHours = Math.floor((rawOvertimeHours * multiplier) * 10) / 10;
 

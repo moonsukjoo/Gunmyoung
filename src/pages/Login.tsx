@@ -70,6 +70,18 @@ export const Login: React.FC = () => {
         return;
       }
       
+      // Clear their Firebase Auth account as well, so next login automatically recreates it with their employee ID
+      const resetEmail = `${(userData.employeeId || '').toLowerCase()}@shipyard.com`;
+      try {
+        await fetch('/api/auth/reset-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: resetEmail })
+        });
+      } catch (e) {
+        console.warn("Failed to reset auth user on server:", e);
+      }
+
       await updateDoc(doc(db, 'users', userDoc.id), {
         hasCustomPin: false,
         failedLoginAttempts: 0,
@@ -111,36 +123,176 @@ export const Login: React.FC = () => {
     if (e) e.preventDefault();
     if (isLoading) return;
     const id = (isRememberedMode ? (rememberedId || '') : employeeId).trim();
-    if (!id || !password) { toast.error('정보를 입력하세요'); return; }
+    const cleanPassword = password.trim();
+
+    if (!id || !cleanPassword) { 
+      toast.error('사번과 비밀번호를 모두 입력해주세요.'); 
+      return; 
+    }
     setIsLoading(true);
-    
-    // Log for debugging (only in dev/training)
-    console.log(`Attempting login for: ${id}`);
     
     try {
       const email = id.includes('@') ? id : `${id.toLowerCase()}@shipyard.com`;
-      try {
-        await signInWithEmailAndPassword(auth, email, password);
-      } catch (err: any) {
-        if (!isRememberedMode && password === id && password.length >= 6) {
-          await createUserWithEmailAndPassword(auth, email, password);
+      const isMasterAdmin = id.toLowerCase() === 'tjrwnfjqm1@gmail.com' || email.toLowerCase() === 'tjrwnfjqm1@gmail.com';
+      let userData: any = null;
+      let userDocId: string | null = null;
+
+      // 1. Check if the employee is registered in the system (except master admin email)
+      if (!isMasterAdmin) {
+        const possibleIds = [id, id.toLowerCase(), id.toUpperCase()];
+        const usersRef = collection(db, 'users');
+        const qId = query(usersRef, where('employeeId', 'in', possibleIds), limit(1));
+        const userSnap = await getDocs(qId);
+
+        let registeredDoc = userSnap.empty ? null : userSnap.docs[0];
+
+        // Also check by email if not found by employeeId
+        if (!registeredDoc) {
+          const qEmail = query(usersRef, where('email', '==', email.toLowerCase()), limit(1));
+          const emailSnap = await getDocs(qEmail);
+          if (!emailSnap.empty) {
+            registeredDoc = emailSnap.docs[0];
+          }
+        }
+
+        if (!registeredDoc) {
+          toast.error('등록되지 않은 사원입니다. 관리자에게 사원 등록을 요청하세요.');
+          setIsLoading(false);
+          return;
+        }
+
+        userData = registeredDoc.data() as UserProfile;
+        userDocId = registeredDoc.id;
+
+        const isRetiredOrInactive = userData.status === 'RETIRED' || !!userData.resignedAt || (userData.isActive === false && userData.status !== 'ACTIVE' && userData.status !== 'ON_LEAVE');
+        if (isRetiredOrInactive) {
+          toast.error('퇴사 또는 비활성화된 계정입니다. 로그인할 수 없습니다.');
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // 2. Perform authentication with credentials
+      const dbEmployeeId = userData ? (userData.employeeId || id) : id;
+      const hasCustomPin = userData ? userData.hasCustomPin === true : false;
+      const targetEmail = isMasterAdmin ? id : `${(dbEmployeeId || '').toLowerCase()}@shipyard.com`;
+
+      let loggedIn = false;
+
+      // Case A: User has a custom PIN (typically 6 digits set in MyPage)
+      if (hasCustomPin) {
+        try {
+          await signInWithEmailAndPassword(auth, targetEmail, cleanPassword);
+          loggedIn = true;
+        } catch (err: any) {
+          // If login fails, check if they entered their employeeId as password
+          const isEnteringIdAsPassword = cleanPassword.toLowerCase() === (dbEmployeeId || '').toLowerCase();
+          if (isEnteringIdAsPassword) {
+            toast.error('PIN 번호가 설정되어 있습니다. 사번 대신 설정한 PIN 번호(6자리)를 입력해주세요.');
+            setIsLoading(false);
+            return;
+          }
+          toast.error('사번 또는 비밀번호가 올바르지 않습니다.');
+          setIsLoading(false);
+          return;
+        }
+      } else {
+        // Case B: User does not have a custom PIN, password should be their employee ID (case-insensitive)
+        const isEnteringIdAsPassword = cleanPassword.toLowerCase() === (dbEmployeeId || '').toLowerCase();
+
+        if (isEnteringIdAsPassword) {
+          const getPadded = (p: string) => {
+            const low = p.toLowerCase();
+            return low.length < 6 ? low.padEnd(6, '0') : low;
+          };
+
+          // Attempt sequence of different casing and padding options for existing Auth accounts
+          const loginPasswords = [
+            cleanPassword,
+            getPadded(cleanPassword),
+            dbEmployeeId,
+            getPadded(dbEmployeeId),
+            (dbEmployeeId || '').toLowerCase(),
+            (dbEmployeeId || '').toUpperCase()
+          ];
+          const uniquePasswords = [...new Set(loginPasswords)];
+
+          for (const pwd of uniquePasswords) {
+            try {
+              await signInWithEmailAndPassword(auth, targetEmail, pwd);
+              loggedIn = true;
+              break;
+            } catch (err) {
+              // Try next casing/padding
+            }
+          }
+
+          // If no existing casing matched, create the Auth account with normalized casing
+          if (!loggedIn) {
+            // Firebase Auth requires min 6 character password. Pad short employee IDs behind the scenes
+            const createPassword = (dbEmployeeId || '').toLowerCase().length < 6 
+              ? (dbEmployeeId || '').toLowerCase().padEnd(6, '0') 
+              : (dbEmployeeId || '').toLowerCase();
+
+            try {
+              await createUserWithEmailAndPassword(auth, targetEmail, createPassword);
+              loggedIn = true;
+            } catch (createErr: any) {
+              if (createErr.code === 'auth/email-already-in-use') {
+                // Stale Auth user exists with a different password. Self-heal by resetting on the server and recreating!
+                try {
+                  console.log("Self-healing: deleting stale Auth account for " + targetEmail);
+                  await fetch('/api/auth/reset-user', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: targetEmail })
+                  });
+                  // Recreate on-the-fly
+                  await createUserWithEmailAndPassword(auth, targetEmail, createPassword);
+                  loggedIn = true;
+                } catch (selfHealErr: any) {
+                  console.error("Self-healing failed:", selfHealErr);
+                  toast.error('비밀번호가 일치하지 않습니다. PIN 번호가 설정되어 있는지 확인해주세요.');
+                  setIsLoading(false);
+                  return;
+                }
+              } else {
+                toast.error('로그인에 실패했습니다. 비밀번호를 확인해주세요.');
+                setIsLoading(false);
+                return;
+              }
+            }
+          }
         } else {
-          console.error("Login Error:", err.code, err.message);
-          throw err;
+          // If they typed something else but hasCustomPin is false
+          try {
+            await signInWithEmailAndPassword(auth, targetEmail, cleanPassword);
+            loggedIn = true;
+          } catch (err: any) {
+            toast.error('사번 또는 비밀번호가 올바르지 않습니다.');
+            setIsLoading(false);
+            return;
+          }
         }
       }
       
       if (isRememberId) {
         localStorage.setItem('remembered_employeeId', id);
+        if (userData) {
+          if (userData.displayName) {
+            localStorage.setItem('remembered_displayName', userData.displayName);
+          }
+        }
         localStorage.setItem('save_employee_id', 'true');
       } else {
         localStorage.removeItem('remembered_employeeId');
+        localStorage.removeItem('remembered_displayName');
         localStorage.setItem('save_employee_id', 'false');
       }
-      toast.success('로그인 성공');
+      toast.success('로그인되었습니다.');
       navigate('/');
     } catch (e: any) { 
-      toast.error('로그인 실패: 정보를 확인해주세요'); 
+      toast.error('로그인 실패: 사번과 비밀번호를 확인해주세요.'); 
     } finally { 
       setIsLoading(false); 
     }

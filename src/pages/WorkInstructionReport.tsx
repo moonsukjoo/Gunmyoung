@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db, handleFirestoreError, OperationType } from '@/firebase';
-import { collection, query, where, getDocs, addDoc, onSnapshot, orderBy, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, onSnapshot, updateDoc, doc } from 'firebase/firestore';
 import { useAuth } from '@/components/AuthProvider';
 import { UserProfile, WorkInstructionReport, Role } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,15 +15,20 @@ import {
   User, 
   Clock, 
   ChevronLeft, 
+  ChevronRight,
   Plus, 
   Trash2, 
   CheckCircle2, 
-  Check,
-  AlertCircle,
-  ShieldCheck,
-  Signature as SignatureIcon,
-  Save,
-  Send
+  Check, 
+  AlertCircle, 
+  ShieldCheck, 
+  Signature as SignatureIcon, 
+  Save, 
+  Send,
+  Sparkles,
+  Users,
+  CheckCheck,
+  AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format } from 'date-fns';
@@ -31,11 +36,18 @@ import { ko } from 'date-fns/locale';
 import SignatureCanvas from 'react-signature-canvas';
 import { cn } from '@/lib/utils';
 import { 
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
 } from "@/components/ui/dialog";
+
+const REPORT_STEPS = [
+  { id: 1, title: '기본 & TBM', desc: '결재선 및 전파사항', icon: ClipboardList },
+  { id: 2, title: '지시 & 서명', desc: '작업자별 전/후 서명', icon: User },
+  { id: 3, title: '안전점검', desc: '일일 안전 체크리스트', icon: ShieldCheck },
+  { id: 4, title: '위험평가 & 제출', desc: '위험요인 대책 및 제출', icon: Send }
+];
 
 const SAFETY_CHECK_ITEMS = [
   {
@@ -79,6 +91,7 @@ const PREFILLED_HAZARDS = [
 export const WorkInstructionReportPage: React.FC = () => {
   const { profile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [reportId, setReportId] = useState<string | null>(null);
@@ -88,6 +101,15 @@ export const WorkInstructionReportPage: React.FC = () => {
   const [activeSignIdx, setActiveSignIdx] = useState<{ idx: number, type: 'before' | 'after' } | null>(null);
   const sigPad = useRef<SignatureCanvas>(null);
   const [justSigned, setJustSigned] = useState<{ idx: number, type: 'before' | 'after' } | null>(null);
+
+  // Scroll to top on page load and step change
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    const mainEl = document.querySelector('main');
+    if (mainEl) {
+      mainEl.scrollTop = 0;
+    }
+  }, [currentStep]);
 
   // Safely patch SignaturePad prototype through the active SignatureCanvas instance when dialog is opened
   useEffect(() => {
@@ -100,7 +122,6 @@ export const WorkInstructionReportPage: React.FC = () => {
             if (pad) {
               const padProto = Object.getPrototypeOf(pad);
               if (padProto) {
-                // Patch _strokeEnd
                 if (padProto._strokeEnd && !padProto._strokeEnd.__isPatched) {
                   const originalStrokeEnd = padProto._strokeEnd;
                   padProto._strokeEnd = function(event: any) {
@@ -111,10 +132,8 @@ export const WorkInstructionReportPage: React.FC = () => {
                     originalStrokeEnd.call(this, event);
                   };
                   padProto._strokeEnd.__isPatched = true;
-                  console.log("Successfully patched _strokeEnd on SignaturePad prototype dynamically!");
                 }
 
-                // Patch _strokeUpdate
                 if (padProto._strokeUpdate && !padProto._strokeUpdate.__isPatched) {
                   const originalStrokeUpdate = padProto._strokeUpdate;
                   padProto._strokeUpdate = function(event: any) {
@@ -125,7 +144,6 @@ export const WorkInstructionReportPage: React.FC = () => {
                     originalStrokeUpdate.call(this, event);
                   };
                   padProto._strokeUpdate.__isPatched = true;
-                  console.log("Successfully patched _strokeUpdate on SignaturePad prototype dynamically!");
                 }
               }
             }
@@ -143,7 +161,7 @@ export const WorkInstructionReportPage: React.FC = () => {
     date: format(new Date(), 'yyyy-MM-dd'),
     dayOfWeek: format(new Date(), 'EEEE', { locale: ko }),
     supervisorName: '',
-    safetyManagerName: '김주영',
+    safetyManagerName: '',
     tbmContent: '개인 안전 보호구 착용 실태 점검 및 작업 전 TBM 실시',
     workerInstructions: [],
     safetyChecks: SAFETY_CHECK_ITEMS.map(cat => ({
@@ -160,7 +178,22 @@ export const WorkInstructionReportPage: React.FC = () => {
     status: 'PENDING'
   });
 
+  const [defaultSafetyManager, setDefaultSafetyManager] = useState<string>('김주영');
+
+  // Listen to company settings for default safety manager name
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'company'), (snap) => {
+      if (snap.exists() && snap.data().safetyManagerName) {
+        setDefaultSafetyManager(snap.data().safetyManagerName);
+      }
+    }, (err) => {
+      console.warn("Company settings fetch warning:", err);
+    });
+    return () => unsub();
+  }, []);
+
   const isSupervisor = profile?.role === 'TEAM_LEADER' || ['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER'].includes(profile?.role || '');
+  const canEditSafetyManager = ['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER', 'TEAM_LEADER'].includes(profile?.role || '') || isSupervisor;
 
   useEffect(() => {
     if (authLoading) return;
@@ -180,15 +213,13 @@ export const WorkInstructionReportPage: React.FC = () => {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const reports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WorkInstructionReport));
       
-      // Find a pending one first
       const pendingReport = reports.find(r => r.status === 'PENDING');
       
       if (pendingReport) {
         setReportId(pendingReport.id);
         setFormData(pendingReport);
       } else if (reports.length > 0) {
-        // If all are APPROVED, we show the latest one but will provide a button to start new
-        const latest = reports[0]; // ordered by date/time ideally
+        const latest = reports[0];
         setReportId(latest.id);
         setFormData(latest);
       } else {
@@ -208,7 +239,6 @@ export const WorkInstructionReportPage: React.FC = () => {
     if (!profile?.departmentId) return;
     setSubmitting(true);
     try {
-      // Find all workers in the department to initialize the list
       const workersQuery = query(
         collection(db, 'users'),
         where('departmentId', '==', profile.departmentId),
@@ -223,7 +253,7 @@ export const WorkInstructionReportPage: React.FC = () => {
         date: format(new Date(), 'yyyy-MM-dd'),
         dayOfWeek: format(new Date(), 'EEEE', { locale: ko }),
         supervisorName: profile.displayName || '',
-        safetyManagerName: '김주영',
+        safetyManagerName: defaultSafetyManager || '김주영',
         tbmContent: '개인 안전 보호구 착용 실태 점검 및 작업 전 TBM 실시',
         workerInstructions: workers.map((w, idx) => ({
           no: idx + 1,
@@ -285,6 +315,16 @@ export const WorkInstructionReportPage: React.FC = () => {
     handleUpdate({ safetyChecks: newChecks });
   };
 
+  const handleCheckAllSafety = (result: 'O' | 'X' | 'N/A') => {
+    if (!isSupervisor) return;
+    const newChecks = (formData.safetyChecks || []).map(cat => ({
+      ...cat,
+      items: cat.items.map(item => ({ ...item, result }))
+    }));
+    handleUpdate({ safetyChecks: newChecks });
+    toast.success(`안전점검 전체 항목이 '${result}'로 설정되었습니다.`);
+  };
+
   const handleSignSave = () => {
     if (sigPad.current && activeSignIdx) {
       if (sigPad.current.isEmpty()) {
@@ -296,14 +336,12 @@ export const WorkInstructionReportPage: React.FC = () => {
       const currentType = activeSignIdx.type;
 
       if (currentIdx === -1) {
-        // Supervisor Signature
         if (!isSupervisor) {
           toast.error('관리감독자 권한이 없습니다.');
           return;
         }
         handleUpdate({ supervisorSignUrl: dataUrl });
       } else if (currentIdx === -2) {
-        // Safety Manager / Director Signature
         const canSignSafety = profile?.role === 'SAFETY_MANAGER' || ['CEO', 'DIRECTOR', 'GENERAL_MANAGER'].includes(profile?.role || '');
         if (!canSignSafety) {
           toast.error('안전관리자 혹은 소장님만 서명할 수 있습니다.');
@@ -326,7 +364,6 @@ export const WorkInstructionReportPage: React.FC = () => {
         handleUpdate({ workerInstructions: newInstructions });
       }
 
-      // Trigger smooth Framer Motion checkmark overlay
       setJustSigned({ idx: currentIdx, type: currentType });
       setTimeout(() => {
         setJustSigned(null);
@@ -343,10 +380,9 @@ export const WorkInstructionReportPage: React.FC = () => {
     setSubmitting(true);
     try {
       await updateDoc(doc(db, 'workInstructionReports', reportId), {
-        status: 'APPROVED' // Or 'SUBMITTED'
+        status: 'APPROVED'
       });
 
-      // Notify Administrative Assistants (서무) and Heads (실장) in the department
       const targetRoles: Role[] = ['GENERAL_AFFAIRS', 'CLERK', 'DIRECTOR', 'GENERAL_MANAGER'];
       const managersQuery = query(
         collection(db, 'users'), 
@@ -381,710 +417,876 @@ export const WorkInstructionReportPage: React.FC = () => {
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center">
-        <Badge variant="outline" className="animate-pulse">데이터 동기화 중...</Badge>
+        <Badge variant="outline" className="animate-pulse font-black text-sm p-3">데이터 동기화 중...</Badge>
       </div>
     );
   }
 
   if (!reportId) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center p-6 space-y-6 text-center">
-        <div className="w-20 h-20 bg-muted rounded-3xl flex items-center justify-center text-muted-foreground/30">
-          <ClipboardList className="w-10 h-10" />
+      <div className="h-[80vh] flex flex-col items-center justify-center p-6 space-y-6 text-center max-w-md mx-auto">
+        <div className="w-20 h-20 bg-muted/60 rounded-3xl flex items-center justify-center text-muted-foreground/30 shadow-inner">
+          <ClipboardList className="w-10 h-10 text-primary/40" />
         </div>
         {!profile?.departmentId ? (
           <div className="space-y-2">
             <h2 className="text-2xl font-black text-rose-500">소속 팀 정보 없음</h2>
-            <p className="text-muted-foreground font-bold italic">현재 소속된 팀이 지정되지 않았습니다.<br/>관리자에게 팀 배정을 요청해 주세요.</p>
+            <p className="text-muted-foreground font-bold text-sm">현재 소속된 팀이 지정되지 않았습니다.<br/>관리자에게 팀 배정을 요청해 주세요.</p>
           </div>
         ) : (
           <>
             <div className="space-y-2">
-              <h2 className="text-2xl font-black">오늘의 일지가 없습니다</h2>
-              <p className="text-muted-foreground font-bold italic">팀장님께서 아직 오늘의 작업지시서를<br/>생성하지 않았습니다.</p>
+              <h2 className="text-2xl font-black text-foreground">오늘의 일지가 없습니다</h2>
+              <p className="text-muted-foreground font-medium text-sm">팀장님께서 아직 오늘의 작업지시서를<br/>생성하지 않았습니다.</p>
             </div>
             {isSupervisor && (
               <Button 
                 onClick={handleCreateReport} 
                 disabled={submitting}
-                className="h-16 px-8 rounded-2xl font-black text-lg gap-2"
+                className="h-14 px-8 rounded-2xl font-black text-base gap-2 bg-primary text-white shadow-xl shadow-primary/20 hover:bg-primary/95"
               >
                 {submitting ? '생성 중...' : '오늘의 일지 생성하기'}
               </Button>
             )}
           </>
         )}
-        <Button variant="ghost" onClick={() => navigate(-1)} className="font-bold">뒤로 가기</Button>
+        <Button variant="ghost" onClick={() => navigate(-1)} className="font-black rounded-xl">뒤로 가기</Button>
       </div>
     );
   }
 
-  const myWorkerIdx = formData.workerInstructions?.findIndex(w => w.workerUid === profile?.uid);
+  const workers = formData.workerInstructions || [];
+  const signedBeforeCount = workers.filter(w => w.signBeforeUrl).length;
+  const signedAfterCount = workers.filter(w => w.signAfterUrl).length;
 
   return (
-    <div className="space-y-6 pb-24 px-1 max-w-4xl mx-auto">
-      <header className="py-6 flex items-center justify-between">
+    <div className="space-y-6 pb-28 px-2 sm:px-4 max-w-4xl mx-auto">
+      {/* Header */}
+      <header className="py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="rounded-xl">
-            <ChevronLeft className="w-6 h-6" />
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="rounded-2xl h-11 w-11 bg-muted/40 hover:bg-muted">
+            <ChevronLeft className="w-6 h-6 text-foreground" />
           </Button>
           <div>
-            <h2 className="text-2xl font-black tracking-tight text-foreground leading-tight">작업지시 및 일일안전 점검일지</h2>
-            <p className="text-muted-foreground font-bold text-xs uppercase tracking-widest">{formData.date} ({formData.dayOfWeek}) - {formData.teamName}</p>
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-foreground leading-tight">작업지시 및 일일안전 점검일지</h1>
+            <p className="text-muted-foreground font-bold text-xs">{formData.date} ({formData.dayOfWeek}) · {formData.teamName}</p>
           </div>
         </div>
-        {formData.status === 'APPROVED' && (
-          <div className="flex items-center gap-2">
-            <Badge className="bg-emerald-500/20 text-emerald-500 border-none font-black px-3 h-8 rounded-lg">제출 완료</Badge>
-            {isSupervisor && (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleCreateReport}
-                className="h-8 rounded-lg font-black text-[10px] gap-1 border-primary/20 text-primary"
-              >
-                <Plus className="w-3 h-3" /> 새 일지 작성
-              </Button>
-            )}
-          </div>
+        {formData.status === 'APPROVED' ? (
+          <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-black px-3.5 py-1.5 rounded-xl text-xs">
+            제출 완료
+          </Badge>
+        ) : (
+          <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 font-black px-3 py-1.5 rounded-xl text-xs">
+            작성 진행 중
+          </Badge>
         )}
       </header>
 
-      {/* 1. Basic Info */}
-      <Card className="bg-card border-border rounded-3xl overflow-hidden shadow-lg">
-        <CardHeader className="bg-muted/50 border-b border-border p-4 md:p-6">
-          <CardTitle className="text-lg font-black flex items-center gap-2">
-            <ClipboardList className="w-5 h-5 text-primary" /> 기본 정보 현황
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-4 md:p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between px-1">
-                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">관리감독자 (팀장)</label>
-                <div className="w-1 h-1 bg-primary rounded-full" />
-              </div>
-              <div className="flex gap-2">
-                <Input 
-                  value={formData.supervisorName}
-                  onChange={e => handleUpdate({ supervisorName: e.target.value })}
-                  readOnly={!isSupervisor || formData.status === 'APPROVED'}
-                  placeholder="팀장 성함"
-                  className="h-12 bg-muted/30 border-border/50 rounded-xl font-bold focus:bg-card transition-all flex-[2]"
-                />
-                <div 
-                  id="supervisor-signature-box"
-                  className={cn(
-                    "relative h-12 bg-muted/20 border border-dashed border-border rounded-xl flex items-center justify-center cursor-pointer hover:bg-muted/40 transition-all flex-1 min-w-[100px] overflow-hidden",
-                    (!isSupervisor || formData.status === 'APPROVED') && "opacity-50 cursor-not-allowed"
-                  )}
-                  onClick={() => {
-                    if (!isSupervisor || formData.status === 'APPROVED') return;
-                    setActiveSignIdx({ idx: -1, type: 'before' });
-                    setIsSignOpen(true);
-                  }}
-                >
-                  {formData.supervisorSignUrl ? (
-                     <div className="relative w-full h-full flex items-center justify-center">
-                       <img src={formData.supervisorSignUrl} className="h-full object-contain mix-blend-multiply dark:mix-blend-normal" alt="supervisor-sign" />
-                       <div className="absolute bottom-1 right-1 bg-emerald-500 text-white rounded-full p-0.5 shadow-md shadow-emerald-500/30">
-                         <Check className="w-1.5 h-1.5" strokeWidth={4} />
-                       </div>
+      {/* 4-Step Wizard Stepper Navigation */}
+      <div className="bg-card border border-border/80 rounded-3xl p-3 sm:p-4 shadow-md">
+        <div className="grid grid-cols-4 gap-1 sm:gap-2 mb-3">
+          {REPORT_STEPS.map((step) => {
+            const isActive = currentStep === step.id;
+            const isPast = currentStep > step.id;
+            const Icon = step.icon;
 
-                       <AnimatePresence>
-                         {justSigned?.idx === -1 && (
-                           <motion.div 
-                             initial={{ opacity: 0, scale: 0.6 }}
-                             animate={{ opacity: 1, scale: 1 }}
-                             exit={{ opacity: 0, scale: 0.8 }}
-                             className="absolute inset-0 bg-emerald-500/95 flex flex-col items-center justify-center rounded-xl z-10 pointer-events-none text-white text-[8px]"
-                             transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                           >
-                             <Check className="w-5 h-5 text-white" strokeWidth={4} />
-                             <span className="font-black mt-0.5">서명됨</span>
-                           </motion.div>
-                         )}
-                       </AnimatePresence>
-                     </div>
-                  ) : (
-                     <div className="flex flex-col items-center justify-center gap-0.5 select-none">
-                       <SignatureIcon className="w-3.5 h-3.5 text-muted-foreground/30" />
-                       <span className="text-[8px] font-black text-muted-foreground/45">팀장 서명</span>
-                     </div>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between px-1">
-                <label className="text-[10px] font-black text-primary uppercase tracking-widest">안전보건관리책임자 (소장)</label>
-                <div className="w-1 h-1 bg-primary rounded-full shadow-[0_0_5px_rgba(49,130,246,0.5)]" />
-              </div>
-              <div className="flex gap-2">
-                <Input 
-                  value={formData.safetyManagerName || '김주영'}
-                  onChange={e => handleUpdate({ safetyManagerName: e.target.value })}
-                  readOnly={!isSupervisor || formData.status === 'APPROVED'}
-                  placeholder="소장 성함"
-                  className="h-12 bg-muted/30 border-border/50 rounded-xl font-black text-primary focus:bg-card transition-all flex-[2]"
-                />
-                <div 
-                  id="safety-manager-signature-box"
-                  className={cn(
-                    "relative h-12 bg-muted/20 border border-dashed border-border rounded-xl flex items-center justify-center cursor-pointer hover:bg-muted/40 transition-all flex-1 min-w-[100px] overflow-hidden",
-                    (formData.status === 'APPROVED') && "opacity-50 cursor-not-allowed"
-                  )}
-                  onClick={() => {
-                    if (formData.status === 'APPROVED') return;
-                    const canSignSafety = profile?.role === 'SAFETY_MANAGER' || ['CEO', 'DIRECTOR', 'GENERAL_MANAGER'].includes(profile?.role || '');
-                    if (!canSignSafety) {
-                      toast.error('안전관리자 혹은 소장님만 서명할 수 있습니다.');
-                      return;
-                    }
-                    setActiveSignIdx({ idx: -2, type: 'before' });
-                    setIsSignOpen(true);
-                  }}
-                >
-                  {formData.safetyManagerSignUrl ? (
-                     <div className="relative w-full h-full flex items-center justify-center">
-                       <img src={formData.safetyManagerSignUrl} className="h-full object-contain mix-blend-multiply dark:mix-blend-normal" alt="safety-manager-sign" />
-                       <div className="absolute bottom-1 right-1 bg-emerald-500 text-white rounded-full p-0.5 shadow-md shadow-emerald-500/30">
-                         <Check className="w-1.5 h-1.5" strokeWidth={4} />
-                       </div>
-
-                       <AnimatePresence>
-                         {justSigned?.idx === -2 && (
-                           <motion.div 
-                             initial={{ opacity: 0, scale: 0.6 }}
-                             animate={{ opacity: 1, scale: 1 }}
-                             exit={{ opacity: 0, scale: 0.8 }}
-                             className="absolute inset-0 bg-emerald-500/95 flex flex-col items-center justify-center rounded-xl z-10 pointer-events-none text-white text-[8px]"
-                             transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                           >
-                             <Check className="w-5 h-5 text-white" strokeWidth={4} />
-                             <span className="font-black mt-0.5">승인됨</span>
-                           </motion.div>
-                         )}
-                       </AnimatePresence>
-                     </div>
-                  ) : (
-                     <div className="flex flex-col items-center justify-center gap-0.5 select-none">
-                       <SignatureIcon className="w-3.5 h-3.5 text-primary/30" />
-                       <span className="text-[8px] font-black text-primary/45">소장 서명</span>
-                     </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between px-1">
-              <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">TBM 및 주요 전파사항</label>
-              <div className="w-1 h-1 bg-muted-foreground/30 rounded-full" />
-            </div>
-            <Textarea 
-              value={formData.tbmContent}
-              onChange={e => handleUpdate({ tbmContent: e.target.value })}
-              readOnly={!isSupervisor || formData.status === 'APPROVED'}
-              placeholder="오늘의 주요 작업 지시 및 안전 전파사항을 입력하세요."
-              className="min-h-[100px] bg-muted/30 border-border/50 rounded-2xl font-bold focus:bg-card transition-all resize-none p-4 leading-relaxed"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 2. Worker Instructions Table */}
-      <Card className="bg-card border-border rounded-3xl overflow-hidden shadow-lg">
-        <CardHeader className="bg-muted/50 border-b border-border p-5 md:p-6 flex flex-row items-center justify-between">
-          <CardTitle className="text-lg font-black flex items-center gap-2">
-            <User className="w-5 h-5 text-primary" /> 지시사항 및 서명
-          </CardTitle>
-          {isSupervisor && (
-            <Button variant="outline" size="sm" onClick={() => {
-              const newInstructions = [...(formData.workerInstructions || [])];
-              newInstructions.push({
-                no: newInstructions.length + 1,
-                workerUid: '',
-                workerName: '새 인원',
-                instruction: '',
-                startTime: '08:00',
-                endTime: '',
-                hazardSubmitted: false,
-                healthStatus: 'GOOD'
-              });
-              handleUpdate({ workerInstructions: newInstructions });
-            }} className="rounded-xl font-black h-8 gap-1 border-primary/20 text-primary hover:bg-primary/5">
-              <Plus className="w-4 h-4" /> 추가
-            </Button>
-          )}
-        </CardHeader>
-        <CardContent className="p-0">
-          {/* Mobile touch-friendly card list (hidden on desktop) */}
-          <div className="md:hidden divide-y divide-border/50 p-4 space-y-4">
-            {formData.workerInstructions?.map((worker, idx) => {
-              const canEditThisRow = isSupervisor || worker.workerUid === profile?.uid;
-              return (
-                <div key={idx} className={cn(
-                  "p-5 rounded-3xl border border-border bg-muted/10 space-y-4 relative overflow-hidden",
-                  worker.workerUid === profile?.uid && "bg-primary/5 border-primary/20"
+            return (
+              <button
+                key={step.id}
+                type="button"
+                onClick={() => setCurrentStep(step.id)}
+                className={cn(
+                  "flex flex-col sm:flex-row items-center sm:items-start gap-1 sm:gap-2.5 p-2 sm:p-3 rounded-2xl text-left transition-all relative overflow-hidden",
+                  isActive 
+                    ? "bg-primary/10 border border-primary/30 shadow-sm" 
+                    : isPast 
+                    ? "bg-muted/40 hover:bg-muted/70 text-foreground" 
+                    : "text-muted-foreground/60 hover:bg-muted/30"
+                )}
+              >
+                <div className={cn(
+                  "w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center shrink-0 text-xs font-black transition-all",
+                  isActive 
+                    ? "bg-primary text-white shadow-md shadow-primary/30 scale-105" 
+                    : isPast 
+                    ? "bg-emerald-500 text-white" 
+                    : "bg-muted text-muted-foreground"
                 )}>
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-black text-muted-foreground/50 uppercase tracking-widest">NO. {worker.no}</span>
-                    <Badge variant={worker.healthStatus === 'GOOD' ? 'default' : worker.healthStatus === 'BAD' ? 'destructive' : 'outline'} className="text-[9px] font-black rounded-lg">
-                      건강: {worker.healthStatus === 'GOOD' ? '좋음' : worker.healthStatus === 'BAD' ? '나쁨' : '보통'}
+                  {isPast ? <Check className="w-4 h-4 stroke-[3]" /> : step.id}
+                </div>
+                <div className="text-center sm:text-left min-w-0">
+                  <p className={cn(
+                    "text-[11px] sm:text-xs font-black truncate",
+                    isActive ? "text-primary" : "text-foreground"
+                  )}>
+                    {step.title}
+                  </p>
+                  <p className="hidden sm:block text-[10px] text-muted-foreground font-medium truncate">
+                    {step.desc}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Linear step progress bar */}
+        <div className="w-full bg-muted h-1.5 rounded-full overflow-hidden">
+          <motion.div 
+            className="h-full bg-primary"
+            initial={false}
+            animate={{ width: `${((currentStep - 1) / (REPORT_STEPS.length - 1)) * 100}%` }}
+            transition={{ duration: 0.3 }}
+          />
+        </div>
+      </div>
+
+      {/* Step Contents */}
+      <AnimatePresence mode="wait">
+        {/* Step 1: 기본 정보 & TBM */}
+        {currentStep === 1 && (
+          <motion.div
+            key="step1"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.2 }}
+            className="space-y-4"
+          >
+            <Card className="bg-card border-border rounded-3xl overflow-hidden shadow-lg">
+              <CardHeader className="bg-muted/40 border-b border-border p-5">
+                <CardTitle className="text-base font-black flex items-center gap-2 text-foreground">
+                  <ClipboardList className="w-4 h-4 text-primary" /> 1단계: 기본 정보 & 결재선 서명
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Supervisor Signature Box */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between px-1">
+                      <label className="text-xs font-black text-foreground">관리감독자 (팀장 서명)</label>
+                      <span className="text-[10px] font-bold text-muted-foreground">직접 터치하여 서명</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Input 
+                        value={formData.supervisorName}
+                        onChange={e => {
+                          setFormData(prev => ({ ...prev, supervisorName: e.target.value }));
+                          handleUpdate({ supervisorName: e.target.value });
+                        }}
+                        readOnly={!isSupervisor || formData.status === 'APPROVED'}
+                        placeholder="팀장 성함"
+                        className="h-14 bg-muted/30 border-border/70 rounded-2xl font-black text-foreground focus:bg-card transition-all flex-[2] text-sm"
+                      />
+                      <div 
+                        id="supervisor-signature-box"
+                        className={cn(
+                          "relative h-14 bg-muted/20 border-2 border-dashed border-border rounded-2xl flex items-center justify-center cursor-pointer hover:bg-muted/40 transition-all flex-1 min-w-[110px] overflow-hidden",
+                          formData.supervisorSignUrl && "border-emerald-500/50 bg-emerald-500/5",
+                          (!isSupervisor || formData.status === 'APPROVED') && "opacity-60 cursor-not-allowed"
+                        )}
+                        onClick={() => {
+                          if (!isSupervisor || formData.status === 'APPROVED') return;
+                          setActiveSignIdx({ idx: -1, type: 'before' });
+                          setIsSignOpen(true);
+                        }}
+                      >
+                        {formData.supervisorSignUrl ? (
+                           <div className="relative w-full h-full flex items-center justify-center p-1">
+                             <img src={formData.supervisorSignUrl} className="h-full object-contain mix-blend-multiply dark:mix-blend-normal" alt="supervisor-sign" />
+                             <div className="absolute bottom-1 right-1 bg-emerald-500 text-white rounded-full p-0.5 shadow-sm">
+                               <Check className="w-2.5 h-2.5" strokeWidth={4} />
+                             </div>
+
+                             <AnimatePresence>
+                               {justSigned?.idx === -1 && (
+                                 <motion.div 
+                                   initial={{ opacity: 0, scale: 0.6 }}
+                                   animate={{ opacity: 1, scale: 1 }}
+                                   exit={{ opacity: 0, scale: 0.8 }}
+                                   className="absolute inset-0 bg-emerald-500/95 flex flex-col items-center justify-center rounded-xl z-10 pointer-events-none text-white text-[10px]"
+                                   transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                                 >
+                                   <Check className="w-5 h-5 text-white" strokeWidth={4} />
+                                   <span className="font-black mt-0.5">서명 완료</span>
+                                 </motion.div>
+                               )}
+                             </AnimatePresence>
+                           </div>
+                        ) : (
+                           <div className="flex flex-col items-center justify-center gap-0.5 select-none">
+                             <SignatureIcon className="w-4 h-4 text-muted-foreground/40 animate-pulse" />
+                             <span className="text-[10px] font-black text-primary">팀장 서명</span>
+                           </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Safety Manager / Director Signature Box */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between px-1">
+                      <label className="text-xs font-black text-foreground">안전보건관리책임자 (소장 서명)</label>
+                      <span className="text-[10px] font-bold text-muted-foreground">소장/안전관리자</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Input 
+                        value={formData.safetyManagerName !== undefined ? formData.safetyManagerName : defaultSafetyManager}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setFormData(prev => ({ ...prev, safetyManagerName: val }));
+                          handleUpdate({ safetyManagerName: val });
+                        }}
+                        readOnly={!canEditSafetyManager || formData.status === 'APPROVED'}
+                        placeholder="소장 성함"
+                        className="h-14 bg-muted/30 border-border/70 rounded-2xl font-black text-primary focus:bg-card transition-all flex-[2] text-sm"
+                      />
+                      <div 
+                        id="safety-manager-signature-box"
+                        className={cn(
+                          "relative h-14 bg-muted/20 border-2 border-dashed border-border rounded-2xl flex items-center justify-center cursor-pointer hover:bg-muted/40 transition-all flex-1 min-w-[110px] overflow-hidden",
+                          formData.safetyManagerSignUrl && "border-emerald-500/50 bg-emerald-500/5",
+                          (formData.status === 'APPROVED') && "opacity-60 cursor-not-allowed"
+                        )}
+                        onClick={() => {
+                          if (formData.status === 'APPROVED') return;
+                          const canSignSafety = profile?.role === 'SAFETY_MANAGER' || ['CEO', 'DIRECTOR', 'GENERAL_MANAGER'].includes(profile?.role || '');
+                          if (!canSignSafety) {
+                            toast.error('안전관리자 혹은 소장님만 서명할 수 있습니다.');
+                            return;
+                          }
+                          setActiveSignIdx({ idx: -2, type: 'before' });
+                          setIsSignOpen(true);
+                        }}
+                      >
+                        {formData.safetyManagerSignUrl ? (
+                           <div className="relative w-full h-full flex items-center justify-center p-1">
+                             <img src={formData.safetyManagerSignUrl} className="h-full object-contain mix-blend-multiply dark:mix-blend-normal" alt="safety-manager-sign" />
+                             <div className="absolute bottom-1 right-1 bg-emerald-500 text-white rounded-full p-0.5 shadow-sm">
+                               <Check className="w-2.5 h-2.5" strokeWidth={4} />
+                             </div>
+
+                             <AnimatePresence>
+                               {justSigned?.idx === -2 && (
+                                 <motion.div 
+                                   initial={{ opacity: 0, scale: 0.6 }}
+                                   animate={{ opacity: 1, scale: 1 }}
+                                   exit={{ opacity: 0, scale: 0.8 }}
+                                   className="absolute inset-0 bg-emerald-500/95 flex flex-col items-center justify-center rounded-xl z-10 pointer-events-none text-white text-[10px]"
+                                   transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                                 >
+                                   <Check className="w-5 h-5 text-white" strokeWidth={4} />
+                                   <span className="font-black mt-0.5">승인 완료</span>
+                                 </motion.div>
+                               )}
+                             </AnimatePresence>
+                           </div>
+                        ) : (
+                           <div className="flex flex-col items-center justify-center gap-0.5 select-none">
+                             <SignatureIcon className="w-4 h-4 text-primary/40" />
+                             <span className="text-[10px] font-black text-primary">소장 서명</span>
+                           </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* TBM Section */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between px-1">
+                    <label className="text-xs font-black text-foreground">TBM 및 주요 안전 전파사항</label>
+                    <span className="text-[10px] font-bold text-muted-foreground">작업 전 전달할 안전 공지</span>
+                  </div>
+                  <Textarea 
+                    value={formData.tbmContent}
+                    onChange={e => {
+                      setFormData(prev => ({ ...prev, tbmContent: e.target.value }));
+                      handleUpdate({ tbmContent: e.target.value });
+                    }}
+                    readOnly={!isSupervisor || formData.status === 'APPROVED'}
+                    placeholder="오늘의 주요 작업 지시 및 안전 전파사항을 입력하세요."
+                    className="min-h-[110px] bg-muted/30 border-border/70 rounded-2xl font-bold focus:bg-card transition-all resize-none p-4 leading-relaxed text-sm text-foreground"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Button
+              type="button"
+              onClick={() => setCurrentStep(2)}
+              className="w-full h-14 bg-primary text-white font-black text-base rounded-2xl shadow-lg shadow-primary/25 hover:bg-primary/95 flex items-center justify-center gap-2"
+            >
+              다음: 작업 지시 및 작업자 서명 <ChevronRight className="w-5 h-5" />
+            </Button>
+          </motion.div>
+        )}
+
+        {/* Step 2: 작업 지시 및 작업자 서명 */}
+        {currentStep === 2 && (
+          <motion.div
+            key="step2"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.2 }}
+            className="space-y-4"
+          >
+            <Card className="bg-card border-border rounded-3xl overflow-hidden shadow-lg">
+              <CardHeader className="bg-muted/40 border-b border-border p-4 sm:p-5 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-base font-black flex items-center gap-2 text-foreground">
+                    <User className="w-4 h-4 text-primary" /> 2단계: 인원별 작업 지시 및 전자 서명
+                  </CardTitle>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge variant="outline" className="text-[10px] font-black">
+                      총원 {workers.length}명
+                    </Badge>
+                    <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-none text-[10px] font-black">
+                      작업전 서명 {signedBeforeCount}/{workers.length}
+                    </Badge>
+                    <Badge className="bg-blue-500/15 text-blue-600 dark:text-blue-400 border-none text-[10px] font-black">
+                      작업후 서명 {signedAfterCount}/{workers.length}
                     </Badge>
                   </div>
-
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-muted-foreground/60">성명</label>
-                        <Input 
-                          value={worker.workerName}
-                          onChange={e => updateWorkerItem(idx, 'workerName', e.target.value)}
-                          readOnly={!isSupervisor}
-                          className="h-10 bg-muted/30 border-border/50 rounded-xl font-black text-xs text-center"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-muted-foreground/60">건강상태</label>
-                        <select
-                          value={worker.healthStatus || 'GOOD'}
-                          onChange={e => updateWorkerItem(idx, 'healthStatus', e.target.value)}
-                          disabled={!canEditThisRow}
-                          className="w-full h-10 bg-muted/30 border-border/55 rounded-xl text-xs font-black px-2 focus:ring-0 outline-none"
-                        >
-                          <option value="GOOD">좋음</option>
-                          <option value="NORMAL">보통</option>
-                          <option value="BAD">나쁨</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-muted-foreground/60">작업지시</label>
-                      <Input 
-                        value={worker.instruction}
-                        onChange={e => updateWorkerItem(idx, 'instruction', e.target.value)}
-                        readOnly={!isSupervisor}
-                        className="h-10 bg-muted/30 border-border/50 rounded-xl font-bold text-xs"
-                        placeholder="작업 위치 및 내용"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-muted-foreground/60">시작 시간</label>
-                        <Input 
-                          type="time"
-                          value={worker.startTime}
-                          onChange={e => updateWorkerItem(idx, 'startTime', e.target.value)}
-                          readOnly={!canEditThisRow}
-                          className="h-10 bg-muted/30 border-border/55 rounded-xl font-bold text-xs"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-muted-foreground/60">종료 시간</label>
-                        <Input 
-                          type="time"
-                          value={worker.endTime}
-                          onChange={e => updateWorkerItem(idx, 'endTime', e.target.value)}
-                          readOnly={!canEditThisRow}
-                          className="h-10 bg-muted/30 border-border/55 rounded-xl font-bold text-xs text-primary"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Highly visible mobile signature areas */}
-                    <div className="grid grid-cols-2 gap-3 pt-2">
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-black text-muted-foreground uppercase">작업 전 서명</label>
-                        <div 
-                          className={cn(
-                            "relative h-16 bg-muted/35 border border-dashed border-border rounded-xl flex items-center justify-center cursor-pointer hover:bg-muted/50 transition-all",
-                            !canEditThisRow && "opacity-55 cursor-not-allowed"
-                          )}
-                          onClick={() => {
-                            if (!canEditThisRow) return;
-                            setActiveSignIdx({ idx, type: 'before' });
-                            setIsSignOpen(true);
-                          }}
-                        >
-                          {worker.signBeforeUrl ? (
-                             <div className="relative w-full h-full flex items-center justify-center">
-                               <img src={worker.signBeforeUrl} className="h-full object-contain mix-blend-multiply dark:mix-blend-normal" alt="sign" />
-                               <div className="absolute bottom-1 right-1 bg-emerald-500 text-white rounded-full p-0.5 shadow-md shadow-emerald-500/30">
-                                 <Check className="w-1.5 h-1.5" strokeWidth={4} />
-                               </div>
-
-                               <AnimatePresence>
-                                 {justSigned?.idx === idx && justSigned?.type === 'before' && (
-                                   <motion.div 
-                                     initial={{ opacity: 0, scale: 0.6 }}
-                                     animate={{ opacity: 1, scale: 1 }}
-                                     exit={{ opacity: 0, scale: 0.8 }}
-                                     className="absolute inset-0 bg-emerald-500/90 flex flex-col items-center justify-center rounded-xl z- z-10 pointer-events-none text-white text-[8px]"
-                                     transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                                   >
-                                     <Check className="w-5 h-5 text-white" strokeWidth={4} />
-                                     <span className="font-black mt-0.5">서명 완료</span>
-                                   </motion.div>
-                                 )}
-                               </AnimatePresence>
-                             </div>
-                          ) : (
-                             <div className="flex flex-col items-center gap-0.5">
-                               <SignatureIcon className="w-4 h-4 text-muted-foreground/30" />
-                               <span className="text-[9px] font-black text-muted-foreground/45">서명하기</span>
-                             </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-black text-primary uppercase">작업 후 서명</label>
-                        <div 
-                          className={cn(
-                            "relative h-16 bg-muted/35 border border-dashed border-border rounded-xl flex items-center justify-center cursor-pointer hover:bg-muted/50 transition-all",
-                            !canEditThisRow && "opacity-55 cursor-not-allowed"
-                          )}
-                          onClick={() => {
-                            if (!canEditThisRow) return;
-                            setActiveSignIdx({ idx, type: 'after' });
-                            setIsSignOpen(true);
-                          }}
-                        >
-                          {worker.signAfterUrl ? (
-                             <div className="relative w-full h-full flex items-center justify-center">
-                               <img src={worker.signAfterUrl} className="h-full object-contain mix-blend-multiply dark:mix-blend-normal" alt="sign" />
-                               <div className="absolute bottom-1 right-1 bg-emerald-500 text-white rounded-full p-0.5 shadow-md shadow-emerald-500/30">
-                                 <Check className="w-1.5 h-1.5" strokeWidth={4} />
-                               </div>
-
-                               <AnimatePresence>
-                                 {justSigned?.idx === idx && justSigned?.type === 'after' && (
-                                   <motion.div 
-                                     initial={{ opacity: 0, scale: 0.6 }}
-                                     animate={{ opacity: 1, scale: 1 }}
-                                     exit={{ opacity: 0, scale: 0.8 }}
-                                     className="absolute inset-0 bg-emerald-500/90 flex flex-col items-center justify-center rounded-xl z- z-10 pointer-events-none text-white text-[8px]"
-                                     transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                                   >
-                                     <Check className="w-5 h-5 text-white" strokeWidth={4} />
-                                     <span className="font-black mt-0.5">서명 완료</span>
-                                   </motion.div>
-                                 )}
-                               </AnimatePresence>
-                             </div>
-                          ) : (
-                             <div className="flex flex-col items-center gap-0.5">
-                               <SignatureIcon className="w-4 h-4 text-primary/30" />
-                               <span className="text-[9px] font-black text-primary/45">서명하기</span>
-                             </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
                 </div>
-              );
-            })}
-          </div>
 
-          {/* Desktop Table view (hidden on mobile, shown on md screens) */}
-          <div className="hidden md:block overflow-x-auto no-scrollbar">
-            <table className="w-full text-left border-collapse min-w-[800px]">
-               <thead>
-                  <tr className="bg-muted/30">
-                    <th className="px-4 py-3 text-[10px] font-black text-muted-foreground uppercase text-center border-b border-border w-10">NO</th>
-                    <th className="px-4 py-3 text-[10px] font-black text-muted-foreground uppercase text-center border-b border-border w-24">성명</th>
-                    <th className="px-4 py-3 text-[10px] font-black text-muted-foreground uppercase border-b border-border">작업지시</th>
-                    <th className="px-4 py-3 text-[10px] font-black text-muted-foreground uppercase text-center border-b border-border w-24">건강</th>
-                    <th className="px-4 py-3 text-[10px] font-black text-muted-foreground uppercase text-center border-b border-border w-28">시간</th>
-                    <th className="px-4 py-3 text-[10px] font-black text-muted-foreground uppercase text-center border-b border-border w-20">작업전</th>
-                    <th className="px-4 py-3 text-[10px] font-black text-muted-foreground uppercase text-center border-b border-border w-20">작업후</th>
-                  </tr>
-               </thead>
-               <tbody className="divide-y divide-border">
-                  {formData.workerInstructions?.map((worker, idx) => {
+                {isSupervisor && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => {
+                      const newInstructions = [...(formData.workerInstructions || [])];
+                      newInstructions.push({
+                        no: newInstructions.length + 1,
+                        workerUid: '',
+                        workerName: '새 인원',
+                        instruction: '',
+                        startTime: '08:00',
+                        endTime: '',
+                        hazardSubmitted: false,
+                        healthStatus: 'GOOD'
+                      });
+                      handleUpdate({ workerInstructions: newInstructions });
+                    }} 
+                    className="rounded-xl font-black h-9 gap-1 border-primary/30 text-primary hover:bg-primary/5"
+                  >
+                    <Plus className="w-4 h-4" /> 인원 추가
+                  </Button>
+                )}
+              </CardHeader>
+              <CardContent className="p-0">
+                {/* Mobile touch-friendly card list */}
+                <div className="md:hidden divide-y divide-border/50 p-3 sm:p-4 space-y-4">
+                  {workers.map((worker, idx) => {
                     const canEditThisRow = isSupervisor || worker.workerUid === profile?.uid;
                     return (
-                      <tr key={idx} className={cn(
-                        "hover:bg-muted/10 transition-colors border-b border-border last:border-0",
-                        worker.workerUid === profile?.uid && "bg-primary/5"
+                      <div key={idx} className={cn(
+                        "p-4 rounded-3xl border border-border bg-muted/20 space-y-3 relative overflow-hidden",
+                        worker.workerUid === profile?.uid && "bg-primary/5 border-primary/30"
                       )}>
-                        <td className="px-4 py-4 text-[10px] font-black text-center text-muted-foreground/50">{worker.no}</td>
-                        <td className="px-4 py-4">
-                          <Input 
-                            value={worker.workerName}
-                            onChange={e => updateWorkerItem(idx, 'workerName', e.target.value)}
-                            readOnly={!isSupervisor}
-                            className="h-9 bg-muted/20 border-border/50 rounded-lg font-black text-xs text-center"
-                          />
-                        </td>
-                        <td className="px-4 py-4">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] font-black text-primary uppercase tracking-widest">NO. {worker.no}</span>
+                          <Badge variant={worker.healthStatus === 'GOOD' ? 'default' : worker.healthStatus === 'BAD' ? 'destructive' : 'outline'} className="text-[9px] font-black rounded-lg">
+                            건강: {worker.healthStatus === 'GOOD' ? '좋음' : worker.healthStatus === 'BAD' ? '나쁨' : '보통'}
+                          </Badge>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-muted-foreground">성명</label>
+                            <Input 
+                              value={worker.workerName}
+                              onChange={e => updateWorkerItem(idx, 'workerName', e.target.value)}
+                              readOnly={!isSupervisor}
+                              className="h-10 bg-card border-border rounded-xl font-black text-xs text-center text-foreground"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-muted-foreground">건강상태</label>
+                            <select
+                              value={worker.healthStatus || 'GOOD'}
+                              onChange={e => updateWorkerItem(idx, 'healthStatus', e.target.value)}
+                              disabled={!canEditThisRow}
+                              className="w-full h-10 bg-card border border-border rounded-xl text-xs font-black px-2 text-foreground focus:ring-0 outline-none"
+                            >
+                              <option value="GOOD">좋음</option>
+                              <option value="NORMAL">보통</option>
+                              <option value="BAD">나쁨</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-muted-foreground">작업 지시 사항</label>
                           <Input 
                             value={worker.instruction}
                             onChange={e => updateWorkerItem(idx, 'instruction', e.target.value)}
                             readOnly={!isSupervisor}
-                            className="h-9 bg-muted/20 border-border/50 rounded-lg font-bold text-xs"
+                            className="h-10 bg-card border-border rounded-xl font-bold text-xs text-foreground"
                             placeholder="작업 위치 및 내용"
                           />
-                        </td>
-                        <td className="px-4 py-4">
-                          <select
-                            value={worker.healthStatus}
-                            onChange={e => updateWorkerItem(idx, 'healthStatus', e.target.value)}
-                            disabled={!canEditThisRow}
-                            className="w-full h-9 bg-muted/20 border-border/50 rounded-lg text-[10px] font-black px-1.5 focus:ring-0 focus:border-primary transition-all outline-none"
-                          >
-                            <option value="GOOD">좋음</option>
-                            <option value="NORMAL">보통</option>
-                            <option value="BAD">나쁨</option>
-                          </select>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="flex items-center gap-1">
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-muted-foreground">시작 시간</label>
                             <Input 
                               type="time"
                               value={worker.startTime}
                               onChange={e => updateWorkerItem(idx, 'startTime', e.target.value)}
                               readOnly={!canEditThisRow}
-                              className="h-9 bg-muted/20 border-border/50 rounded-lg font-bold text-[10px] p-1"
+                              className="h-10 bg-card border-border rounded-xl font-bold text-xs"
                             />
-                            <span className="text-muted-foreground/30">~</span>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-muted-foreground">종료 시간</label>
                             <Input 
                               type="time"
                               value={worker.endTime}
                               onChange={e => updateWorkerItem(idx, 'endTime', e.target.value)}
                               readOnly={!canEditThisRow}
-                              className="h-9 bg-muted/20 border-border/50 rounded-lg font-bold text-[10px] p-1 text-primary"
+                              className="h-10 bg-card border-border rounded-xl font-bold text-xs text-primary"
                             />
                           </div>
-                        </td>
-                        <td className="px-2 py-4 text-center">
-                          <div 
-                            className={cn(
-                              "w-12 h-12 bg-muted/20 rounded-xl flex items-center justify-center cursor-pointer border border-dashed border-border/50 overflow-hidden hover:bg-muted/40 transition-all relative mx-auto",
-                              !canEditThisRow && "opacity-50 cursor-not-allowed"
-                            )}
-                            onClick={() => {
-                              if (!canEditThisRow) return;
-                              setActiveSignIdx({ idx, type: 'before' });
-                              setIsSignOpen(true);
-                            }}
-                          >
-                            {worker.signBeforeUrl ? (
-                              <div className="relative w-full h-full flex items-center justify-center">
-                                <img src={worker.signBeforeUrl} className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal" alt="sign" />
-                                
-                                {/* Small permanent corner badge checkmark */}
-                                <div className="absolute bottom-1 right-1 bg-emerald-500 text-white rounded-full p-0.5 shadow-md shadow-emerald-500/30">
-                                  <Check className="w-1.5 h-1.5" strokeWidth={4} />
-                                </div>
-  
-                                {/* Highlight Full Face Overlay animation for 3 seconds on justSigned */}
-                                <AnimatePresence>
-                                  {justSigned?.idx === idx && justSigned?.type === 'before' && (
-                                    <motion.div 
-                                      initial={{ opacity: 0, scale: 0.6 }}
-                                      animate={{ opacity: 1, scale: 1 }}
-                                      exit={{ opacity: 0, scale: 0.8 }}
-                                      className="absolute inset-0 bg-emerald-500/90 flex flex-col items-center justify-center rounded-xl z-10 pointer-events-none text-white"
-                                      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                                    >
-                                      <motion.div
-                                        initial={{ scale: 0, rotate: -45 }}
-                                        animate={{ scale: 1, rotate: 0 }}
-                                        transition={{ delay: 0.05, type: "spring", stiffness: 300, damping: 15 }}
-                                      >
-                                        <Check className="w-5 h-5 text-white" strokeWidth={4} />
-                                      </motion.div>
-                                      <span className="text-[7px] font-black tracking-widest text-white/95 uppercase mt-0.5">서명됨</span>
-                                    </motion.div>
-                                  )}
-                                </AnimatePresence>
-                              </div>
-                            ) : (
-                              <SignatureIcon className="w-3 h-3 text-muted-foreground/30" />
-                            )}
+                        </div>
+
+                        {/* Signatures */}
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-black text-muted-foreground uppercase">작업 전 서명</label>
+                            <div 
+                              className={cn(
+                                "relative h-14 bg-card border border-dashed border-border rounded-xl flex items-center justify-center cursor-pointer hover:bg-muted/40 transition-all overflow-hidden",
+                                !canEditThisRow && "opacity-60 cursor-not-allowed"
+                              )}
+                              onClick={() => {
+                                if (!canEditThisRow) return;
+                                setActiveSignIdx({ idx, type: 'before' });
+                                setIsSignOpen(true);
+                              }}
+                            >
+                              {worker.signBeforeUrl ? (
+                                 <div className="relative w-full h-full flex items-center justify-center p-1">
+                                   <img src={worker.signBeforeUrl} className="h-full object-contain mix-blend-multiply dark:mix-blend-normal" alt="sign" />
+                                   <div className="absolute bottom-1 right-1 bg-emerald-500 text-white rounded-full p-0.5 shadow-sm">
+                                     <Check className="w-2 h-2" strokeWidth={4} />
+                                   </div>
+                                 </div>
+                              ) : (
+                                 <div className="flex flex-col items-center gap-0.5">
+                                   <SignatureIcon className="w-3.5 h-3.5 text-muted-foreground/40" />
+                                   <span className="text-[10px] font-black text-muted-foreground/60">서명하기</span>
+                                 </div>
+                              )}
+                            </div>
                           </div>
-                        </td>
-                        <td className="px-2 py-4 text-center">
-                          <div 
-                            className={cn(
-                              "w-12 h-12 bg-muted/20 rounded-xl flex items-center justify-center cursor-pointer border border-dashed border-border/50 overflow-hidden hover:bg-muted/40 transition-all relative mx-auto",
-                              !canEditThisRow && "opacity-50 cursor-not-allowed"
-                            )}
-                            onClick={() => {
-                              if (!canEditThisRow) return;
-                              setActiveSignIdx({ idx, type: 'after' });
-                              setIsSignOpen(true);
-                            }}
-                          >
-                            {worker.signAfterUrl ? (
-                              <div className="relative w-full h-full flex items-center justify-center">
-                                <img src={worker.signAfterUrl} className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal text-primary" alt="sign" />
-                                
-                                {/* Small permanent corner badge checkmark */}
-                                <div className="absolute bottom-1 right-1 bg-emerald-500 text-white rounded-full p-0.5 shadow-md shadow-emerald-500/30">
-                                  <Check className="w-1.5 h-1.5" strokeWidth={4} />
-                                </div>
-  
-                                {/* Highlight Full Face Overlay animation for 3 seconds on justSigned */}
-                                <AnimatePresence>
-                                  {justSigned?.idx === idx && justSigned?.type === 'after' && (
-                                    <motion.div 
-                                      initial={{ opacity: 0, scale: 0.6 }}
-                                      animate={{ opacity: 1, scale: 1 }}
-                                      exit={{ opacity: 0, scale: 0.8 }}
-                                      className="absolute inset-0 bg-emerald-500/90 flex flex-col items-center justify-center rounded-xl z-10 pointer-events-none text-white"
-                                      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                                    >
-                                      <motion.div
-                                        initial={{ scale: 0, rotate: -45 }}
-                                        animate={{ scale: 1, rotate: 0 }}
-                                        transition={{ delay: 0.05, type: "spring", stiffness: 300, damping: 15 }}
-                                      >
-                                        <Check className="w-5 h-5 text-white" strokeWidth={4} />
-                                      </motion.div>
-                                      <span className="text-[7px] font-black tracking-widest text-white/95 uppercase mt-0.5">서명됨</span>
-                                    </motion.div>
-                                  )}
-                                </AnimatePresence>
-                              </div>
-                            ) : (
-                              <SignatureIcon className="w-3 h-3 text-primary/30" />
-                            )}
+
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-black text-primary uppercase">작업 후 서명</label>
+                            <div 
+                              className={cn(
+                                "relative h-14 bg-card border border-dashed border-border rounded-xl flex items-center justify-center cursor-pointer hover:bg-muted/40 transition-all overflow-hidden",
+                                !canEditThisRow && "opacity-60 cursor-not-allowed"
+                              )}
+                              onClick={() => {
+                                if (!canEditThisRow) return;
+                                setActiveSignIdx({ idx, type: 'after' });
+                                setIsSignOpen(true);
+                              }}
+                            >
+                              {worker.signAfterUrl ? (
+                                 <div className="relative w-full h-full flex items-center justify-center p-1">
+                                   <img src={worker.signAfterUrl} className="h-full object-contain mix-blend-multiply dark:mix-blend-normal" alt="sign" />
+                                   <div className="absolute bottom-1 right-1 bg-emerald-500 text-white rounded-full p-0.5 shadow-sm">
+                                     <Check className="w-2 h-2" strokeWidth={4} />
+                                   </div>
+                                 </div>
+                              ) : (
+                                 <div className="flex flex-col items-center gap-0.5">
+                                   <SignatureIcon className="w-3.5 h-3.5 text-primary/40" />
+                                   <span className="text-[10px] font-black text-primary/70">서명하기</span>
+                                 </div>
+                              )}
+                            </div>
                           </div>
-                        </td>
-                      </tr>
+                        </div>
+                      </div>
                     );
                   })}
-               </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+                </div>
 
-      {/* 3. Safety Inspection */}
-      <Card className="bg-card border-border rounded-3xl overflow-hidden shadow-lg">
-        <CardHeader className="bg-muted/50 border-b border-border p-6">
-          <CardTitle className="text-lg font-black flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-primary" /> 일일안전점검
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {formData.safetyChecks?.map((cat, catIdx) => (
-            <div key={catIdx} className="border-b border-border last:border-0">
-              <div className="bg-muted/10 px-6 py-2">
-                 <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{cat.category}</h4>
-              </div>
-              <div className="divide-y divide-border">
-                {cat.items.map((item, itemIdx) => (
-                  <div key={itemIdx} className="flex items-center justify-between px-6 py-3 transition-colors hover:bg-muted/5">
-                    <div className="flex items-center gap-3">
-                       <span className="text-xs font-bold text-muted-foreground/40">{itemIdx + 1}</span>
-                       <p className="text-sm font-bold text-foreground">{item.text}</p>
+                {/* Desktop Table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left border-collapse min-w-[700px]">
+                    <thead>
+                      <tr className="bg-muted/30 border-b border-border">
+                        <th className="px-4 py-3 text-[11px] font-black text-muted-foreground uppercase text-center w-12">NO</th>
+                        <th className="px-4 py-3 text-[11px] font-black text-muted-foreground uppercase text-center w-28">성명</th>
+                        <th className="px-4 py-3 text-[11px] font-black text-muted-foreground uppercase">작업지시</th>
+                        <th className="px-4 py-3 text-[11px] font-black text-muted-foreground uppercase text-center w-24">건강</th>
+                        <th className="px-4 py-3 text-[11px] font-black text-muted-foreground uppercase text-center w-36">시간</th>
+                        <th className="px-4 py-3 text-[11px] font-black text-muted-foreground uppercase text-center w-20">작업전</th>
+                        <th className="px-4 py-3 text-[11px] font-black text-muted-foreground uppercase text-center w-20">작업후</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {workers.map((worker, idx) => {
+                        const canEditThisRow = isSupervisor || worker.workerUid === profile?.uid;
+                        return (
+                          <tr key={idx} className={cn(
+                            "hover:bg-muted/10 transition-colors",
+                            worker.workerUid === profile?.uid && "bg-primary/5"
+                          )}>
+                            <td className="px-4 py-3 text-xs font-black text-center text-muted-foreground/50">{worker.no}</td>
+                            <td className="px-4 py-3">
+                              <Input 
+                                value={worker.workerName}
+                                onChange={e => updateWorkerItem(idx, 'workerName', e.target.value)}
+                                readOnly={!isSupervisor}
+                                className="h-9 bg-muted/20 border-border/50 rounded-lg font-black text-xs text-center"
+                              />
+                            </td>
+                            <td className="px-4 py-3">
+                              <Input 
+                                value={worker.instruction}
+                                onChange={e => updateWorkerItem(idx, 'instruction', e.target.value)}
+                                readOnly={!isSupervisor}
+                                className="h-9 bg-muted/20 border-border/50 rounded-lg font-bold text-xs"
+                                placeholder="작업 위치 및 내용"
+                              />
+                            </td>
+                            <td className="px-4 py-3">
+                              <select
+                                value={worker.healthStatus}
+                                onChange={e => updateWorkerItem(idx, 'healthStatus', e.target.value)}
+                                disabled={!canEditThisRow}
+                                className="w-full h-9 bg-muted/20 border border-border/50 rounded-lg text-xs font-black px-1 focus:ring-0 outline-none"
+                              >
+                                <option value="GOOD">좋음</option>
+                                <option value="NORMAL">보통</option>
+                                <option value="BAD">나쁨</option>
+                              </select>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-1">
+                                <Input 
+                                  type="time"
+                                  value={worker.startTime}
+                                  onChange={e => updateWorkerItem(idx, 'startTime', e.target.value)}
+                                  readOnly={!canEditThisRow}
+                                  className="h-9 bg-muted/20 border-border/50 rounded-lg font-bold text-xs p-1"
+                                />
+                                <span className="text-muted-foreground/30">~</span>
+                                <Input 
+                                  type="time"
+                                  value={worker.endTime}
+                                  onChange={e => updateWorkerItem(idx, 'endTime', e.target.value)}
+                                  readOnly={!canEditThisRow}
+                                  className="h-9 bg-muted/20 border-border/50 rounded-lg font-bold text-xs p-1 text-primary"
+                                />
+                              </div>
+                            </td>
+                            <td className="px-2 py-3 text-center">
+                              <div 
+                                className={cn(
+                                  "w-12 h-10 bg-muted/20 rounded-xl flex items-center justify-center cursor-pointer border border-dashed border-border/60 overflow-hidden hover:bg-muted/40 transition-all relative mx-auto",
+                                  !canEditThisRow && "opacity-50 cursor-not-allowed"
+                                )}
+                                onClick={() => {
+                                  if (!canEditThisRow) return;
+                                  setActiveSignIdx({ idx, type: 'before' });
+                                  setIsSignOpen(true);
+                                }}
+                              >
+                                {worker.signBeforeUrl ? (
+                                  <div className="relative w-full h-full flex items-center justify-center">
+                                    <img src={worker.signBeforeUrl} className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal" alt="sign" />
+                                    <div className="absolute bottom-0.5 right-0.5 bg-emerald-500 text-white rounded-full p-0.5">
+                                      <Check className="w-1.5 h-1.5" strokeWidth={4} />
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <SignatureIcon className="w-3.5 h-3.5 text-muted-foreground/30" />
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-2 py-3 text-center">
+                              <div 
+                                className={cn(
+                                  "w-12 h-10 bg-muted/20 rounded-xl flex items-center justify-center cursor-pointer border border-dashed border-border/60 overflow-hidden hover:bg-muted/40 transition-all relative mx-auto",
+                                  !canEditThisRow && "opacity-50 cursor-not-allowed"
+                                )}
+                                onClick={() => {
+                                  if (!canEditThisRow) return;
+                                  setActiveSignIdx({ idx, type: 'after' });
+                                  setIsSignOpen(true);
+                                }}
+                              >
+                                {worker.signAfterUrl ? (
+                                  <div className="relative w-full h-full flex items-center justify-center">
+                                    <img src={worker.signAfterUrl} className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal" alt="sign" />
+                                    <div className="absolute bottom-0.5 right-0.5 bg-emerald-500 text-white rounded-full p-0.5">
+                                      <Check className="w-1.5 h-1.5" strokeWidth={4} />
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <SignatureIcon className="w-3.5 h-3.5 text-primary/30" />
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCurrentStep(1)}
+                className="flex-1 h-14 rounded-2xl font-black text-sm border-border"
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" /> 이전: 기본 정보
+              </Button>
+              <Button
+                type="button"
+                onClick={() => setCurrentStep(3)}
+                className="flex-[2] h-14 bg-primary text-white font-black text-base rounded-2xl shadow-lg shadow-primary/25 hover:bg-primary/95 flex items-center justify-center gap-2"
+              >
+                다음: 일일 안전 점검 <ChevronRight className="w-5 h-5" />
+              </Button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Step 3: 일일 안전 점검 */}
+        {currentStep === 3 && (
+          <motion.div
+            key="step3"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.2 }}
+            className="space-y-4"
+          >
+            <Card className="bg-card border-border rounded-3xl overflow-hidden shadow-lg">
+              <CardHeader className="bg-muted/40 border-b border-border p-4 sm:p-5 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-base font-black flex items-center gap-2 text-foreground">
+                    <ShieldCheck className="w-4 h-4 text-primary" /> 3단계: 일일 안전 점검 (체크리스트)
+                  </CardTitle>
+                  <p className="text-[11px] text-muted-foreground font-bold mt-0.5">
+                    각 항목별 점검 결과(O: 양호 / X: 불량 / N/A: 비해당)를 선택해 주세요.
+                  </p>
+                </div>
+                {isSupervisor && formData.status !== 'APPROVED' && (
+                  <Button 
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleCheckAllSafety('O')}
+                    className="bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 font-black rounded-xl text-xs h-9 px-3 gap-1.5"
+                  >
+                    <CheckCheck className="w-3.5 h-3.5" /> 전체 'O(양호)'
+                  </Button>
+                )}
+              </CardHeader>
+              <CardContent className="p-0">
+                {formData.safetyChecks?.map((cat, catIdx) => (
+                  <div key={catIdx} className="border-b border-border last:border-0">
+                    <div className="bg-muted/30 px-5 py-2.5 flex items-center justify-between">
+                      <h4 className="text-xs font-black text-primary tracking-wide">{cat.category}</h4>
+                      <span className="text-[10px] font-bold text-muted-foreground">{cat.items.length}개 항목</span>
                     </div>
-                    <div className="flex gap-1.5 shrink-0 ml-4">
-                        {['O', 'X', 'N/A'].map(res => (
-                          <button
-                            key={res}
-                            disabled={(!isSupervisor && formData.status !== 'APPROVED') || formData.status === 'APPROVED'}
-                            onClick={() => updateSafetyCheck(catIdx, itemIdx, res as any)}
-                            className={cn(
-                              "w-12 h-10 rounded-xl text-[11px] font-black transition-all border transition-all active:scale-95",
-                              item.result === res 
-                                ? "bg-primary border-primary text-white shadow-lg shadow-primary/20" 
-                                : "bg-muted/50 border-border text-muted-foreground/40 hover:bg-muted",
-                              (!isSupervisor || formData.status === 'APPROVED') && "cursor-not-allowed opacity-80 active:scale-100"
-                            )}
-                          >
-                            {res}
-                          </button>
-                        ))}
+                    <div className="divide-y divide-border">
+                      {cat.items.map((item, itemIdx) => (
+                        <div key={itemIdx} className="flex items-center justify-between px-4 sm:px-6 py-3.5 hover:bg-muted/10 transition-colors">
+                          <div className="flex items-center gap-2.5 pr-2">
+                            <span className="text-xs font-black text-muted-foreground/40 shrink-0 w-5">{itemIdx + 1}</span>
+                            <p className="text-xs sm:text-sm font-bold text-foreground leading-snug">{item.text}</p>
+                          </div>
+                          <div className="flex gap-1 shrink-0 ml-2">
+                            {['O', 'X', 'N/A'].map(res => (
+                              <button
+                                key={res}
+                                type="button"
+                                disabled={(!isSupervisor && formData.status !== 'APPROVED') || formData.status === 'APPROVED'}
+                                onClick={() => updateSafetyCheck(catIdx, itemIdx, res as any)}
+                                className={cn(
+                                  "w-10 sm:w-12 h-10 rounded-xl text-xs font-black transition-all border",
+                                  item.result === res 
+                                    ? res === 'O' 
+                                      ? "bg-emerald-500 border-emerald-500 text-white shadow-md shadow-emerald-500/25 scale-105"
+                                      : res === 'X'
+                                      ? "bg-rose-500 border-rose-500 text-white shadow-md shadow-rose-500/25 scale-105"
+                                      : "bg-slate-500 border-slate-500 text-white shadow-md shadow-slate-500/25 scale-105"
+                                    : "bg-muted/40 border-border text-muted-foreground/50 hover:bg-muted",
+                                  (!isSupervisor || formData.status === 'APPROVED') && "cursor-not-allowed opacity-80"
+                                )}
+                              >
+                                {res}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}
-              </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCurrentStep(2)}
+                className="flex-1 h-14 rounded-2xl font-black text-sm border-border"
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" /> 이전: 작업 지시
+              </Button>
+              <Button
+                type="button"
+                onClick={() => setCurrentStep(4)}
+                className="flex-[2] h-14 bg-primary text-white font-black text-base rounded-2xl shadow-lg shadow-primary/25 hover:bg-primary/95 flex items-center justify-center gap-2"
+              >
+                다음: 위험요인 대책 및 제출 <ChevronRight className="w-5 h-5" />
+              </Button>
             </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      {/* 4. Hazard Assessment */}
-      <Card className="bg-card border-border rounded-3xl overflow-hidden shadow-lg">
-        <CardHeader className="bg-muted/50 border-b border-border p-6">
-          <CardTitle className="text-lg font-black flex items-center gap-2">
-            <AlertCircle className="w-5 h-5 text-primary" /> 위험요소 및 안전작업방법 (사전 입력됨)
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0 overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[600px]">
-             <thead className="bg-muted/30">
-                <tr>
-                   <th className="px-4 py-3 text-[10px] font-black text-muted-foreground uppercase text-center border-border border-b w-10">NO</th>
-                   <th className="px-4 py-3 text-[10px] font-black text-muted-foreground uppercase border-border border-b w-1/4">위험요인</th>
-                   <th className="px-4 py-3 text-[10px] font-black text-muted-foreground uppercase border-border border-b">안전작업방법</th>
-                </tr>
-             </thead>
-             <tbody className="divide-y divide-border">
-                {formData.hazardAssessments?.map((hazard, idx) => (
-                  <tr key={idx} className="hover:bg-muted/5">
-                    <td className="px-4 py-3 text-xs font-bold text-center text-muted-foreground">{hazard.no}</td>
-                    <td className="px-4 py-3 text-sm font-black text-foreground">{hazard.hazardFactor}</td>
-                    <td className="px-4 py-3">
-                      <Input 
-                        value={hazard.safetyMethod}
-                        onChange={e => {
-                          const newHazards = [...(formData.hazardAssessments || [])];
-                          newHazards[idx].safetyMethod = e.target.value;
-                          handleUpdate({ hazardAssessments: newHazards });
-                        }}
-                        readOnly={!isSupervisor}
-                        placeholder="안전작업방법 입력"
-                        className="h-10 bg-muted/20 border-none rounded-lg font-bold text-sm"
-                      />
-                    </td>
-                  </tr>
-                ))}
-             </tbody>
-          </table>
-        </CardContent>
-      </Card>
-
-      {/* Buttons */}
-      <div className="flex gap-4 pt-4">
-        <Button 
-          variant="outline" 
-          className="flex-1 h-16 rounded-[2rem] font-black text-lg border-border"
-          onClick={() => navigate(-1)}
-        >
-          목록으로
-        </Button>
-        {isSupervisor && formData.status === 'PENDING' && (
-          <Button 
-            className="flex-[2] h-16 rounded-[2rem] font-black text-lg bg-primary hover:bg-primary/90 text-primary-foreground shadow-xl shadow-primary/20"
-            onClick={handleFinalSubmit}
-            disabled={submitting}
-          >
-            {submitting ? '제출 중...' : (
-              <span className="flex items-center gap-2">
-                <Send className="w-5 h-5" /> 보고서 최종 제출
-              </span>
-            )}
-          </Button>
+          </motion.div>
         )}
-      </div>
+
+        {/* Step 4: 위험성 평가 & 최종 제출 */}
+        {currentStep === 4 && (
+          <motion.div
+            key="step4"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.2 }}
+            className="space-y-4"
+          >
+            {/* Hazards Table */}
+            <Card className="bg-card border-border rounded-3xl overflow-hidden shadow-lg">
+              <CardHeader className="bg-muted/40 border-b border-border p-4 sm:p-5">
+                <CardTitle className="text-base font-black flex items-center gap-2 text-foreground">
+                  <AlertCircle className="w-4 h-4 text-primary" /> 4단계: 위험요소 및 안전작업방법
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0 overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[550px]">
+                  <thead className="bg-muted/30">
+                    <tr>
+                      <th className="px-4 py-3 text-[10px] font-black text-muted-foreground uppercase text-center border-border border-b w-10">NO</th>
+                      <th className="px-4 py-3 text-[10px] font-black text-muted-foreground uppercase border-border border-b w-1/3">위험요인</th>
+                      <th className="px-4 py-3 text-[10px] font-black text-muted-foreground uppercase border-border border-b">안전작업방법</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {formData.hazardAssessments?.map((hazard, idx) => (
+                      <tr key={idx} className="hover:bg-muted/5">
+                        <td className="px-4 py-3 text-xs font-bold text-center text-muted-foreground">{hazard.no}</td>
+                        <td className="px-4 py-3 text-xs font-black text-foreground">{hazard.hazardFactor}</td>
+                        <td className="px-4 py-3">
+                          <Input 
+                            value={hazard.safetyMethod}
+                            onChange={e => {
+                              const newHazards = [...(formData.hazardAssessments || [])];
+                              newHazards[idx].safetyMethod = e.target.value;
+                              handleUpdate({ hazardAssessments: newHazards });
+                            }}
+                            readOnly={!isSupervisor || formData.status === 'APPROVED'}
+                            placeholder="안전작업방법 입력"
+                            className="h-10 bg-muted/20 border border-border/40 rounded-xl font-bold text-xs"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+
+            {/* Submission Checklist Summary */}
+            <Card className="bg-muted/20 border-border rounded-3xl p-5 shadow-md">
+              <h3 className="text-sm font-black text-foreground mb-3 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500" /> 최종 제출 전 현황 점검
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3 bg-card border border-border rounded-2xl text-center space-y-1">
+                  <span className="text-[10px] font-bold text-muted-foreground">팀장 서명</span>
+                  <p className={cn("text-xs font-black", formData.supervisorSignUrl ? "text-emerald-500" : "text-amber-500")}>
+                    {formData.supervisorSignUrl ? '서명 완료' : '미서명'}
+                  </p>
+                </div>
+                <div className="p-3 bg-card border border-border rounded-2xl text-center space-y-1">
+                  <span className="text-[10px] font-bold text-muted-foreground">소장 서명</span>
+                  <p className={cn("text-xs font-black", formData.safetyManagerSignUrl ? "text-emerald-500" : "text-muted-foreground")}>
+                    {formData.safetyManagerSignUrl ? '서명 완료' : '대기중'}
+                  </p>
+                </div>
+                <div className="p-3 bg-card border border-border rounded-2xl text-center space-y-1">
+                  <span className="text-[10px] font-bold text-muted-foreground">작업전 서명</span>
+                  <p className="text-xs font-black text-primary">
+                    {signedBeforeCount} / {workers.length}명
+                  </p>
+                </div>
+                <div className="p-3 bg-card border border-border rounded-2xl text-center space-y-1">
+                  <span className="text-[10px] font-bold text-muted-foreground">작업후 서명</span>
+                  <p className="text-xs font-black text-primary">
+                    {signedAfterCount} / {workers.length}명
+                  </p>
+                </div>
+              </div>
+            </Card>
+
+            {/* Buttons */}
+            <div className="flex gap-3 pt-2">
+              <Button 
+                variant="outline" 
+                className="flex-1 h-16 rounded-2xl font-black text-base border-border"
+                onClick={() => setCurrentStep(3)}
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" /> 이전: 안전 점검
+              </Button>
+              {isSupervisor && formData.status === 'PENDING' ? (
+                <Button 
+                  className="flex-[2] h-16 rounded-2xl font-black text-base bg-primary hover:bg-primary/90 text-white shadow-xl shadow-primary/25"
+                  onClick={handleFinalSubmit}
+                  disabled={submitting}
+                >
+                  {submitting ? '제출 중...' : (
+                    <span className="flex items-center gap-2">
+                      <Send className="w-5 h-5" /> 보고서 최종 제출
+                    </span>
+                  )}
+                </Button>
+              ) : (
+                <Button 
+                  className="flex-[2] h-16 rounded-2xl font-black text-base bg-muted text-foreground border border-border hover:bg-muted/80"
+                  onClick={() => navigate(-1)}
+                >
+                  목록으로 돌아가기
+                </Button>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Signature Dialog */}
       <Dialog open={isSignOpen} onOpenChange={setIsSignOpen}>
-        <DialogContent className="bg-card border-border text-foreground max-w-sm rounded-[2.5rem]">
+        <DialogContent className="bg-card border-border text-foreground max-w-sm rounded-[2.5rem] p-6">
           <DialogHeader>
-            <DialogTitle className="text-xl font-black text-center pt-4">서명해 주세요</DialogTitle>
+            <DialogTitle className="text-xl font-black text-center pt-2">서명해 주세요</DialogTitle>
           </DialogHeader>
-          <div className="py-6 flex flex-col items-center gap-4">
+          <div className="py-4 flex flex-col items-center gap-4">
             <div className="w-64 h-48 bg-white rounded-2xl border-2 border-border overflow-hidden touch-none shadow-inner">
                <SignatureCanvas 
                   ref={sigPad}
@@ -1098,13 +1300,13 @@ export const WorkInstructionReportPage: React.FC = () => {
             <div className="flex gap-2 w-full">
                <Button 
                  variant="outline" 
-                 className="flex-1 rounded-xl font-bold h-10"
+                 className="flex-1 rounded-xl font-bold h-11"
                  onClick={() => sigPad.current?.clear()}
                >
                  초기화
                </Button>
                <Button 
-                 className="flex-1 rounded-xl font-black h-10"
+                 className="flex-1 rounded-xl font-black h-11 bg-primary text-white"
                  onClick={handleSignSave}
                >
                  서명 저장

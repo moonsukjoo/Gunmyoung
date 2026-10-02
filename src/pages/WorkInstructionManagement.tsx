@@ -43,6 +43,16 @@ export const WorkInstructionManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedReport, setSelectedReport] = useState<WorkInstructionReport | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [defaultSafetyManager, setDefaultSafetyManager] = useState('김주영');
+
+  useEffect(() => {
+    const unsubCompany = onSnapshot(doc(db, 'settings', 'company'), (snap) => {
+      if (snap.exists() && snap.data().safetyManagerName) {
+        setDefaultSafetyManager(snap.data().safetyManagerName);
+      }
+    });
+    return () => unsubCompany();
+  }, []);
 
   useEffect(() => {
     if (!profile) return;
@@ -245,7 +255,7 @@ export const WorkInstructionManagement: React.FC = () => {
                              <div className="space-y-1">
                                 <p className="text-[9px] md:text-[10px] font-bold text-muted-foreground uppercase">안전책임자</p>
                                 <div className="flex items-center gap-2">
-                                  <p className="text-base md:text-lg font-black leading-tight text-primary">{selectedReport.safetyManagerName || '김주영'}</p>
+                                  <p className="text-base md:text-lg font-black leading-tight text-primary">{selectedReport.safetyManagerName || defaultSafetyManager}</p>
                                   {selectedReport.safetyManagerSignUrl ? (
                                     <div className="h-6 w-16 bg-white/5 rounded overflow-hidden border border-border/30">
                                       <img src={selectedReport.safetyManagerSignUrl} className="h-full w-full object-contain mix-blend-multiply dark:mix-blend-normal" alt="safety-manager-sign" />

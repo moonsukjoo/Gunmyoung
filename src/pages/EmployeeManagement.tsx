@@ -357,6 +357,18 @@ export const EmployeeManagement: React.FC = () => {
     if (!resetTarget) return;
     
     try {
+      // Clear their Firebase Auth account as well, so next login automatically recreates it with their employee ID
+      const resetEmail = `${resetTarget.employeeId.toLowerCase()}@shipyard.com`;
+      try {
+        await fetch('/api/auth/reset-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: resetEmail })
+        });
+      } catch (e) {
+        console.warn("Failed to reset auth user on server:", e);
+      }
+
       await updateDoc(doc(db, 'users', resetTarget.uid), { 
         hasCustomPin: false,
         failedLoginAttempts: 0,

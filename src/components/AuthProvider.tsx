@@ -140,6 +140,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             try {
               if (snapshot.exists()) {
                 const currentProfile = snapshot.data() as UserProfile;
+                
+                // Check if account was marked inactive or retired
+                const isRetiredOrInactive = currentProfile.status === 'RETIRED' || !!currentProfile.resignedAt || (currentProfile.isActive === false && currentProfile.status !== 'ACTIVE' && currentProfile.status !== 'ON_LEAVE');
+                if (isRetiredOrInactive) {
+                  await auth.signOut();
+                  setProfile(null);
+                  toast.error('퇴사 또는 비활성화된 계정입니다. 로그인할 수 없습니다.');
+                  return;
+                }
+
                 setProfile(currentProfile);
                 
                 // CEO Bootstrap logic
@@ -165,25 +175,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   }).catch(() => {});
                 }
               } else {
+                // If the user profile does NOT exist in Firestore:
+                // Only allow the master CEO email to auto-bootstrap!
                 const isBootstrapCEO = email.toLowerCase() === 'tjrwnfjqm1@gmail.com';
-                const emailPrefix = email.split('@')[0].toLowerCase();
-                const isX66626Email = email.toLowerCase().includes('x66626') || emailPrefix === 'x66626';
                 
-                const newProfile: UserProfile = {
-                  uid: firebaseUser.uid,
-                  employeeId: isX66626Email ? 'x66626' : employeeId,
-                  email: firebaseUser.email || '',
-                  displayName: firebaseUser.displayName || (isX66626Email ? '임직원(x66626)' : employeeId.toUpperCase()) || 'Anonymous',
-                  role: isBootstrapCEO ? 'CEO' : 'EMPLOYEE',
-                  position: isX66626Email ? '사원' : (isBootstrapCEO ? '사장' : '사원'),
-                  isActive: true,
-                  status: 'ACTIVE',
-                  joinedAt: new Date().toISOString(),
-                  kudosCount: 0,
-                  annualLeaveBalance: 15,
-                };
-                await setDoc(doc(db, 'users', firebaseUser.uid), newProfile).catch(() => {});
-                setProfile(newProfile);
+                if (isBootstrapCEO) {
+                  const newProfile: UserProfile = {
+                    uid: firebaseUser.uid,
+                    employeeId: employeeId || 'CEO',
+                    email: firebaseUser.email || 'tjrwnfjqm1@gmail.com',
+                    displayName: firebaseUser.displayName || '대표이사',
+                    role: 'CEO',
+                    position: '대표',
+                    isActive: true,
+                    status: 'ACTIVE',
+                    joinedAt: new Date().toISOString(),
+                    kudosCount: 0,
+                    annualLeaveBalance: 15,
+                  };
+                  await setDoc(doc(db, 'users', firebaseUser.uid), newProfile).catch(() => {});
+                  setProfile(newProfile);
+                } else {
+                  // Unregistered user! Prevent auto-creation, sign out and throw error
+                  console.warn("Unregistered user attempted access without admin registration:", firebaseUser.uid, email);
+                  await auth.signOut();
+                  setProfile(null);
+                  toast.error('등록된 인원이 아닙니다. 관리자에게 사원 등록을 요청하세요.');
+                }
               }
             } catch (err) {
               console.error("Profile internal error:", err);

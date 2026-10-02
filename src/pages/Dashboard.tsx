@@ -30,6 +30,8 @@ import {
   Heart,
   Sparkles,
   Trophy,
+  Crown,
+  Medal,
   User as UserIcon,
   FileBox,
   CheckCircle2,
@@ -44,10 +46,23 @@ import {
   Ticket,
   Wallet,
   Volume2,
-  MessageSquare
+  MessageSquare,
+  Settings2,
+  Pin,
+  PinOff,
+  ArrowUp,
+  ArrowDown,
+  Trash2,
+  RotateCcw,
+  Receipt,
+  Flame,
+  GripVertical,
+  ChevronDown,
+  ChevronUp,
+  Radio
 } from 'lucide-react';
 import { db } from '@/firebase';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, limit, orderBy, getDocs, Timestamp } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, limit, orderBy, getDocs, Timestamp, setDoc } from 'firebase/firestore';
 import { Attendance, Notice, Role, AccidentCase, LeaveRequest, Task, UserProfile } from '@/types';
 import { format, startOfMonth, subMonths, differenceInDays } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -69,14 +84,261 @@ import { sendPushNotification, requestNotificationPermission } from '@/services/
 import { calculateAttendanceHours } from '@/lib/attendance';
 import { checkIsSpecialDay } from '@/lib/holidays';
 import { useSafetySensor } from '@/components/SafetySensorProvider';
+import { useAutoAttendance } from '@/components/AutoAttendanceProvider';
+import { DashboardStatusBar } from '@/components/dashboard/DashboardStatusBar';
+import { AttendanceHubCard } from '@/components/dashboard/AttendanceHubCard';
+import { ServicesHub } from '@/components/dashboard/ServicesHub';
+import { DailyBriefingCard } from '@/components/dashboard/DailyBriefingCard';
 
 import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
 import { AlertSoundPlayer } from '../lib/sound';
 
+export interface ShortcutOption {
+  id: string;
+  label: string;
+  sublabel: string;
+  path: string;
+  icon: React.ElementType;
+  colorName: string;
+  gradientBg: string;
+  borderColor: string;
+  hoverBorderColor: string;
+  hoverBg: string;
+  iconBg: string;
+  shadowColor: string;
+  iconColor: string;
+  category: string;
+}
+
+export const ALL_SHORTCUT_OPTIONS: ShortcutOption[] = [
+  {
+    id: 'attendance',
+    label: '출퇴근',
+    sublabel: '근태 관리',
+    path: '/attendance',
+    icon: Clock,
+    colorName: 'blue',
+    gradientBg: 'from-blue-500/10 via-blue-500/5 to-card',
+    borderColor: 'border-blue-500/20',
+    hoverBorderColor: 'hover:border-blue-500/40',
+    hoverBg: 'hover:bg-blue-500/15',
+    iconBg: 'bg-blue-600 text-white',
+    shadowColor: 'hover:shadow-[0_8px_20px_rgba(59,130,246,0.15)]',
+    iconColor: 'group-hover:text-blue-600 dark:group-hover:text-blue-400',
+    category: '근태/인사'
+  },
+  {
+    id: 'leave',
+    label: '연차신청',
+    sublabel: '휴가 결재',
+    path: '/leave',
+    icon: CalendarDays,
+    colorName: 'indigo',
+    gradientBg: 'from-indigo-500/10 via-indigo-500/5 to-card',
+    borderColor: 'border-indigo-500/20',
+    hoverBorderColor: 'hover:border-indigo-500/40',
+    hoverBg: 'hover:bg-indigo-500/15',
+    iconBg: 'bg-indigo-600 text-white',
+    shadowColor: 'hover:shadow-[0_8px_20px_rgba(99,102,241,0.15)]',
+    iconColor: 'group-hover:text-indigo-600 dark:group-hover:text-indigo-400',
+    category: '근태/인사'
+  },
+  {
+    id: 'health',
+    label: '건강체크',
+    sublabel: '상태 진단',
+    path: '/health-mgmt',
+    icon: Activity,
+    colorName: 'rose',
+    gradientBg: 'from-rose-500/10 via-rose-500/5 to-card',
+    borderColor: 'border-rose-500/20',
+    hoverBorderColor: 'hover:border-rose-500/40',
+    hoverBg: 'hover:bg-rose-500/15',
+    iconBg: 'bg-rose-600 text-white',
+    shadowColor: 'hover:shadow-[0_8px_20px_rgba(244,63,94,0.15)]',
+    iconColor: 'group-hover:text-rose-600 dark:group-hover:text-rose-400',
+    category: '안전/보건'
+  },
+  {
+    id: 'worklog',
+    label: '작업일지',
+    sublabel: '일일 기록',
+    path: '/work-log',
+    icon: ClipboardList,
+    colorName: 'amber',
+    gradientBg: 'from-amber-500/10 via-amber-500/5 to-card',
+    borderColor: 'border-amber-500/20',
+    hoverBorderColor: 'hover:border-amber-500/40',
+    hoverBg: 'hover:bg-amber-500/15',
+    iconBg: 'bg-amber-600 text-white',
+    shadowColor: 'hover:shadow-[0_8px_20px_rgba(245,158,11,0.15)]',
+    iconColor: 'group-hover:text-amber-600 dark:group-hover:text-amber-400',
+    category: '업무/작업'
+  },
+  {
+    id: 'notices',
+    label: '전사공지',
+    sublabel: '중요 알림',
+    path: '/notices',
+    icon: Megaphone,
+    colorName: 'sky',
+    gradientBg: 'from-sky-500/10 via-sky-500/5 to-card',
+    borderColor: 'border-sky-500/20',
+    hoverBorderColor: 'hover:border-sky-500/40',
+    hoverBg: 'hover:bg-sky-500/15',
+    iconBg: 'bg-sky-600 text-white',
+    shadowColor: 'hover:shadow-[0_8px_20px_rgba(14,165,233,0.15)]',
+    iconColor: 'group-hover:text-sky-600 dark:group-hover:text-sky-400',
+    category: '소통/정보'
+  },
+  {
+    id: 'meal',
+    label: '식수신청',
+    sublabel: '식수/식권',
+    path: '/meal-request',
+    icon: Utensils,
+    colorName: 'orange',
+    gradientBg: 'from-orange-500/10 via-orange-500/5 to-card',
+    borderColor: 'border-orange-500/20',
+    hoverBorderColor: 'hover:border-orange-500/40',
+    hoverBg: 'hover:bg-orange-500/15',
+    iconBg: 'bg-orange-600 text-white',
+    shadowColor: 'hover:shadow-[0_8px_20px_rgba(249,115,22,0.15)]',
+    iconColor: 'group-hover:text-orange-600 dark:group-hover:text-orange-400',
+    category: '복지/생활'
+  },
+  {
+    id: 'praise',
+    label: '칭찬피드',
+    sublabel: '동료 격려',
+    path: '/praise-feed',
+    icon: Heart,
+    colorName: 'pink',
+    gradientBg: 'from-pink-500/10 via-pink-500/5 to-card',
+    borderColor: 'border-pink-500/20',
+    hoverBorderColor: 'hover:border-pink-500/40',
+    hoverBg: 'hover:bg-pink-500/15',
+    iconBg: 'bg-pink-600 text-white',
+    shadowColor: 'hover:shadow-[0_8px_20px_rgba(236,72,153,0.15)]',
+    iconColor: 'group-hover:text-pink-600 dark:group-hover:text-pink-400',
+    category: '소통/정보'
+  },
+  {
+    id: 'training',
+    label: '법정교육',
+    sublabel: '의무 교육',
+    path: '/training-list',
+    icon: BookOpen,
+    colorName: 'emerald',
+    gradientBg: 'from-emerald-500/10 via-emerald-500/5 to-card',
+    borderColor: 'border-emerald-500/20',
+    hoverBorderColor: 'hover:border-emerald-500/40',
+    hoverBg: 'hover:bg-emerald-500/15',
+    iconBg: 'bg-emerald-600 text-white',
+    shadowColor: 'hover:shadow-[0_8px_20px_rgba(16,185,129,0.15)]',
+    iconColor: 'group-hover:text-emerald-600 dark:group-hover:text-emerald-400',
+    category: '안전/보건'
+  },
+  {
+    id: 'payslip',
+    label: '급여명세',
+    sublabel: '명세서 조회',
+    path: '/my-payslip',
+    icon: Receipt,
+    colorName: 'teal',
+    gradientBg: 'from-teal-500/10 via-teal-500/5 to-card',
+    borderColor: 'border-teal-500/20',
+    hoverBorderColor: 'hover:border-teal-500/40',
+    hoverBg: 'hover:bg-teal-500/15',
+    iconBg: 'bg-teal-600 text-white',
+    shadowColor: 'hover:shadow-[0_8px_20px_rgba(20,184,166,0.15)]',
+    iconColor: 'group-hover:text-teal-600 dark:group-hover:text-teal-400',
+    category: '근태/인사'
+  },
+  {
+    id: 'coupons',
+    label: '복지쿠폰',
+    sublabel: '쿠폰함',
+    path: '/coupons',
+    icon: Ticket,
+    colorName: 'purple',
+    gradientBg: 'from-purple-500/10 via-purple-500/5 to-card',
+    borderColor: 'border-purple-500/20',
+    hoverBorderColor: 'hover:border-purple-500/40',
+    hoverBg: 'hover:bg-purple-500/15',
+    iconBg: 'bg-purple-600 text-white',
+    shadowColor: 'hover:shadow-[0_8px_20px_rgba(168,85,247,0.15)]',
+    iconColor: 'group-hover:text-purple-600 dark:group-hover:text-purple-400',
+    category: '복지/생활'
+  },
+  {
+    id: 'temp',
+    label: '체감온도',
+    sublabel: '온열질환 예방',
+    path: '/perceived-temp',
+    icon: Thermometer,
+    colorName: 'yellow',
+    gradientBg: 'from-yellow-500/10 via-yellow-500/5 to-card',
+    borderColor: 'border-yellow-500/20',
+    hoverBorderColor: 'hover:border-yellow-500/40',
+    hoverBg: 'hover:bg-yellow-500/15',
+    iconBg: 'bg-amber-500 text-slate-950',
+    shadowColor: 'hover:shadow-[0_8px_20px_rgba(234,179,8,0.15)]',
+    iconColor: 'group-hover:text-amber-500 dark:group-hover:text-yellow-400',
+    category: '안전/보건'
+  },
+  {
+    id: 'ranking',
+    label: '안전랭킹',
+    sublabel: '포인트 순위',
+    path: '/safety-ranking',
+    icon: Trophy,
+    colorName: 'lime',
+    gradientBg: 'from-lime-500/10 via-lime-500/5 to-card',
+    borderColor: 'border-lime-500/20',
+    hoverBorderColor: 'hover:border-lime-500/40',
+    hoverBg: 'hover:bg-lime-500/15',
+    iconBg: 'bg-lime-600 text-white',
+    shadowColor: 'hover:shadow-[0_8px_20px_rgba(132,204,22,0.15)]',
+    iconColor: 'group-hover:text-lime-600 dark:group-hover:text-lime-400',
+    category: '안전/보건'
+  },
+  {
+    id: 'settings',
+    label: '근무설정',
+    sublabel: '자동출퇴근',
+    path: '/attendance/settings',
+    icon: Settings2,
+    colorName: 'cyan',
+    gradientBg: 'from-cyan-500/10 via-cyan-500/5 to-card',
+    borderColor: 'border-cyan-500/20',
+    hoverBorderColor: 'hover:border-cyan-500/40',
+    hoverBg: 'hover:bg-cyan-500/15',
+    iconBg: 'bg-cyan-600 text-white',
+    shadowColor: 'hover:shadow-[0_8px_20px_rgba(6,182,212,0.15)]',
+    iconColor: 'group-hover:text-cyan-600 dark:group-hover:text-cyan-400',
+    category: '근태/인사'
+  }
+];
+
+export const DEFAULT_PINNED_SHORTCUTS = ['attendance', 'leave', 'health'];
+
 export const Dashboard: React.FC = () => {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
-  const [todayAttendance, setTodayAttendance] = useState<Attendance | null>(null);
+  const { 
+    locationSettings, 
+    currentLocation, 
+    distanceToCenter, 
+    isInsideCheckInZone, 
+    isLocationRetentionActive,
+    retentionRemainingMinutes,
+    lastVerifiedInsideTime,
+    geofenceBufferMeters,
+    pendingExitState,
+    todayAttendance,
+    refreshLocation 
+  } = useAutoAttendance();
   const [weeklyAttendanceMap, setWeeklyAttendanceMap] = useState<Record<string, Attendance>>({});
   const [specialDates, setSpecialDates] = useState<Record<string, any>>({});
   const [recentNotices, setRecentNotices] = useState<Notice[]>([]);
@@ -89,6 +351,9 @@ export const Dashboard: React.FC = () => {
   const [newNotice, setNewNotice] = useState({ title: '', content: '', isImportant: false, shouldNotify: true });
   const [userTrend, setUserTrend] = useState<number>(0);
   const [isClockInHealthDialogOpen, setIsClockInHealthDialogOpen] = useState(false);
+  const [isClockingIn, setIsClockingIn] = useState(false);
+  const [isClockingOut, setIsClockingOut] = useState(false);
+  const [currentTimeStr, setCurrentTimeStr] = useState(format(new Date(), 'HH:mm:ss'));
   const [isSOSLoading, setIsSOSLoading] = useState(false);
   const [isPresenceDialogOpen, setIsPresenceDialogOpen] = useState(false);
   const [selectedTeamIndex, setSelectedTeamIndex] = useState<number | null>(null);
@@ -100,7 +365,10 @@ export const Dashboard: React.FC = () => {
     absentList: { name: string; position: string }[];
   }[]>([]);
   const [bannerText, setBannerText] = useState('안전한 하루가 되세요');
-  const [activeCategory, setActiveCategory] = useState<'ALL' | 'WORK' | 'HR' | 'WELFARE'>('ALL');
+  const [activeCategory, setActiveCategory] = useState<'ALL' | 'SAFETY_WORK' | 'HR' | 'WELFARE'>('ALL');
+  const [briefingTab, setBriefingTab] = useState<'NOTICES' | 'ACCIDENTS' | 'PRAISE'>('NOTICES');
+  const [showWeeklyTimecard, setShowWeeklyTimecard] = useState(false);
+  const [isRetentionModalOpen, setIsRetentionModalOpen] = useState(false);
 
   const isInitialNotices = useRef(true);
   const isInitialAccidents = useRef(true);
@@ -114,6 +382,112 @@ export const Dashboard: React.FC = () => {
   });
   const [pendingTrainings, setPendingTrainings] = useState(0);
   const [isAppExited, setIsAppExited] = useState(false);
+  const [praiseKings, setPraiseKings] = useState<UserProfile[]>([]);
+
+  // 🚀 Pinned Quick Action Shortcuts State & Handlers
+  const [isShortcutConfigOpen, setIsShortcutConfigOpen] = useState(false);
+  const [editShortcuts, setEditShortcuts] = useState<string[]>(DEFAULT_PINNED_SHORTCUTS);
+  const [isSavingShortcuts, setIsSavingShortcuts] = useState(false);
+
+  const openShortcutConfig = () => {
+    const current = (profile?.pinnedShortcuts && profile.pinnedShortcuts.length > 0)
+      ? profile.pinnedShortcuts
+      : DEFAULT_PINNED_SHORTCUTS;
+    setEditShortcuts([...current]);
+    setIsShortcutConfigOpen(true);
+  };
+
+  const handleMoveShortcutUp = (index: number) => {
+    if (index === 0) return;
+    const next = [...editShortcuts];
+    const temp = next[index];
+    next[index] = next[index - 1];
+    next[index - 1] = temp;
+    setEditShortcuts(next);
+  };
+
+  const handleMoveShortcutDown = (index: number) => {
+    if (index === editShortcuts.length - 1) return;
+    const next = [...editShortcuts];
+    const temp = next[index];
+    next[index] = next[index + 1];
+    next[index + 1] = temp;
+    setEditShortcuts(next);
+  };
+
+  const handleToggleShortcut = (id: string) => {
+    if (editShortcuts.includes(id)) {
+      if (editShortcuts.length <= 1) {
+        toast.warning('최소 1개 이상의 빠른 실행 메뉴가 필요합니다.');
+        return;
+      }
+      setEditShortcuts(editShortcuts.filter(x => x !== id));
+    } else {
+      if (editShortcuts.length >= 6) {
+        toast.warning('빠른 실행 메뉴는 최대 6개까지 고정할 수 있습니다.');
+        return;
+      }
+      setEditShortcuts([...editShortcuts, id]);
+    }
+  };
+
+  const handleResetShortcuts = () => {
+    setEditShortcuts([...DEFAULT_PINNED_SHORTCUTS]);
+    toast.info('기본 메뉴(출퇴근, 연차, 건강)로 초기화되었습니다.');
+  };
+
+  const handleSaveShortcuts = async () => {
+    if (!profile) return;
+    setIsSavingShortcuts(true);
+    try {
+      await updateDoc(doc(db, 'users', profile.uid), {
+        pinnedShortcuts: editShortcuts
+      });
+      toast.success('빠른 실행 메뉴 설정이 저장되었습니다.');
+      setIsShortcutConfigOpen(false);
+    } catch (error) {
+      console.error(error);
+      toast.error('빠른 실행 메뉴 저장 실패');
+    } finally {
+      setIsSavingShortcuts(false);
+    }
+  };
+
+  const activePinnedShortcutIds = (profile?.pinnedShortcuts && profile.pinnedShortcuts.length > 0)
+    ? profile.pinnedShortcuts
+    : DEFAULT_PINNED_SHORTCUTS;
+
+  const activePinnedShortcuts = activePinnedShortcutIds
+    .map(id => ALL_SHORTCUT_OPTIONS.find(opt => opt.id === id))
+    .filter(Boolean) as ShortcutOption[];
+
+  useEffect(() => {
+    const currentMonth = format(new Date(), 'yyyy-MM');
+    const q = query(
+      collection(db, 'users'),
+      where('isActive', '==', true)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const userList = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
+      const sorted = userList
+        .sort((a, b) => {
+          const aMonthKudos = a.kudosMonth === currentMonth ? (a.monthlyKudosCount || 0) : 0;
+          const bMonthKudos = b.kudosMonth === currentMonth ? (b.monthlyKudosCount || 0) : 0;
+          if (bMonthKudos !== aMonthKudos) {
+            return bMonthKudos - aMonthKudos;
+          }
+          return (b.points || 0) - (a.points || 0);
+        })
+        .slice(0, 5);
+
+      setPraiseKings(sorted);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'users');
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     const q = query(collection(db, 'specialDates'));
@@ -189,6 +563,13 @@ export const Dashboard: React.FC = () => {
   }, []);
 
   // Specific restrictions as requested: Hide for 조장, 반장, 사원
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTimeStr(format(new Date(), 'HH:mm:ss'));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const isExcludedRole = profile && (
     ['EMPLOYEE', 'WORKER'].includes(profile.role?.toUpperCase() || '') || 
     (['조장', '반장', '사원'].includes(profile.position?.trim() || '') && profile.role !== 'TEAM_LEADER') ||
@@ -252,23 +633,6 @@ export const Dashboard: React.FC = () => {
     if (!profile) return;
 
     const today = format(new Date(), 'yyyy-MM-dd');
-    const q = query(
-      collection(db, 'attendance'), 
-      where('uid', '==', profile.uid),
-      where('date', '==', today),
-      limit(1)
-    );
-
-    const unsubscribeAttendance = onSnapshot(q, (snapshot) => {
-      if (!snapshot.empty) {
-        const docData = snapshot.docs[0];
-        setTodayAttendance({ id: docData.id, ...docData.data() } as Attendance);
-      } else {
-        setTodayAttendance(null);
-      }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'attendance');
-    });
 
     // Fetch last 15 attendance entries to build a week view (No orderBy to avoid composite index requirement)
     const weeklyQ = query(
@@ -442,7 +806,6 @@ export const Dashboard: React.FC = () => {
     });
 
     return () => {
-      unsubscribeAttendance();
       unsubscribeWeekly();
       unsubscribeNotices();
       unsubscribeAccidents();
@@ -555,9 +918,11 @@ export const Dashboard: React.FC = () => {
 
   const confirmClockIn = async (selectedHealth: 'GOOD' | 'NORMAL' | 'BAD') => {
     if (!profile) return;
+    setIsClockingIn(true);
     const now = new Date();
     const today = format(now, 'yyyy-MM-dd');
     const status = now.getHours() >= 9 && now.getMinutes() > 0 ? 'LATE' : 'PRESENT';
+    const attendanceDocId = `${profile.uid}_${today}`;
 
     try {
       const leaveQuery = query(
@@ -570,7 +935,7 @@ export const Dashboard: React.FC = () => {
       const leaveSnapshot = await getDocs(leaveQuery);
       const leave = leaveSnapshot.empty ? null : leaveSnapshot.docs[0].data() as LeaveRequest;
 
-      await addDoc(collection(db, 'attendance'), {
+      await setDoc(doc(db, 'attendance', attendanceDocId), {
         uid: profile.uid,
         date: today,
         clockIn: now.toISOString(),
@@ -579,40 +944,72 @@ export const Dashboard: React.FC = () => {
         displayName: profile?.displayName || '이름없음',
         departmentId: profile.departmentId || '',
         departmentName: profile.departmentName || '미지정',
-        leaveType: leave?.type || null
-      });
+        leaveType: leave?.type || null,
+        clockInLat: currentLocation?.latitude || null,
+        clockInLng: currentLocation?.longitude || null,
+        workHours: 0,
+        overtimeHours: 0,
+        pendingExitSince: null,
+        createdAt: now.toISOString()
+      }, { merge: true });
+
+      // Enable ghost guard
+      await updateDoc(doc(db, 'users', profile.uid), {
+        ghostGuardEnabled: true,
+        lastMovementAt: now.toISOString(),
+        isImmobile: false
+      }).catch(err => console.warn('User ghost guard activate warning', err));
+
+      // Grant random ship part
+      grantRandomShipPart(profile.uid, '출근');
 
       setHealthStatus(selectedHealth);
       await sendHealthNotification(selectedHealth);
       setIsClockInHealthDialogOpen(false);
-      toast.success('출근 처리 완료', {
-        description: `${format(now, 'HH:mm')}에 정상적으로 출근 처리되었습니다.`
+      toast.success('🎉 출근 등록 완료!', {
+        description: `${format(now, 'HH:mm')}에 정상적으로 출근 등록되었습니다. (유령 가드 활성화 & 파츠 지급)`
       });
     } catch (error) {
       console.error("Clock-in error:", error);
       toast.error('출근 처리 중 오류가 발생했습니다.');
       handleFirestoreError(error, OperationType.WRITE, 'attendance');
+    } finally {
+      setIsClockingIn(false);
     }
   };
 
   const handleClockOut = async () => {
     if (!todayAttendance || !profile) return;
+    setIsClockingOut(true);
     try {
       const now = new Date();
       const isSpecial = checkIsSpecialDay(new Date(todayAttendance.clockIn), specialDates).isSpecial;
       const { workHours, overtimeHours } = calculateAttendanceHours(todayAttendance.clockIn, now, isSpecial);
+      
       await updateDoc(doc(db, 'attendance', todayAttendance.id), {
         clockOut: now.toISOString(),
         workHours,
-        overtimeHours
+        overtimeHours,
+        clockOutLat: currentLocation?.latitude || null,
+        clockOutLng: currentLocation?.longitude || null,
+        pendingExitSince: null
       });
-      toast.success('퇴근 처리 완료', {
-        description: `${format(now, 'HH:mm')}에 안전하게 퇴근 처리되었습니다.`
+
+      // Disable ghost guard
+      await updateDoc(doc(db, 'users', profile.uid), {
+        ghostGuardEnabled: false,
+        isImmobile: false
+      }).catch(err => console.warn('User ghost guard deactivate warning', err));
+
+      toast.success('🏁 퇴근 등록 완료!', {
+        description: `${format(now, 'HH:mm')} 퇴근 (정규 ${workHours}h / 잔업 ${overtimeHours}h 정산)`
       });
     } catch (error) {
       console.error("Clock-out error:", error);
       toast.error('퇴근 처리 중 오류가 발생했습니다.');
       handleFirestoreError(error, OperationType.WRITE, `attendance/${todayAttendance.id}`);
+    } finally {
+      setIsClockingOut(false);
     }
   };
 
@@ -839,567 +1236,374 @@ export const Dashboard: React.FC = () => {
         )}
       </header>
 
-      {/* IoT / Sensor Fast Status Bar */}
-      <div className="flex items-center justify-between bg-card/30 border border-border/30 rounded-2xl p-2.5 px-3">
-        <div className="flex items-center gap-2">
-          <div className="relative flex h-2 w-2">
-            <span className={cn("animate-ping absolute inline-flex h-full w-full rounded-full opacity-75", isMonitoring ? "bg-emerald-400" : "bg-red-400")}></span>
-            <span className={cn("relative inline-flex rounded-full h-2 w-2", isMonitoring ? "bg-emerald-500" : "bg-red-500")}></span>
-          </div>
-          <span className="text-xs font-black text-muted-foreground/80 tracking-tight">
-            {isMonitoring ? (
-              <span className="text-emerald-500">안전 센서 작동중</span>
-            ) : (
-              <span className="text-red-500">안전 센서 꺼짐</span>
-            )}
-          </span>
-        </div>
-        {!isMonitoring ? (
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="h-7 text-xs font-black border-red-500/20 bg-red-500/10 text-red-600 rounded-full hover:bg-red-500/20 active:scale-95 transition-all cursor-pointer px-3"
-            onClick={startMonitoring}
-          >
-            센서 켜기
-          </Button>
-        ) : (
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="h-7 text-xs font-black border-orange-500/20 bg-orange-500/10 text-orange-600 rounded-full hover:bg-orange-500/20 active:scale-95 transition-all cursor-pointer px-3"
-            onClick={() => {
-              if ((window as any).simulateSafetySensor) {
-                (window as any).simulateSafetySensor('IMPACT');
-              } else {
-                toast.error('센서 기능이 준비되지 않았습니다.');
-              }
-            }}
-          >
-            ⚡ 센서 테스트
-          </Button>
-        )}
-      </div>
+      {/* 📍 Real-time Geofence Retention & Sensor Status Bar */}
+      <DashboardStatusBar
+        isLocationRetentionActive={isLocationRetentionActive}
+        retentionRemainingMinutes={retentionRemainingMinutes}
+        isInsideCheckInZone={isInsideCheckInZone}
+        distanceToCenter={distanceToCenter}
+        refreshLocation={refreshLocation}
+        isMonitoring={isMonitoring}
+        startMonitoring={startMonitoring}
+        geofenceBufferMeters={geofenceBufferMeters}
+      />
 
-
-
-      {/* 2. Weekly Timecard Card (NAHAGO Style) */}
-      <section className="bg-card border border-border/60 rounded-3xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-4">
-        {/* Weekly Header Row */}
-        <div className="flex items-center justify-between">
+      {/* 🚀 CUSTOMIZABLE QUICK ACTION SHORTCUTS (사용자 맞춤 빠른 실행 메뉴) */}
+      <section className="bg-card/70 backdrop-blur-md border border-border/70 rounded-3xl p-3.5 shadow-[0_6px_24px_rgba(0,0,0,0.03)] space-y-2.5">
+        <div className="flex items-center justify-between px-1">
           <div className="flex items-center gap-1.5">
-            <ChevronLeft className="w-4 h-4 text-muted-foreground/40 hover:text-foreground cursor-pointer transition-colors" />
-            <h3 className="text-[15px] font-black text-foreground tracking-tight">
-              {(() => {
-                const now = new Date();
-                const month = now.getMonth() + 1;
-                // Calculate week of the month
-                const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-                const firstDayOfWeek = firstDayOfMonth.getDay(); 
-                const offsetDate = now.getDate() + (firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1);
-                const weekNum = Math.ceil(offsetDate / 7);
-                return `${month}월 ${weekNum}주차 근무시간`;
-              })()}
-            </h3>
-            <ChevronRight className="w-4 h-4 text-muted-foreground/40 hover:text-foreground cursor-pointer transition-colors" />
+            <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+            <span className="text-[11px] font-black text-foreground tracking-tight">자주 쓰는 빠른 실행</span>
+            <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-bold border-primary/30 text-primary bg-primary/5">
+              {activePinnedShortcuts.length}개 고정됨
+            </Badge>
           </div>
-          <button 
-            onClick={() => navigate('/attendance')}
-            className="text-xs font-black text-muted-foreground/60 hover:text-primary transition-colors flex items-center gap-0.5 cursor-pointer"
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={openShortcutConfig}
+            className="h-6 px-2 text-[10px] font-bold text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-lg flex items-center gap-1 cursor-pointer"
           >
-            근무통계 조회 <ChevronRight className="w-3.5 h-3.5" />
-          </button>
+            <Settings2 className="w-3 h-3 text-primary" />
+            메뉴 설정
+          </Button>
         </div>
 
-        {/* 7 Days Columns */}
-        <div className="grid grid-cols-7 gap-1">
-          {(() => {
-            const daysKo = ['일', '월', '화', '수', '목', '금', '토'];
-            const todayStr = format(new Date(), 'yyyy-MM-dd');
-            
-            // Get Monday to Sunday of the current week
-            const current = new Date();
-            const dayIdx = current.getDay();
-            const distanceToMonday = dayIdx === 0 ? -6 : 1 - dayIdx;
-            const monday = new Date(current);
-            monday.setDate(current.getDate() + distanceToMonday);
-            
-            return Array.from({ length: 7 }).map((_, idx) => {
-              const dayDate = new Date(monday);
-              dayDate.setDate(monday.getDate() + idx);
-              const dateStr = format(dayDate, 'yyyy-MM-dd');
-              const isToday = dateStr === todayStr;
-              
-              const dayLabel = daysKo[dayDate.getDay()];
-              const dateNum = format(dayDate, 'd');
-              const att = weeklyAttendanceMap[dateStr];
-              
-              const isWeekend = dayDate.getDay() === 0 || dayDate.getDay() === 6;
-              
-              let statusNode = null;
-              if (att) {
-                const inTime = att.clockIn ? format(new Date(att.clockIn), 'HH:mm') : '--:--';
-                const outTime = att.clockOut ? format(new Date(att.clockOut), 'HH:mm') : '--:--';
-                statusNode = (
-                  <div className="flex flex-col gap-0.5 leading-[1.1]">
-                    <span className="text-[10px] font-bold text-primary">{inTime}</span>
-                    <span className="text-[10px] font-bold text-muted-foreground/70">{outTime}</span>
-                  </div>
-                );
-              } else {
-                if (isWeekend) {
-                  statusNode = <span className="text-[10.5px] font-black text-muted-foreground/40">휴일</span>;
-                } else if (dateStr === todayStr) {
-                  statusNode = <span className="text-[10.5px] font-black text-primary animate-pulse">미출근</span>;
-                } else if (dateStr < todayStr) {
-                  statusNode = <span className="text-[10.5px] font-bold text-muted-foreground/35">결근</span>;
-                } else {
-                  statusNode = <span className="text-[10.5px] font-bold text-muted-foreground/25">대기</span>;
-                }
-              }
-
-              return (
-                <div 
-                  key={idx}
-                  className={cn(
-                    "flex flex-col items-center gap-1.5 py-2.5 rounded-xl text-center border transition-all duration-300",
-                    isToday 
-                      ? "bg-primary/[0.05] border-primary/40 shadow-[0_2px_8px_rgba(37,99,235,0.06)]"
-                      : "bg-card border-border/20"
-                  )}
-                >
-                  <span className={cn(
-                    "text-[10.5px] font-black tracking-tighter leading-none px-1.5 py-0.5 rounded-full",
-                    isToday 
-                      ? "bg-primary text-primary-foreground font-extrabold text-[10px]"
-                      : isWeekend ? "text-muted-foreground/45" : "text-muted-foreground/70"
-                  )}>
-                    {isToday ? '오늘' : dayLabel}
-                  </span>
-                  
-                  <span className={cn(
-                    "text-[15px] font-black tracking-tight leading-none",
-                    isToday ? "text-primary" : "text-foreground"
-                  )}>
-                    {dateNum}
-                  </span>
-
-                  <div className="min-h-5 flex items-center justify-center">
-                    {statusNode}
-                  </div>
-                </div>
-              );
-            });
-          })()}
-        </div>
-
-        {/* 3 Horizontal Action Buttons Group */}
-        <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-border/40">
-          <button 
-            onClick={() => navigate('/attendance')}
-            className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-muted/45 border border-border/40 hover:bg-muted active:scale-95 transition-all text-center cursor-pointer"
-          >
-            <Clock className="w-3.5 h-3.5 text-primary" />
-            <span className="text-[12px] font-black text-foreground">근무조회</span>
-          </button>
-
-          {/* Interactive Core Punch In/Out */}
-          {(() => {
-            if (!todayAttendance) {
-              return (
-                <button 
-                  onClick={handleClockIn}
-                  className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 active:scale-95 transition-all text-center cursor-pointer shadow-[0_4px_12px_rgba(37,99,235,0.25)]"
-                >
-                  <span className="relative flex h-1.5 w-1.5 shrink-0">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
-                  </span>
-                  <span className="text-[12px] font-black">출근등록</span>
-                </button>
-              );
-            } else if (!todayAttendance.clockOut) {
-              return (
-                <button 
-                  onClick={handleClockOut}
-                  className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-red-600 text-white hover:bg-red-500 active:scale-95 transition-all text-center cursor-pointer shadow-[0_4px_12px_rgba(220,38,38,0.25)]"
-                >
-                  <span className="relative flex h-1.5 w-1.5 shrink-0">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
-                  </span>
-                  <span className="text-[12px] font-black">퇴근등록</span>
-                </button>
-              );
-            } else {
-              return (
-                <button 
-                  disabled
-                  className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-muted border border-border/50 text-muted-foreground/50 text-center cursor-not-allowed"
-                >
-                  <CheckCircle className="w-3.5 h-3.5 text-muted-foreground/30" />
-                  <span className="text-[12px] font-black">근무완료</span>
-                </button>
-              );
-            }
-          })()}
-
-          <button 
-            onClick={() => navigate('/leave')}
-            className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-muted/45 border border-border/40 hover:bg-muted active:scale-95 transition-all text-center cursor-pointer"
-          >
-            <CalendarDays className="w-3.5 h-3.5 text-indigo-500" />
-            <span className="text-[12px] font-black text-foreground">연차신청</span>
-          </button>
-        </div>
-      </section>
-
-
-
-      {/* 3. Services Layout (Categorized Bento Grid) */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between px-0.5">
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 bg-primary rounded-full"></span>
-            <h4 className="text-xs font-black text-muted-foreground/60 uppercase tracking-[0.15em]">
-              업무 및 편의 서비스
-            </h4>
-          </div>
-          <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-            카테고리별 모아보기
-          </span>
-        </div>
-
-        {/* Category Tabs */}
-        <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-          {[
-            { id: 'ALL', label: '전체 서비스' },
-            { id: 'WORK', label: '🛠️ 안전/업무' },
-            { id: 'HR', label: '📅 인사/근태' },
-            { id: 'WELFARE', label: '🎁 복지/소통' }
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveCategory(tab.id as any)}
-              className={cn(
-                "px-3.5 py-2.5 rounded-2xl text-xs font-extrabold transition-all duration-300 whitespace-nowrap border cursor-pointer active:scale-95 flex-1 text-center",
-                activeCategory === tab.id
-                  ? "bg-primary text-primary-foreground border-primary shadow-[0_4px_12px_rgba(37,99,235,0.25)]"
-                  : "bg-card border-border/60 text-muted-foreground/80 hover:text-foreground hover:bg-muted/45"
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Dynamic Categorized Grid/List */}
-        <div className="grid grid-cols-2 gap-3.5">
-          {[
-            // 1. 업무/안전 (WORK)
-            { label: '작업일지', icon: ClipboardList, to: '/personal-work-log', bg: 'bg-gradient-to-br from-[#10b981] to-[#059669] text-white border-emerald-500/10', category: 'WORK', desc: '오늘의 조업 내용 기록' },
-            { label: '업무/안전요청', icon: MessageSquare, to: '/request-center', bg: 'bg-gradient-to-br from-[#0284c7] to-[#0369a1] text-white border-sky-500/10', category: 'WORK', desc: '담당자 지정 실시간 요청' },
-            { label: '체감온도', icon: Thermometer, to: '/perceived-temp', bg: 'bg-gradient-to-br from-[#f43f5e] to-[#e11d48] text-white border-rose-500/10', category: 'WORK', desc: '현재 체감 온도 체크' },
-            { label: '보건보고', icon: Activity, to: '/health-mgmt', bg: 'bg-gradient-to-br from-[#ef4444] to-[#dc2626] text-white border-red-500/10', category: 'WORK', desc: '일일 건강 및 상태 진단' },
-            { label: '교육센터', icon: BookOpen, to: '/training', bg: 'bg-gradient-to-br from-[#8b5cf6] to-[#7c3aed] text-white border-purple-500/10', category: 'WORK', desc: '의무 안전 보건 교육 이수' },
-            { label: '안전랭킹', icon: Trophy, to: '/safety-leaderboard', bg: 'bg-gradient-to-br from-[#f59e0b] to-[#d97706] text-white border-amber-500/10', category: 'WORK', desc: '우수 안전 요원 랭킹' },
-            
-            // 2. 인사/근태 (HR)
-            { label: '근태현황', icon: Clock, to: '/attendance', bg: 'bg-gradient-to-br from-[#3b82f6] to-[#2563eb] text-white border-blue-500/10', category: 'HR', desc: '나의 출퇴근 실적 현황' },
-            { label: '연차신청', icon: CalendarDays, to: '/leave', bg: 'bg-gradient-to-br from-[#6366f1] to-[#4f46e5] text-white border-indigo-500/10', category: 'HR', desc: '연차 신청 및 휴가 결재' },
-            
-            // 3. 복지/소통 (WELFARE)
-            { label: '식사신청', icon: Utensils, to: '/meal-request', bg: 'bg-gradient-to-br from-[#f97316] to-[#ea580c] text-white border-orange-500/10', category: 'WELFARE', desc: '중식/석식 간편 식사 신청' },
-            { label: '칭찬하기', icon: Heart, to: '/praise-feed', bg: 'bg-gradient-to-br from-[#ec4899] to-[#db2777] text-white border-pink-500/10', category: 'WELFARE', desc: '서로를 응원하는 칭찬 피드' },
-            { label: '선박게임', icon: Ship, to: '/ship-assembly', bg: 'bg-gradient-to-br from-[#0ea5e9] to-[#0284c7] text-white border-sky-500/10', category: 'WELFARE', desc: '선박 조립 퍼즐 게임' },
-            { label: '현물보상', icon: Sparkles, to: '/redemption', bg: 'bg-gradient-to-br from-[#eab308] to-[#ca8a04] text-white border-yellow-500/10', category: 'WELFARE', desc: '포인트로 사내 현물 교환' },
-            { label: '로또추첨', icon: Ticket, to: '/lotto', bg: 'bg-gradient-to-br from-[#a855f7] to-[#9333ea] text-white border-violet-500/10', category: 'WELFARE', desc: '행운의 번호 추출' },
-            { label: '엔터놀이', icon: FileBox, to: '/entertainment', bg: 'bg-gradient-to-br from-[#14b8a6] to-[#0d9488] text-white border-teal-500/10', category: 'WELFARE', desc: '휴게 공간 엔터테인먼트' }
-          ]
-            .filter(item => activeCategory === 'ALL' || item.category === activeCategory)
-            .map((item, idx) => (
-              <Card 
-                key={idx}
-                onClick={() => navigate(item.to)}
+        <div className={cn(
+          "grid gap-2.5 sm:gap-3",
+          activePinnedShortcuts.length <= 3 ? "grid-cols-3" :
+          activePinnedShortcuts.length === 4 ? "grid-cols-2 sm:grid-cols-4" :
+          activePinnedShortcuts.length === 5 ? "grid-cols-3 sm:grid-cols-5" :
+          "grid-cols-3 sm:grid-cols-6"
+        )}>
+          {activePinnedShortcuts.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                onClick={() => navigate(item.path)}
                 className={cn(
-                  "border rounded-3xl p-4 cursor-pointer active:scale-95 transition-all duration-300 shadow-[0_4px_16px_rgba(0,0,0,0.04)] flex flex-col gap-4 justify-between relative overflow-hidden group hover:shadow-xl hover:-translate-y-0.5",
-                  item.bg
+                  "group relative flex flex-col items-center justify-center p-3 sm:p-3.5 rounded-2xl bg-gradient-to-b border active:scale-95 transition-all duration-300 shadow-sm hover:-translate-y-0.5 cursor-pointer overflow-hidden",
+                  item.gradientBg,
+                  item.borderColor,
+                  item.hoverBorderColor,
+                  item.hoverBg,
+                  item.shadowColor
                 )}
               >
-                {/* Clean glass reflection overlay */}
-                <div className="absolute -right-3 -bottom-3 w-16 h-16 bg-white/10 rounded-full blur-xl group-hover:bg-white/20 group-hover:scale-125 transition-all duration-300" />
-                <div className="absolute -left-6 -top-6 w-16 h-16 bg-black/5 rounded-full blur-xl group-hover:scale-125 transition-all duration-300" />
-                
-                <div className="flex items-center justify-between">
-                  <div className="w-10 h-10 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center text-white border border-white/10 shadow-inner group-hover:scale-105 transition-all duration-300 shrink-0">
-                    <item.icon className={cn("w-5 h-5", item.label === '칭찬하기' && "fill-current")} />
-                  </div>
-                  <ChevronRight className="w-4.5 h-4.5 text-white/50 group-hover:text-white group-hover:translate-x-0.5 transition-all duration-300" />
+                <div className="absolute -top-6 -right-6 w-14 h-14 bg-white/10 rounded-full blur-lg group-hover:scale-150 transition-all duration-500 pointer-events-none" />
+                <div className={cn(
+                  "w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center shadow-md group-hover:scale-110 transition-all duration-300 shrink-0 mb-1.5",
+                  item.iconBg
+                )}>
+                  <Icon className="w-5.5 h-5.5 sm:w-6 sm:h-6" />
                 </div>
-                
-                <div className="space-y-1.5 z-10">
-                  <h3 className="text-[15.5px] font-black tracking-tight text-white flex items-center gap-1">
-                    {item.label}
-                  </h3>
-                  <p className="text-[11.5px] font-medium text-white/75 truncate tracking-tight">
-                    {item.desc}
-                  </p>
-                </div>
-              </Card>
-            ))}
+                <span className={cn(
+                  "text-xs sm:text-sm font-black text-foreground transition-colors",
+                  item.iconColor
+                )}>
+                  {item.label}
+                </span>
+                <span className="text-[9.5px] sm:text-[10px] font-bold text-muted-foreground/75 mt-0.5 whitespace-nowrap">
+                  {item.sublabel}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </section>
 
-      {/* 4. Notice Section */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between px-0.5">
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 bg-primary rounded-full"></span>
-            <h4 className="text-xs font-black text-muted-foreground/60 uppercase tracking-[0.15em]">
-              최근 공지사항
-            </h4>
-          </div>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="h-7 text-xs font-black text-primary hover:bg-primary/5 rounded-full cursor-pointer px-2.5"
-            onClick={() => navigate('/notices')}
-          >
-            더보기 <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
-          </Button>
-        </div>
-        <Card className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
-          <div className="divide-y divide-border/10">
-            {recentNotices.length > 0 ? (
-              recentNotices.map((notice) => (
-                <div 
-                  key={notice.id} 
-                  className="p-3.5 hover:bg-muted/40 active:bg-muted/60 transition-colors cursor-pointer group"
-                  onClick={() => setSelectedNotice(notice)}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1 min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        {notice.isImportant && (
-                          <Badge className={cn(
-                            "bg-rose-500 hover:bg-rose-600 text-[9.5px] font-black h-4 px-1.5 rounded-md shrink-0 leading-none",
-                            (() => {
-                              let createdAtDate: Date;
-                              const createdRaw = notice.createdAt as any;
-                              if (createdRaw) {
-                                if (typeof createdRaw === 'string') {
-                                  createdAtDate = new Date(createdRaw);
-                                } else if (typeof createdRaw.toDate === 'function') {
-                                  createdAtDate = createdRaw.toDate();
-                                } else if (createdRaw.seconds) {
-                                  createdAtDate = new Date(createdRaw.seconds * 1000);
-                                } else {
-                                  createdAtDate = new Date(createdRaw);
-                                }
-                              } else {
-                                createdAtDate = new Date();
-                              }
-                              const isRecent = Date.now() - createdAtDate.getTime() < 7 * 24 * 60 * 60 * 1000;
-                              const lastViewed = localStorage.getItem('lastViewedNoticesTime');
-                              const isUnread = !lastViewed || createdAtDate.getTime() > new Date(lastViewed).getTime() + 1000;
-                              return isRecent && isUnread ? "animate-glow-pulse" : "";
-                            })()
-                          )}>URGENT</Badge>
+      {/* 🛠️ QUICK ACTION SHORTCUTS CONFIGURATION MODAL (빠른 실행 커스텀 모달) */}
+      <Dialog open={isShortcutConfigOpen} onOpenChange={setIsShortcutConfigOpen}>
+        <DialogContent className="max-w-md w-[94vw] p-5 rounded-3xl bg-card border-border/80 shadow-2xl max-h-[88vh] overflow-y-auto">
+          <DialogHeader className="space-y-1.5 text-left">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                <Pin className="w-4 h-4" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-black text-foreground">
+                  빠른 실행 메뉴 설정
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  원하는 기능을 상단에 핀 고정하고 순서를 변경하세요 (최대 6개)
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-5 py-2">
+            {/* 1. 현재 고정된 메뉴 (순서 변경) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-foreground flex items-center gap-1.5">
+                  <GripVertical className="w-3.5 h-3.5 text-primary" />
+                  현재 고정된 메뉴 ({editShortcuts.length}/6)
+                </span>
+                <span className="text-[10px] font-bold text-muted-foreground">
+                  위/아래 버튼으로 순서 조정
+                </span>
+              </div>
+
+              <div className="space-y-1.5 bg-muted/30 border border-border/50 rounded-2xl p-2">
+                {editShortcuts.map((id, index) => {
+                  const opt = ALL_SHORTCUT_OPTIONS.find(o => o.id === id);
+                  if (!opt) return null;
+                  const Icon = opt.icon;
+                  return (
+                    <div
+                      key={id}
+                      className="flex items-center justify-between p-2 rounded-xl bg-card border border-border/60 shadow-2xs"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="w-5 h-5 rounded-lg bg-muted text-muted-foreground font-black text-[10px] flex items-center justify-center shrink-0">
+                          {index + 1}
+                        </span>
+                        <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center text-white shrink-0", opt.iconBg)}>
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-black text-foreground truncate">{opt.label}</p>
+                          <p className="text-[10px] text-muted-foreground truncate">{opt.sublabel}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          disabled={index === 0}
+                          onClick={() => handleMoveShortcutUp(index)}
+                          className="h-7 w-7 rounded-lg hover:bg-muted text-muted-foreground disabled:opacity-30"
+                          title="위로 이동"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          disabled={index === editShortcuts.length - 1}
+                          onClick={() => handleMoveShortcutDown(index)}
+                          className="h-7 w-7 rounded-lg hover:bg-muted text-muted-foreground disabled:opacity-30"
+                          title="아래로 이동"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          disabled={editShortcuts.length <= 1}
+                          onClick={() => handleToggleShortcut(id)}
+                          className="h-7 w-7 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-500 disabled:opacity-30"
+                          title="고정 해제"
+                        >
+                          <PinOff className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 2. 전체 기능 라이브러리 (클릭하여 추가/제거) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-foreground">
+                  전체 기능 목록 (선택하여 추가/해제)
+                </span>
+                <span className="text-[10px] font-bold text-muted-foreground">
+                  클릭 시 핀 고정 토글
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+                {ALL_SHORTCUT_OPTIONS.map((opt) => {
+                  const isPinned = editShortcuts.includes(opt.id);
+                  const Icon = opt.icon;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => handleToggleShortcut(opt.id)}
+                      className={cn(
+                        "p-2 rounded-xl border text-left flex items-center justify-between gap-2 transition-all cursor-pointer",
+                        isPinned
+                          ? "bg-primary/10 border-primary/50 text-foreground ring-1 ring-primary/30"
+                          : "bg-card/60 border-border/40 text-muted-foreground hover:bg-muted"
+                      )}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className={cn("w-6 h-6 rounded-md flex items-center justify-center shrink-0 text-white", opt.iconBg)}>
+                          <Icon className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className={cn("text-[11px] font-black truncate", isPinned ? "text-primary" : "text-foreground")}>
+                            {opt.label}
+                          </p>
+                          <p className="text-[9px] text-muted-foreground truncate">{opt.sublabel}</p>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0">
+                        {isPinned ? (
+                          <Badge className="bg-primary text-primary-foreground text-[9px] px-1.5 py-0 h-4 font-black rounded-md">
+                            고정됨
+                          </Badge>
+                        ) : (
+                          <Plus className="w-3.5 h-3.5 text-muted-foreground" />
                         )}
-                        <h3 className="text-[14.5px] font-bold text-foreground truncate group-hover:text-primary transition-colors leading-none">
-                          {notice.title}
-                        </h3>
                       </div>
-                      <p className="text-xs text-muted-foreground/70 line-clamp-1">
-                        {notice.content}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 self-center">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="w-8 h-8 rounded-full hover:bg-primary/10 text-muted-foreground hover:text-primary active:scale-90 transition-all cursor-pointer"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          AlertSoundPlayer.trigger('notice', `${notice.title}. ${notice.content}`);
-                        }}
-                        title="음성으로 듣기"
-                      >
-                        <Volume2 className="w-4 h-4" />
-                      </Button>
-                      <span className="text-[11.5px] font-black text-muted-foreground/40 whitespace-nowrap font-mono">
-                        {format(new Date(notice.createdAt), 'MM/dd')}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="py-8 text-center text-muted-foreground/30 font-bold text-xs uppercase tracking-widest">
-                No recent notices
+                    </button>
+                  );
+                })}
               </div>
-            )}
+            </div>
           </div>
-        </Card>
-      </section>
 
-      {/* 4.5. Accident Section */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between px-0.5">
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 bg-red-500 rounded-full"></span>
-            <h4 className="text-xs font-black text-muted-foreground/60 uppercase tracking-[0.15em]">
-              최근 사고사례
-            </h4>
-          </div>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="h-7 text-xs font-black text-primary hover:bg-primary/5 rounded-full cursor-pointer px-2.5"
-            onClick={() => navigate('/accidents')}
-          >
-            더보기 <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
-          </Button>
-        </div>
-        <Card className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
-          <div className="divide-y divide-border/10">
-            {recentAccidents.length > 0 ? (
-              recentAccidents.map((accCase) => (
-                <div 
-                  key={accCase.id} 
-                  className="p-3.5 hover:bg-muted/40 active:bg-muted/60 transition-colors cursor-pointer group"
-                  onClick={() => setSelectedDashboardAccident(accCase)}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1 min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <Badge className={cn(
-                          "text-[9.5px] font-black h-4 px-1.5 rounded-md shrink-0 border-none text-white leading-none",
-                          accCase.severity === 'HIGH' ? "bg-red-500 animate-pulse" : accCase.severity === 'MEDIUM' ? "bg-orange-500" : "bg-emerald-500"
-                        )}>
-                          {accCase.severity === 'HIGH' ? '중대' : accCase.severity === 'MEDIUM' ? '경미' : '아차'}
-                        </Badge>
-                        <h3 className="text-[14.5px] font-bold text-foreground truncate group-hover:text-primary transition-colors leading-none">
-                          {accCase.title}
-                        </h3>
-                      </div>
-                      <p className="text-xs text-muted-foreground/70 line-clamp-1">
-                        위치: {accCase.location} {accCase.description ? `• ${accCase.description}` : ''}
-                      </p>
-                    </div>
-                    <span className="text-[11.5px] font-black text-muted-foreground/40 whitespace-nowrap font-mono mt-0.5">
-                      {accCase.date ? format(new Date(accCase.date), 'MM/dd') : ''}
-                    </span>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="py-8 text-center text-muted-foreground/30 font-bold text-xs uppercase tracking-widest">
-                등록된 사고사례가 없습니다
-              </div>
-            )}
-          </div>
-        </Card>
-      </section>
+          <DialogFooter className="flex flex-row items-center justify-between sm:justify-between gap-2 pt-2 border-t border-border/40">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleResetShortcuts}
+              className="text-xs font-bold text-muted-foreground hover:text-foreground h-9 rounded-xl flex items-center gap-1"
+            >
+              <RotateCcw className="w-3 h-3" />
+              기본값 복원
+            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsShortcutConfigOpen(false)}
+                className="text-xs font-bold h-9 rounded-xl"
+              >
+                취소
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={isSavingShortcuts}
+                onClick={handleSaveShortcuts}
+                className="text-xs font-black h-9 rounded-xl bg-primary text-primary-foreground px-4 shadow-sm"
+              >
+                {isSavingShortcuts ? '저장 중...' : '설정 저장'}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {/* 5. Special Admin Features (Manager/Supervisor only) */}
+      {/* 🌟 2. PROMINENT ATTENDANCE & TIMECARD HUB */}
+      <AttendanceHubCard
+        todayAttendance={todayAttendance}
+        weeklyAttendanceMap={weeklyAttendanceMap}
+        currentTimeStr={currentTimeStr}
+        isClockingIn={isClockingIn}
+        isClockingOut={isClockingOut}
+        handleClockIn={handleClockIn}
+        handleClockOut={handleClockOut}
+        pendingExitState={pendingExitState}
+      />
+
+      {/* 🛠️ 3. STREAMLINED ALL-SERVICES HUB (모든 서비스 4열 아이콘 런처) */}
+      <ServicesHub
+        activeCategory={activeCategory}
+        setActiveCategory={setActiveCategory}
+      />
+
+      {/* 👑 4. SPECIAL ADMIN FEATURES (Manager/Supervisor only) */}
       {(isSupervisor || isManager || canManageMeal) && (
-        <section className="space-y-3 pt-4 border-t border-border/10">
+        <section className="p-3.5 bg-card/70 backdrop-blur-md border border-border/70 rounded-3xl space-y-2.5 shadow-2xs">
           <div className="flex items-center gap-1.5 px-0.5">
-            <Lock className="w-3.5 h-3.5 text-rose-500" />
-            <h4 className="text-xs font-black text-rose-500 uppercase tracking-[0.15em]">
-              관리 지원 모듈
+            <Lock className="w-3.5 h-3.5 text-primary" />
+            <h4 className="text-xs font-black text-foreground tracking-tight">
+              현장 관리 지원 데스크
             </h4>
+            <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-bold border-primary/30 text-primary bg-primary/5 ml-auto">
+              관리 권한 활성
+            </Badge>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {isSupervisor && (
               <button 
+                type="button"
                 onClick={() => navigate('/work-instruction-mgmt')} 
-                className="flex items-center gap-3 p-3.5 bg-card border border-border/40 rounded-2xl text-left hover:bg-muted transition-all cursor-pointer active:scale-95 shadow-sm"
+                className="flex items-center gap-2 p-2.5 bg-card border border-border/60 rounded-xl text-left hover:bg-muted/80 hover:border-primary/40 transition-all cursor-pointer shadow-2xs active:scale-95"
               >
-                <div className="w-9.5 h-9.5 bg-rose-500/10 border border-rose-500/10 rounded-xl flex items-center justify-center text-rose-500 shrink-0">
-                  <ShieldCheck className="w-5 h-5" />
+                <div className="w-7 h-7 bg-rose-500/10 rounded-lg flex items-center justify-center text-rose-500 shrink-0">
+                  <ShieldCheck className="w-4 h-4" />
                 </div>
-                <span className="text-xs font-black text-foreground/85 leading-tight">작업지시 관리</span>
+                <span className="text-xs font-black text-foreground truncate">작업지시 관리</span>
               </button>
             )}
             {isManager && (
               <button 
+                type="button"
                 onClick={fetchTeamAttendance} 
-                className="flex items-center gap-3 p-3.5 bg-card border border-border/40 rounded-2xl text-left hover:bg-muted transition-all cursor-pointer active:scale-95 shadow-sm"
+                className="flex items-center gap-2 p-2.5 bg-card border border-border/60 rounded-xl text-left hover:bg-muted/80 hover:border-primary/40 transition-all cursor-pointer shadow-2xs active:scale-95"
               >
-                <div className="w-9.5 h-9.5 bg-blue-500/10 border border-blue-500/10 rounded-xl flex items-center justify-center text-blue-500 shrink-0">
-                  <Users className="w-5 h-5" />
+                <div className="w-7 h-7 bg-blue-500/10 rounded-lg flex items-center justify-center text-blue-500 shrink-0">
+                  <Users className="w-4 h-4" />
                 </div>
-                <span className="text-xs font-black text-foreground/85 leading-tight">팀 출근 현황</span>
+                <span className="text-xs font-black text-foreground truncate">팀 출근 현황</span>
               </button>
             )}
             {isManager && (
               <button 
+                type="button"
                 onClick={() => setIsNoticeDialogOpen(true)} 
-                className="flex items-center gap-3 p-3.5 bg-card border border-border/40 rounded-2xl text-left hover:bg-muted transition-all cursor-pointer active:scale-95 shadow-sm"
+                className="flex items-center gap-2 p-2.5 bg-card border border-border/60 rounded-xl text-left hover:bg-muted/80 hover:border-primary/40 transition-all cursor-pointer shadow-2xs active:scale-95"
               >
-                <div className="w-9.5 h-9.5 bg-emerald-500/10 border border-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-500 shrink-0">
-                  <Megaphone className="w-5 h-5" />
+                <div className="w-7 h-7 bg-emerald-500/10 rounded-lg flex items-center justify-center text-emerald-500 shrink-0">
+                  <Megaphone className="w-4 h-4" />
                 </div>
-                <span className="text-xs font-black text-foreground/85 leading-tight">공지사항 등록</span>
+                <span className="text-xs font-black text-foreground truncate">공지사항 등록</span>
               </button>
             )}
             {canReportAccident && (
               <button 
+                type="button"
                 onClick={() => navigate('/accidents')} 
-                className="flex items-center gap-3 p-3.5 bg-card border border-border/40 rounded-2xl text-left hover:bg-muted transition-all cursor-pointer active:scale-95 shadow-sm"
+                className="flex items-center gap-2 p-2.5 bg-card border border-border/60 rounded-xl text-left hover:bg-muted/80 hover:border-primary/40 transition-all cursor-pointer shadow-2xs active:scale-95"
               >
-                <div className="w-9.5 h-9.5 bg-rose-500/10 border border-rose-500/10 rounded-xl flex items-center justify-center text-rose-500 shrink-0">
-                  <AlertTriangle className="w-5 h-5" />
+                <div className="w-7 h-7 bg-amber-500/10 rounded-lg flex items-center justify-center text-amber-500 shrink-0">
+                  <AlertTriangle className="w-4 h-4" />
                 </div>
-                <span className="text-xs font-black text-foreground/85 leading-tight">사고사례 등록</span>
+                <span className="text-xs font-black text-foreground truncate">사고사례 등록</span>
               </button>
             )}
             {canManageMeal && (
               <button 
+                type="button"
                 onClick={() => navigate('/meal-mgmt')} 
-                className="col-span-2 flex items-center justify-between p-3.5 bg-card border border-border/40 rounded-2xl hover:bg-muted transition-all cursor-pointer active:scale-98 shadow-sm"
+                className="col-span-2 flex items-center justify-between p-2.5 bg-card border border-border/60 rounded-xl hover:bg-muted/80 hover:border-primary/40 transition-all cursor-pointer shadow-2xs active:scale-95"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-9.5 h-9.5 bg-orange-500/10 border border-orange-500/10 rounded-xl flex items-center justify-center text-orange-500 shrink-0">
-                    <Utensils className="w-4.5 h-4.5" />
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 bg-orange-500/10 rounded-lg flex items-center justify-center text-orange-500 shrink-0">
+                    <Utensils className="w-4 h-4" />
                   </div>
-                  <span className="text-xs font-black text-foreground/85">식사·간식 신청 내역 관리</span>
+                  <span className="text-xs font-black text-foreground">식사·간식 신청 내역 관리</span>
                 </div>
-                <ChevronRight className="w-4.5 h-4.5 text-muted-foreground/30" />
+                <ChevronRight className="w-4 h-4 text-muted-foreground/40" />
               </button>
             )}
           </div>
         </section>
       )}
 
-      {/* 6. Inline Quick Shortcut Links (Non-overlapping!) */}
-      <section className="bg-card/60 backdrop-blur-md border border-border/60 rounded-3xl p-2.5 flex justify-around items-center gap-1 shadow-sm">
-        <Button 
-          variant="ghost" 
-          className="flex-1 rounded-2xl h-9 text-xs font-black text-muted-foreground/80 hover:text-foreground active:bg-muted transition-all cursor-pointer px-1" 
-          onClick={() => navigate('/notices')}
-        >
-          📢 공지사항
-        </Button>
-        <div className="w-px h-4 bg-border/20 self-center" />
-        <Button 
-          variant="ghost" 
-          className="flex-1 rounded-2xl h-9 text-xs font-black text-muted-foreground/80 hover:text-foreground active:bg-muted transition-all cursor-pointer px-1" 
-          onClick={() => navigate('/accidents')}
-        >
-          ⚠️ 사고사례
-        </Button>
-        <div className="w-px h-4 bg-border/20 self-center" />
-        <Button 
-          variant="ghost" 
-          className="flex-1 rounded-2xl h-9 text-xs font-black text-muted-foreground/80 hover:text-foreground active:bg-muted transition-all cursor-pointer px-1" 
-          onClick={() => navigate('/leave')}
-        >
-          📅 연차신청
-        </Button>
-      </section>
+      {/* 📢 5. DAILY BRIEFING HUB (공지사항 / 사고사례 / 이달의 칭찬왕 통합 탭) */}
+      <DailyBriefingCard
+        briefingTab={briefingTab}
+        setBriefingTab={setBriefingTab}
+        recentNotices={recentNotices}
+        recentAccidents={recentAccidents}
+        praiseKings={praiseKings}
+        onSelectNotice={(notice) => setSelectedNotice(notice)}
+        onSelectAccident={(accident) => setSelectedDashboardAccident(accident)}
+      />
 
       {/* Dialogs */}
       <Dialog open={!!selectedNotice} onOpenChange={() => setSelectedNotice(null)}>

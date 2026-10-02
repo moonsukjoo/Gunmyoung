@@ -2,6 +2,7 @@ import React, { useLayoutEffect, useEffect, Component, ErrorInfo, ReactNode, Sus
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './components/AuthProvider';
 import { SafetySensorProvider } from './components/SafetySensorProvider';
+import { AutoAttendanceProvider } from './components/AutoAttendanceProvider';
 import { Layout } from './components/Layout';
 import { Toaster, toast } from 'sonner';
 import { GlowLoading } from './components/GlowLoading';
@@ -42,6 +43,7 @@ const lazyWithRetry = <T extends React.ComponentType<any>>(
 const Admin = lazyWithRetry(() => import('./pages/Admin').then(m => ({ default: m.Admin })));
 const EmployeeManagement = lazyWithRetry(() => import('./pages/EmployeeManagement').then(m => ({ default: m.EmployeeManagement })));
 const Attendance = lazyWithRetry(() => import('./pages/Attendance').then(m => ({ default: m.Attendance })));
+const AttendanceSettings = lazyWithRetry(() => import('./pages/AttendanceSettings').then(m => ({ default: m.AttendanceSettings })));
 const AccidentReport = lazyWithRetry(() => import('./pages/AccidentReport').then(m => ({ default: m.AccidentReport })));
 const Notifications = lazyWithRetry(() => import('./pages/Notifications').then(m => ({ default: m.Notifications })));
 const Notices = lazyWithRetry(() => import('./pages/Notices').then(m => ({ default: m.Notices })));
@@ -231,12 +233,26 @@ function AppContent() {
       document.documentElement.style.setProperty('color-scheme', 'dark');
     }
 
+    if (profile?.highContrast) {
+      document.documentElement.classList.add('high-contrast');
+    } else {
+      document.documentElement.classList.remove('high-contrast');
+    }
+
+    // Font size scaling
+    document.documentElement.classList.remove('font-scale-large', 'font-scale-xlarge');
+    if (profile?.fontSizeScale === 'large') {
+      document.documentElement.classList.add('font-scale-large');
+    } else if (profile?.fontSizeScale === 'xlarge') {
+      document.documentElement.classList.add('font-scale-xlarge');
+    }
+
     if (profile?.elderlyMode) {
       document.documentElement.classList.add('elderly-mode');
     } else {
       document.documentElement.classList.remove('elderly-mode');
     }
-  }, [profile?.lightTheme, profile?.elderlyMode]);
+  }, [profile?.lightTheme, profile?.highContrast, profile?.fontSizeScale, profile?.elderlyMode]);
 
   return (
     <Router>
@@ -256,6 +272,8 @@ function AppContent() {
             <Route path="/admin/pc/evacuation-history" element={<ProtectedRoute permission="admin"><PCAdminEvacuationHistory /></ProtectedRoute>} />
             <Route path="/personnel" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="employee_mgmt"><EmployeeManagement /></ProtectedRoute>} />
             <Route path="/attendance" element={<ProtectedRoute><Attendance /></ProtectedRoute>} />
+            <Route path="/attendance/settings" element={<ProtectedRoute><AttendanceSettings /></ProtectedRoute>} />
+            <Route path="/attendance-settings" element={<ProtectedRoute><AttendanceSettings /></ProtectedRoute>} />
             <Route path="/accidents" element={<ProtectedRoute><AccidentReport /></ProtectedRoute>} />
             <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
             <Route path="/notices" element={<ProtectedRoute><Notices /></ProtectedRoute>} />
@@ -267,7 +285,7 @@ function AppContent() {
             <Route path="/mypage" element={<ProtectedRoute><MyPage /></ProtectedRoute>} />
             <Route path="/redemption" element={<ProtectedRoute><Redemption /></ProtectedRoute>} />
             <Route path="/redemption-mgmt" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="redemption_mgmt"><RedemptionManagement /></ProtectedRoute>} />
-            <Route path="/attendance-mgmt" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="attendance_mgmt"><AttendanceManagement /></ProtectedRoute>} />
+            <Route path="/attendance-mgmt" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER', 'CLERK', 'GENERAL_AFFAIRS', 'TEAM_LEADER']} permission="attendance_mgmt"><AttendanceManagement /></ProtectedRoute>} />
             <Route path="/high-work-monitor" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER']} permission="high_work_monitor"><HighWorkMonitoring /></ProtectedRoute>} />
             <Route path="/ship-assembly" element={<ProtectedRoute><ShipAssembly /></ProtectedRoute>} />
             <Route path="/mypage/payslip" element={<ProtectedRoute><MyPayslip /></ProtectedRoute>} />
@@ -364,7 +382,9 @@ export default function App() {
     <ErrorBoundary>
       <AuthProvider>
         <SafetySensorProvider>
-          <AppContent />
+          <AutoAttendanceProvider>
+            <AppContent />
+          </AutoAttendanceProvider>
         </SafetySensorProvider>
       </AuthProvider>
     </ErrorBoundary>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthProvider';
 import { 
@@ -66,20 +66,38 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const { user, profile } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const mainRef = useRef<HTMLElement>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isSOSDialogOpen, setIsSOSDialogOpen] = useState(false);
   const [isSOSLoading, setIsSOSLoading] = useState(false);
 
+  // Automatically scroll container and window to top on route change
+  useEffect(() => {
+    if (mainRef.current) {
+      mainRef.current.scrollTop = 0;
+    }
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [location.pathname, location.search]);
+
   const lightTheme = profile?.lightTheme;
+  const highContrast = profile?.highContrast;
 
   useEffect(() => {
-    // Apply light-theme class to body to ensure backgrounds and scrollbars update
+    // Apply light-theme and high-contrast classes to body to ensure backgrounds and scrollbars update
     if (lightTheme) {
       document.body.classList.add('light-theme');
     } else {
       document.body.classList.remove('light-theme');
     }
-  }, [lightTheme]);
+
+    if (highContrast) {
+      document.body.classList.add('high-contrast');
+    } else {
+      document.body.classList.remove('high-contrast');
+    }
+  }, [lightTheme, highContrast]);
 
   useEffect(() => {
     if (!profile) return;
@@ -341,7 +359,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto bg-background relative overflow-x-hidden">
+      <main ref={mainRef} className="flex-1 overflow-y-auto bg-background relative overflow-x-hidden">
         {/* Dynamic background glass glowing nodes */}
         <div className="absolute top-8 left-8 w-64 h-64 rounded-full bg-primary/10 blur-[100px] pointer-events-none" />
         <div className="absolute top-[40%] -right-16 w-80 h-80 rounded-full bg-indigo-500/8 blur-[120px] pointer-events-none" />

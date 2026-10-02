@@ -2,17 +2,37 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/components/AuthProvider';
 import { db, handleFirestoreError, OperationType } from '@/firebase';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, increment, orderBy, limit } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, setDoc, increment, orderBy, limit } from 'firebase/firestore';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Coins, Trophy, RefreshCw, ChevronRight, Minus, Plus, Flag, Anchor, Waves } from 'lucide-react';
+import { Coins, Trophy, RefreshCw, ChevronRight, Minus, Plus, Flag, Anchor, Waves, Settings, Sliders } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
+
+const playChimeSound = () => {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.15);
+  } catch (e) {
+    // Audio Context not initialized or supported
+  }
+};
 
 interface RouletteSetting {
   id: string;
@@ -78,6 +98,36 @@ export const Entertainment: React.FC = () => {
   const [fightStartTime, setFightStartTime] = useState<number>(0);
   const [rouletteProbs, setRouletteProbs] = useState<number[]>([0.35, 0.3, 0.2, 0.1, 0.03, 0.02]);
 
+  // Ladder Game State
+  const [selectedLadderStart, setSelectedLadderStart] = useState<number>(0);
+  const [isLadderPlaying, setIsLadderPlaying] = useState<boolean>(false);
+  const [ladderProbs, setLadderProbs] = useState<number[]>([0.75, 0.25]);
+  const [ladderGrid, setLadderGrid] = useState<{
+    rungs: { level: number; col: number }[];
+    rewards: { id: string; label: string; multiplier: number; color: string; bg: string }[];
+  } | null>(null);
+  const [ladderPathCoords, setLadderPathCoords] = useState<{ x: number; y: number }[]>([]);
+  const [ladderPos, setLadderPos] = useState<{ x: number; y: number } | null>(null);
+  const [ladderTracedPath, setLadderTracedPath] = useState<{ x: number; y: number }[]>([]);
+  type LadderEventType = 'pinwheel' | 'bomb' | 'portal' | 'magnet' | 'ufo' | 'rocket' | 'banana';
+
+  const [ladderEvents, setLadderEvents] = useState<{ id: string; type: LadderEventType; x: number; y: number; icon: string; name: string; targetX?: number; hit?: boolean }[]>([]);
+  const [ladderFloatingEvent, setLadderFloatingEvent] = useState<{ text: string; icon: string; color: string } | null>(null);
+  const [ladderBombEffect, setLadderBombEffect] = useState<{ x: number; y: number } | null>(null);
+  const [ladderWindEffect, setLadderWindEffect] = useState<{ x: number; y: number } | null>(null);
+  const [ladderPortalEffect, setLadderPortalEffect] = useState<{ fromX: number; fromY: number; toX: number; toY: number } | null>(null);
+  const [ladderMagnetEffect, setLadderMagnetEffect] = useState<{ fromX: number; fromY: number; toX: number; toY: number } | null>(null);
+  const [ladderUfoEffect, setLadderUfoEffect] = useState<{ fromX: number; fromY: number; toX: number; toY: number } | null>(null);
+  const [ladderRocketEffect, setLadderRocketEffect] = useState<{ x: number; y: number } | null>(null);
+  const [ladderBananaEffect, setLadderBananaEffect] = useState<{ x: number; y: number } | null>(null);
+  const [brokenRungs, setBrokenRungs] = useState<{ x1: number; y1: number; x2: number; y2: number }[]>([]);
+  const [emergencyRungs, setEmergencyRungs] = useState<{ x1: number; y1: number; x2: number; y2: number }[]>([]);
+  const [ladderResultModal, setLadderResultModal] = useState<{
+    winPoints: number;
+    multiplier: number;
+    label: string;
+  } | null>(null);
+
   useEffect(() => {
     if (!profile) return;
     const qGame = query(collection(db, 'lottoHistory'), where('uid', '==', profile.uid), orderBy('createdAt', 'desc'), limit(5));
@@ -103,6 +153,7 @@ export const Entertainment: React.FC = () => {
           setFishingSettings(migrated);
         }
         setRouletteProbs(data.rouletteProbabilities || [0.35, 0.3, 0.2, 0.1, 0.03, 0.02]);
+        setLadderProbs(data.ladderProbabilities || [0.75, 0.25]);
       }
     });
 
@@ -667,6 +718,342 @@ export const Entertainment: React.FC = () => {
     });
   };
 
+  const startLadderGame = async () => {
+    const FIXED_BET = 0.2;
+    if (isLadderPlaying || !profile) return;
+    if (profile.points < FIXED_BET) {
+      toast.error('포인트가 부족합니다.');
+      return;
+    }
+
+    setIsLadderPlaying(true);
+    setLadderResultModal(null);
+    setLadderFloatingEvent(null);
+
+    // 1. Target win selection based on ladderProbs ([0]: 꽝, [1]: 4배 당첨)
+    const winProb = ladderProbs[1] !== undefined ? ladderProbs[1] : 0.25;
+    const isWin = Math.random() < winProb;
+
+    // 2. Generate random horizontal rungs across 8 levels
+    const numLevels = 8;
+    const rungs: { level: number; col: number }[] = [];
+
+    for (let level = 0; level < numLevels; level++) {
+      const possibleCols = [0, 1, 2];
+      const shuffled = [...possibleCols].sort(() => Math.random() - 0.5);
+      const chosenCol = shuffled[0];
+      rungs.push({ level, col: chosenCol });
+
+      if (Math.random() < 0.35) {
+        const secondCols = possibleCols.filter(c => Math.abs(c - chosenCol) > 1);
+        if (secondCols.length > 0) {
+          rungs.push({ level, col: secondCols[0] });
+        }
+      }
+    }
+
+    // 3. Assign event levels along the ladder trajectory
+    const colX = [40, 110, 180, 250];
+    const levelY = [55, 90, 125, 160, 195, 230, 265, 300];
+    const topY = 25;
+    const bottomY = 330;
+
+    // Pick 3 random event types from 7 choices
+    const availableTypes: LadderEventType[] = ['pinwheel', 'bomb', 'portal', 'magnet', 'ufo', 'rocket', 'banana'];
+    const shuffledTypes = [...availableTypes].sort(() => Math.random() - 0.5).slice(0, 3);
+    const chosenLevels = [1, 3, 5];
+
+    const eventLevels: { level: number; type: LadderEventType }[] = [
+      { level: chosenLevels[0], type: shuffledTypes[0] },
+      { level: chosenLevels[1], type: shuffledTypes[1] },
+      { level: chosenLevels[2], type: shuffledTypes[2] }
+    ];
+
+    const pathCoords: { x: number; y: number }[] = [];
+    const generatedEvents: { id: string; type: LadderEventType; x: number; y: number; icon: string; name: string; targetX?: number; hit?: boolean }[] = [];
+    const initialBrokenRungs: { x1: number; y1: number; x2: number; y2: number }[] = [];
+    const initialEmergencyRungs: { x1: number; y1: number; x2: number; y2: number }[] = [];
+
+    let tracerCol = selectedLadderStart;
+    pathCoords.push({ x: colX[tracerCol], y: topY });
+
+    for (let level = 0; level < numLevels; level++) {
+      const ly = levelY[level];
+      pathCoords.push({ x: colX[tracerCol], y: ly });
+
+      const evt = eventLevels.find(e => e.level === level);
+
+      if (evt) {
+        const evX = colX[tracerCol];
+        const evY = ly;
+
+        if (evt.type === 'pinwheel') {
+          // 🪅 Pinwheel: 바람개비 바람을 타고 다른 라인으로 회전 이동!
+          const targetCol = tracerCol === 0 ? 1 : tracerCol === 3 ? 2 : (Math.random() < 0.5 ? tracerCol - 1 : tracerCol + 1);
+          generatedEvents.push({ id: `ev-${level}-${Date.now()}`, type: 'pinwheel', x: evX, y: evY, icon: '🪅', name: '바람개비 라인 회전', targetX: colX[targetCol] });
+
+          tracerCol = targetCol;
+          pathCoords.push({ x: colX[tracerCol], y: ly });
+        } else if (evt.type === 'bomb') {
+          // 💣 Bomb: 폭탄 폭발로 기존 라인 부서짐 & 긴급 우회 다리로 타 라인 이동!
+          const targetCol = tracerCol < 2 ? tracerCol + 1 : tracerCol - 1;
+          generatedEvents.push({ id: `ev-${level}-${Date.now()}`, type: 'bomb', x: evX, y: evY, icon: '💣', name: '폭탄 폭발 긴급 우회', targetX: colX[targetCol] });
+
+          initialBrokenRungs.push({ x1: evX - 18, y1: evY, x2: evX + 18, y2: evY });
+          initialEmergencyRungs.push({ x1: evX, y1: evY, x2: colX[targetCol], y2: ly + 15 });
+
+          tracerCol = targetCol;
+          pathCoords.push({ x: colX[tracerCol], y: ly + 15 });
+        } else if (evt.type === 'portal') {
+          // 🌀 Portal: 시공간 워프 순간이동!
+          const targetCol = 3 - tracerCol;
+          generatedEvents.push({ id: `ev-${level}-${Date.now()}`, type: 'portal', x: evX, y: evY, icon: '🌀', name: '시공간 워프 포탈', targetX: colX[targetCol] });
+
+          tracerCol = targetCol;
+          pathCoords.push({ x: colX[tracerCol], y: ly });
+        } else if (evt.type === 'magnet') {
+          // 🧲 Magnet: 자력파에 끌려 인접 라인으로 수평 이동!
+          const targetCol = tracerCol < 2 ? tracerCol + 1 : tracerCol - 1;
+          generatedEvents.push({ id: `ev-${level}-${Date.now()}`, type: 'magnet', x: evX, y: evY, icon: '🧲', name: '자석 끌림 파동', targetX: colX[targetCol] });
+
+          tracerCol = targetCol;
+          pathCoords.push({ x: colX[tracerCol], y: ly });
+        } else if (evt.type === 'ufo') {
+          // 🛸 UFO: UFO 트랙터 빔 픽업 순간이동!
+          const otherCols = [0, 1, 2, 3].filter(c => c !== tracerCol);
+          const targetCol = otherCols[Math.floor(Math.random() * otherCols.length)];
+          generatedEvents.push({ id: `ev-${level}-${Date.now()}`, type: 'ufo', x: evX, y: evY, icon: '🛸', name: 'UFO 납치 픽업', targetX: colX[targetCol] });
+
+          tracerCol = targetCol;
+          pathCoords.push({ x: colX[tracerCol], y: ly });
+        } else if (evt.type === 'rocket') {
+          // 🚀 Rocket: 2단계 수직 급강하 로켓 점프!
+          generatedEvents.push({ id: `ev-${level}-${Date.now()}`, type: 'rocket', x: evX, y: evY, icon: '🚀', name: '로켓 수직 점프' });
+
+          const nextLevelY = levelY[Math.min(level + 1, numLevels - 1)];
+          pathCoords.push({ x: colX[tracerCol], y: nextLevelY });
+        } else if (evt.type === 'banana') {
+          // 🍌 Banana: 바나나 껍질 미끄러짐!
+          const targetCol = tracerCol === 0 ? 1 : tracerCol === 3 ? 2 : (Math.random() < 0.5 ? tracerCol - 1 : tracerCol + 1);
+          generatedEvents.push({ id: `ev-${level}-${Date.now()}`, type: 'banana', x: evX, y: evY, icon: '🍌', name: '바나나 슬라이딩', targetX: colX[targetCol] });
+
+          tracerCol = targetCol;
+          pathCoords.push({ x: colX[tracerCol], y: ly + 12 });
+        }
+      } else {
+        // Standard ladder rung
+        const rightRung = rungs.find(r => r.level === level && r.col === tracerCol);
+        const leftRung = rungs.find(r => r.level === level && r.col === tracerCol - 1);
+
+        if (rightRung) {
+          tracerCol += 1;
+          pathCoords.push({ x: colX[tracerCol], y: ly });
+        } else if (leftRung) {
+          tracerCol -= 1;
+          pathCoords.push({ x: colX[tracerCol], y: ly });
+        }
+      }
+    }
+
+    pathCoords.push({ x: colX[tracerCol], y: bottomY });
+    const endCol = tracerCol;
+
+    // 4. Assign bottom rewards: 3x 꽝 (0배) & 1x 4배 당첨!
+    const WIN_REWARD = { id: 'win', label: '4배 당첨!', multiplier: 4, color: 'text-amber-400', bg: 'bg-amber-950/90 border-amber-500' };
+    const LOSE_REWARD = { id: 'lose', label: '꽝 (0배)', multiplier: 0, color: 'text-slate-400', bg: 'bg-slate-800/90 border-slate-700' };
+
+    const bottomRewards = Array(4).fill(null);
+
+    if (isWin) {
+      bottomRewards[endCol] = WIN_REWARD;
+      for (let col = 0; col < 4; col++) {
+        if (col !== endCol) {
+          bottomRewards[col] = LOSE_REWARD;
+        }
+      }
+    } else {
+      bottomRewards[endCol] = LOSE_REWARD;
+      const otherCols = [0, 1, 2, 3].filter(c => c !== endCol).sort(() => Math.random() - 0.5);
+      const winCol = otherCols[0];
+      bottomRewards[winCol] = WIN_REWARD;
+      bottomRewards[otherCols[1]] = LOSE_REWARD;
+      bottomRewards[otherCols[2]] = LOSE_REWARD;
+    }
+
+    const targetReward = bottomRewards[endCol];
+
+    setLadderGrid({
+      rungs,
+      rewards: bottomRewards
+    });
+
+    setLadderPathCoords(pathCoords);
+    setLadderPos(pathCoords[0]);
+    setLadderTracedPath([pathCoords[0]]);
+
+    // Reset special visual effects and set initial broken/emergency rungs
+    setLadderBombEffect(null);
+    setLadderWindEffect(null);
+    setLadderPortalEffect(null);
+    setLadderMagnetEffect(null);
+    setLadderUfoEffect(null);
+    setLadderRocketEffect(null);
+    setLadderBananaEffect(null);
+    setBrokenRungs(initialBrokenRungs);
+    setEmergencyRungs(initialEmergencyRungs);
+
+    setLadderEvents(generatedEvents);
+
+    // Deduct initial bet points
+    try {
+      await updateDoc(doc(db, 'users', profile.uid), {
+        points: increment(-FIXED_BET)
+      });
+    } catch (e) {
+      console.warn("Failed deducting points", e);
+    }
+
+    // 7. Smooth continuous Animation via rAF
+    const segments: { p1: { x: number; y: number }; p2: { x: number; y: number }; len: number }[] = [];
+    let totalLen = 0;
+    for (let i = 0; i < pathCoords.length - 1; i++) {
+      const dx = pathCoords[i+1].x - pathCoords[i].x;
+      const dy = pathCoords[i+1].y - pathCoords[i].y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      segments.push({ p1: pathCoords[i], p2: pathCoords[i+1], len });
+      totalLen += len;
+    }
+
+    let startTime: number | null = null;
+    let speedMult = 1.0;
+    const hitIds = new Set<string>();
+
+    const animateStep = (timestamp: number) => {
+      if (!startTime) startTime = timestamp;
+      const elapsed = (timestamp - startTime) * speedMult;
+      const duration = 6500; // Slower & smooth descent (6.5s)
+      const progress = Math.min(elapsed / duration, 1);
+
+      const distCovered = progress * totalLen;
+      let accumulated = 0;
+      let currX = pathCoords[0].x;
+      let currY = pathCoords[0].y;
+      const currentTracedPath: { x: number; y: number }[] = [pathCoords[0]];
+
+      for (const seg of segments) {
+        if (accumulated + seg.len >= distCovered) {
+          const segProgress = (distCovered - accumulated) / seg.len;
+          currX = seg.p1.x + (seg.p2.x - seg.p1.x) * segProgress;
+          currY = seg.p1.y + (seg.p2.y - seg.p1.y) * segProgress;
+          currentTracedPath.push({ x: currX, y: currY });
+          break;
+        } else {
+          accumulated += seg.len;
+          currentTracedPath.push(seg.p2);
+        }
+      }
+
+      setLadderPos({ x: currX, y: currY });
+      setLadderTracedPath(currentTracedPath);
+
+      // Detect Event collision and trigger dynamic visual visual actions!
+      generatedEvents.forEach(ev => {
+        if (!hitIds.has(ev.id)) {
+          const dist = Math.hypot(currX - ev.x, currY - ev.y);
+          if (dist < 20) {
+            hitIds.add(ev.id);
+            ev.hit = true;
+            playChimeSound();
+
+            if (ev.type === 'pinwheel') {
+              setLadderWindEffect({ x: ev.x, y: ev.y });
+              setLadderFloatingEvent({ text: '🪅 바람개비 바람을 타고 새로운 라인으로 회전!', icon: '🪅', color: 'text-emerald-400' });
+              setTimeout(() => setLadderWindEffect(null), 1800);
+            } else if (ev.type === 'bomb') {
+              setLadderBombEffect({ x: ev.x, y: ev.y });
+              setLadderFloatingEvent({ text: '💣 폭탄 폭발! 라인이 파괴되어 긴급 우회!', icon: '💥', color: 'text-red-400' });
+              setTimeout(() => setLadderBombEffect(null), 1500);
+            } else if (ev.type === 'portal') {
+              const toX = ev.targetX || (ev.x < 150 ? ev.x + 140 : ev.x - 140);
+              setLadderPortalEffect({ fromX: ev.x, fromY: ev.y, toX, toY: ev.y });
+              setLadderFloatingEvent({ text: '🌀 시공간 포탈 워프! 순간이동 점프!', icon: '🌀', color: 'text-cyan-400' });
+              setTimeout(() => setLadderPortalEffect(null), 1800);
+            } else if (ev.type === 'magnet') {
+              const toX = ev.targetX || (ev.x < 150 ? ev.x + 70 : ev.x - 70);
+              setLadderMagnetEffect({ fromX: ev.x, fromY: ev.y, toX, toY: ev.y });
+              setLadderFloatingEvent({ text: '🧲 자력 끌림! 자기력 파동으로 옆 라인 당겨짐!', icon: '🧲', color: 'text-blue-400' });
+              setTimeout(() => setLadderMagnetEffect(null), 1800);
+            } else if (ev.type === 'ufo') {
+              const toX = ev.targetX || (ev.x < 150 ? ev.x + 70 : ev.x - 70);
+              setLadderUfoEffect({ fromX: ev.x, fromY: ev.y, toX, toY: ev.y });
+              setLadderFloatingEvent({ text: '🛸 UFO 트랙터 빔! 순간 납치되어 다른 라인 착륙!', icon: '🛸', color: 'text-lime-400' });
+              setTimeout(() => setLadderUfoEffect(null), 1800);
+            } else if (ev.type === 'rocket') {
+              setLadderRocketEffect({ x: ev.x, y: ev.y });
+              setLadderFloatingEvent({ text: '🚀 로켓 점프! 2단계 수직 급강하 점프!', icon: '🚀', color: 'text-orange-400' });
+              setTimeout(() => setLadderRocketEffect(null), 1500);
+            } else if (ev.type === 'banana') {
+              setLadderBananaEffect({ x: ev.x, y: ev.y });
+              setLadderFloatingEvent({ text: '🍌 바나나 껍질! 미끄러져서 옆 라인으로 슉!', icon: '🍌', color: 'text-yellow-400' });
+              setTimeout(() => setLadderBananaEffect(null), 1500);
+            }
+
+            setTimeout(() => setLadderFloatingEvent(null), 1500);
+          }
+        }
+      });
+
+      if (progress < 1) {
+        requestAnimationFrame(animateStep);
+      } else {
+        // Complete game
+        setLadderPos(pathCoords[pathCoords.length - 1]);
+        setLadderTracedPath(pathCoords);
+
+        const finalMultiplier = targetReward.multiplier;
+        const finalLabel = targetReward.label;
+        const totalWin = parseFloat((FIXED_BET * finalMultiplier).toFixed(2));
+
+        (async () => {
+          try {
+            if (totalWin > 0) {
+              await updateDoc(doc(db, 'users', profile.uid), {
+                points: increment(totalWin)
+              });
+            }
+
+            await addDoc(collection(db, 'lottoHistory'), {
+              uid: profile.uid,
+              type: 'LADDER',
+              label: `사다리: ${finalLabel}`,
+              betPoints: FIXED_BET,
+              winPoints: totalWin,
+              createdAt: new Date().toISOString()
+            });
+
+            if (totalWin > 0) {
+              confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+              toast.success(`축하합니다! ${finalLabel}으로 ${totalWin}P 획득!`);
+            } else {
+              toast.error('아쉽습니다! 꽝이 나왔습니다.');
+            }
+          } catch (err) {
+            toast.error('결과 처리 중 오류가 발생했습니다.');
+          }
+
+          setIsLadderPlaying(false);
+          setLadderResultModal({
+            winPoints: totalWin,
+            multiplier: finalMultiplier,
+            label: finalLabel
+          });
+        })();
+      }
+    };
+
+    requestAnimationFrame(animateStep);
+  };
+
 
   return (
     <div className="space-y-6 pb-24 px-1 text-foreground">
@@ -704,13 +1091,14 @@ export const Entertainment: React.FC = () => {
          </div>
       </div>
 
-      <div className="bg-muted p-2 rounded-3xl grid grid-cols-4 gap-1.5 border border-border shadow-2xl relative overflow-hidden">
+      <div className="bg-muted p-2 rounded-3xl grid grid-cols-5 gap-1 border border-border shadow-2xl relative overflow-hidden">
          <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-primary/5 pointer-events-none" />
          {[
            {id:'roulette', label:'룰렛'},
            {id:'ship', label:'진수식'},
            {id:'snail', label:'달팽이'},
-           {id:'fishing', label:'낚시'}
+           {id:'fishing', label:'낚시'},
+           {id:'ladder', label:'사다리'}
          ].map(tab => (
             <button 
               key={tab.id} 
@@ -1514,6 +1902,356 @@ export const Entertainment: React.FC = () => {
                     </p>
                   </div>
                </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'ladder' && (
+            <motion.div key="ladder" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.05 }} className="space-y-6 pt-2">
+              <div className="relative bg-slate-900 border-4 border-amber-500/30 rounded-[3rem] p-6 shadow-2xl overflow-hidden flex flex-col items-center">
+                <div className="absolute inset-0 bg-gradient-to-b from-amber-500/5 via-transparent to-blue-500/5 pointer-events-none" />
+
+                {/* Header */}
+                <div className="text-center mb-4 space-y-1 relative w-full">
+                  <span className="text-[10px] font-black text-amber-400 uppercase tracking-[0.3em]">건명 익스트림 스피드 사다리</span>
+                  <h3 className="text-2xl font-black text-white italic drop-shadow-md">출발할 라인을 선택하세요</h3>
+                </div>
+
+                {/* Top Selection Characters */}
+                <div className="grid grid-cols-4 gap-2 w-full max-w-xs mb-2 z-10">
+                  {[
+                    { id: 0, label: '건', icon: '👷‍♂️', color: 'border-yellow-500 bg-yellow-500/20 text-yellow-300' },
+                    { id: 1, label: '명', icon: '🏗️', color: 'border-cyan-500 bg-cyan-500/20 text-cyan-300' },
+                    { id: 2, label: '안', icon: '⚓', color: 'border-emerald-500 bg-emerald-500/20 text-emerald-300' },
+                    { id: 3, label: '전', icon: '🚢', color: 'border-purple-500 bg-purple-500/20 text-purple-300' }
+                  ].map((item) => (
+                    <button
+                      key={item.id}
+                      disabled={isLadderPlaying}
+                      onClick={() => setSelectedLadderStart(item.id)}
+                      className={cn(
+                        "p-2.5 rounded-2xl border-2 flex flex-col items-center justify-center transition-all duration-200 active:scale-95 shadow-md",
+                        selectedLadderStart === item.id
+                          ? cn(item.color, "ring-4 ring-amber-400/50 scale-105 shadow-xl font-black")
+                          : "border-slate-800 bg-slate-800/40 text-slate-400 hover:border-slate-700"
+                      )}
+                    >
+                      <span className="text-2xl mb-1 animate-pulse">{item.icon}</span>
+                      <span className="text-xs font-black italic">{item.label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Floating Event Toast Overlay */}
+                <AnimatePresence>
+                  {ladderFloatingEvent && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -20, scale: 0.8 }}
+                      animate={{ opacity: 1, y: 0, scale: 1.1 }}
+                      exit={{ opacity: 0, y: -20, scale: 0.8 }}
+                      className="absolute top-24 z-30 bg-slate-900/90 border-2 border-amber-400 p-2.5 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-2"
+                    >
+                      <span className="text-2xl animate-spin">{ladderFloatingEvent.icon}</span>
+                      <span className={cn("text-xs font-black italic", ladderFloatingEvent.color)}>
+                        {ladderFloatingEvent.text}
+                      </span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* SVG Ladder Board Area */}
+                <div className="relative w-full max-w-[320px] h-[360px] bg-slate-950/80 rounded-3xl border border-white/10 p-2 my-2 shadow-inner flex items-center justify-center overflow-hidden">
+                  <svg className="w-full h-full" viewBox="0 0 300 360">
+                    {/* Vertical Lines (Col X: 40, 110, 180, 250) */}
+                    {[40, 110, 180, 250].map((x, idx) => (
+                      <line
+                        key={idx}
+                        x1={x}
+                        y1={30}
+                        x2={x}
+                        y2={330}
+                        stroke={selectedLadderStart === idx ? "#f59e0b" : "#334155"}
+                        strokeWidth={selectedLadderStart === idx ? "5" : "3"}
+                        strokeDasharray={selectedLadderStart === idx ? undefined : "4 4"}
+                      />
+                    ))}
+
+                    {/* Horizontal Rungs (8 Levels) */}
+                    {ladderGrid?.rungs?.map((rung, i) => {
+                      const colX = [40, 110, 180, 250];
+                      const levelY = [55, 90, 125, 160, 195, 230, 265, 300];
+                      const x1 = colX[rung.col];
+                      const x2 = colX[rung.col + 1];
+                      const y = levelY[rung.level];
+                      return (
+                        <line
+                          key={i}
+                          x1={x1}
+                          y1={y}
+                          x2={x2}
+                          y2={y}
+                          stroke="#64748b"
+                          strokeWidth="4"
+                          strokeLinecap="round"
+                        />
+                      );
+                    })}
+
+                    {/* Dynamic Event / Obstacle Items on Grid */}
+                    {ladderEvents.map((ev) => (
+                      <g key={ev.id} transform={`translate(${ev.x}, ${ev.y})`} className="transition-all">
+                        <circle
+                          r="12"
+                          fill={ev.hit ? "#22c55e" : "#1e293b"}
+                          stroke={ev.hit ? "#4ade80" : "#f59e0b"}
+                          strokeWidth="2"
+                          className={ev.hit ? "opacity-30" : "animate-pulse"}
+                        />
+                        <text y="4" textAnchor="middle" fontSize="11" fontWeight="bold">
+                          {ev.icon}
+                        </text>
+                      </g>
+                    ))}
+
+                    {/* Broken Rungs from Bomb Explosions */}
+                    {brokenRungs.map((br, idx) => (
+                      <g key={`br-${idx}`}>
+                        <line
+                          x1={br.x1}
+                          y1={br.y1}
+                          x2={br.x2}
+                          y2={br.y2}
+                          stroke="#ef4444"
+                          strokeWidth="4"
+                          strokeDasharray="4 3"
+                        />
+                        <text x={(br.x1 + br.x2)/2} y={br.y1 + 4} textAnchor="middle" fontSize="12">
+                          💥
+                        </text>
+                      </g>
+                    ))}
+
+                    {/* Emergency Bridges Created by Rerouting */}
+                    {emergencyRungs.map((er, idx) => (
+                      <line
+                        key={`er-${idx}`}
+                        x1={er.x1}
+                        y1={er.y1}
+                        x2={er.x2}
+                        y2={er.y2}
+                        stroke="#f97316"
+                        strokeWidth="5"
+                        strokeDasharray="3 3"
+                        className="animate-pulse"
+                      />
+                    ))}
+
+                    {/* Portal Beam Warp Effect */}
+                    {ladderPortalEffect && (
+                      <g>
+                        <line
+                          x1={ladderPortalEffect.fromX}
+                          y1={ladderPortalEffect.fromY}
+                          x2={ladderPortalEffect.toX}
+                          y2={ladderPortalEffect.toY}
+                          stroke="#22d3ee"
+                          strokeWidth="5"
+                          strokeDasharray="5 3"
+                          className="animate-pulse"
+                        />
+                        <circle cx={ladderPortalEffect.fromX} cy={ladderPortalEffect.fromY} r="14" fill="none" stroke="#22d3ee" strokeWidth="3" className="animate-ping" />
+                        <circle cx={ladderPortalEffect.toX} cy={ladderPortalEffect.toY} r="14" fill="none" stroke="#22d3ee" strokeWidth="3" className="animate-ping" />
+                      </g>
+                    )}
+
+                    {/* Wind Gust Particle Effect */}
+                    {ladderWindEffect && (
+                      <g transform={`translate(${ladderWindEffect.x}, ${ladderWindEffect.y})`} className="animate-spin">
+                        <text x="-12" y="-12" fontSize="12">🌸</text>
+                        <text x="12" y="12" fontSize="12">🍃</text>
+                        <text x="12" y="-12" fontSize="12">✨</text>
+                        <text x="-12" y="12" fontSize="12">🌀</text>
+                      </g>
+                    )}
+
+                    {/* Magnet Attraction Waves Effect */}
+                    {ladderMagnetEffect && (
+                      <g>
+                        <line
+                          x1={ladderMagnetEffect.fromX}
+                          y1={ladderMagnetEffect.fromY}
+                          x2={ladderMagnetEffect.toX}
+                          y2={ladderMagnetEffect.toY}
+                          stroke="#3b82f6"
+                          strokeWidth="6"
+                          strokeDasharray="4 2"
+                          className="animate-pulse"
+                        />
+                        <text x={(ladderMagnetEffect.fromX + ladderMagnetEffect.toX)/2} y={ladderMagnetEffect.fromY - 6} textAnchor="middle" fontSize="13">
+                          🧲⚡
+                        </text>
+                      </g>
+                    )}
+
+                    {/* UFO Tractor Beam Effect */}
+                    {ladderUfoEffect && (
+                      <g>
+                        <polygon
+                          points={`${ladderUfoEffect.fromX - 10},${ladderUfoEffect.fromY - 15} ${ladderUfoEffect.fromX + 10},${ladderUfoEffect.fromY - 15} ${ladderUfoEffect.toX + 20},${ladderUfoEffect.toY + 10} ${ladderUfoEffect.toX - 20},${ladderUfoEffect.toY + 10}`}
+                          fill="#a3e635"
+                          opacity="0.4"
+                          className="animate-pulse"
+                        />
+                        <text x={ladderUfoEffect.fromX} y={ladderUfoEffect.fromY - 18} textAnchor="middle" fontSize="18" className="animate-bounce">
+                          🛸
+                        </text>
+                      </g>
+                    )}
+
+                    {/* Rocket Fire Trail Effect */}
+                    {ladderRocketEffect && (
+                      <g transform={`translate(${ladderRocketEffect.x}, ${ladderRocketEffect.y})`}>
+                        <text x="0" y="20" textAnchor="middle" fontSize="18" className="animate-bounce">
+                          🔥🚀
+                        </text>
+                      </g>
+                    )}
+
+                    {/* Banana Slide Effect */}
+                    {ladderBananaEffect && (
+                      <g transform={`translate(${ladderBananaEffect.x}, ${ladderBananaEffect.y})`}>
+                        <circle r="18" fill="#facc15" className="animate-ping opacity-50" />
+                        <text x="0" y="5" textAnchor="middle" fontSize="16">
+                          🍌✨
+                        </text>
+                      </g>
+                    )}
+
+                    {/* Bomb Explosion Flash */}
+                    {ladderBombEffect && (
+                      <g transform={`translate(${ladderBombEffect.x}, ${ladderBombEffect.y})`}>
+                        <circle r="22" fill="#ef4444" className="animate-ping opacity-75" />
+                        <text y="5" textAnchor="middle" fontSize="20">💥</text>
+                      </g>
+                    )}
+
+                    {/* Smooth Traced Continuous Polyline */}
+                    {ladderTracedPath.length > 1 && (
+                      <polyline
+                        points={ladderTracedPath.map(p => `${p.x},${p.y}`).join(' ')}
+                        stroke="#fbbf24"
+                        strokeWidth="7"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        fill="none"
+                        className="filter drop-shadow-[0_0_14px_rgba(251,191,36,0.9)]"
+                      />
+                    )}
+
+                    {/* Smooth Animated Player Position Marker */}
+                    {ladderPos && (
+                      <g transform={`translate(${ladderPos.x}, ${ladderPos.y})`}>
+                        <circle r="16" fill="#fbbf24" className="animate-ping opacity-75" />
+                        <circle r="13" fill="#f59e0b" stroke="#ffffff" strokeWidth="3" />
+                        <text y="5" textAnchor="middle" fontSize="13">
+                          🏃‍♂️
+                        </text>
+                      </g>
+                    )}
+                  </svg>
+                </div>
+
+                {/* Bottom Rewards Bar */}
+                <div className="grid grid-cols-4 gap-2 w-full max-w-xs mt-2 z-10">
+                  {[0, 1, 2, 3].map((colIdx) => {
+                    const reward = ladderGrid?.rewards?.[colIdx];
+                    return (
+                      <div
+                        key={colIdx}
+                        className={cn(
+                          "p-2.5 rounded-2xl border text-center transition-all flex flex-col items-center justify-center min-h-[58px]",
+                          reward ? reward.bg : "border-slate-800 bg-slate-900/60 text-slate-500"
+                        )}
+                      >
+                        <span className={cn("text-xs font-black italic", reward ? reward.color : "text-slate-500")}>
+                          {reward ? reward.label : '❓'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Betting & Play Button */}
+              <div className="space-y-4">
+                <div className="bg-slate-900/80 border border-white/10 p-5 rounded-[2.5rem] flex items-center justify-between shadow-2xl backdrop-blur-xl">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-amber-500/10 rounded-2xl flex items-center justify-center border border-amber-500/20 shadow-inner">
+                      <Coins className="w-6 h-6 text-amber-400" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">배팅 금액</p>
+                      <p className="text-2xl font-black text-white italic leading-none">0.2 <span className="text-sm font-bold text-amber-400 not-italic">P</span></p>
+                    </div>
+                  </div>
+
+                  <Button
+                    onClick={startLadderGame}
+                    disabled={isLadderPlaying}
+                    className={cn(
+                      "h-16 px-8 rounded-[2rem] font-black text-xl shadow-2xl transition-all active:scale-95 uppercase italic",
+                      isLadderPlaying ? "bg-white/5 text-white/20 cursor-not-allowed" : "bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 hover:from-amber-400 hover:to-yellow-300 shadow-amber-500/20"
+                    )}
+                  >
+                    {isLadderPlaying ? '사다리 이동 중...' : '사다리 출발!'}
+                  </Button>
+                </div>
+
+                <p className="text-[11px] text-center font-black text-white/40 uppercase tracking-[0.2em] italic">
+                  ※ 장애물, 워프 포탈, 터보 스피드, 방어막 등 스릴 넘치는 액션 요소가 적용되었습니다!
+                </p>
+              </div>
+
+              {/* Ladder Result Modal */}
+              <AnimatePresence>
+                {ladderResultModal && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+                  >
+                    <div className="bg-slate-900 border-4 border-amber-500/50 p-8 rounded-[3rem] text-center max-w-sm w-full space-y-6 shadow-2xl relative overflow-hidden">
+                      <div className="w-20 h-20 bg-amber-500/20 border-2 border-amber-400 rounded-full flex items-center justify-center mx-auto text-4xl shadow-xl animate-bounce">
+                        {ladderResultModal.multiplier > 0 ? '🏆' : '💣'}
+                      </div>
+
+                      <div className="space-y-2">
+                        <h4 className="text-3xl font-black text-white italic drop-shadow-md">
+                          {ladderResultModal.multiplier > 0 ? '당첨 축하합니다!' : '아쉽습니다!'}
+                        </h4>
+                        <p className="text-xl font-bold text-amber-400">
+                          {ladderResultModal.label}
+                        </p>
+                        {ladderResultModal.winPoints > 0 ? (
+                          <p className="text-4xl font-black text-emerald-400 italic font-mono pt-2">
+                            +{ladderResultModal.winPoints} <span className="text-sm text-yellow-400 not-italic">P</span>
+                          </p>
+                        ) : (
+                          <p className="text-sm font-bold text-slate-400 pt-2">다음 기회에 도전해보세요!</p>
+                        )}
+                      </div>
+
+                      <Button
+                        onClick={() => setLadderResultModal(null)}
+                        className="w-full h-14 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-lg rounded-2xl shadow-xl"
+                      >
+                        확인
+                      </Button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
             </motion.div>
           )}
          </AnimatePresence>

@@ -654,6 +654,27 @@
         "ceoDate": { "type": "string" },
         "ceoUid": { "type": "string" }
       }
+    },
+    "WorkRequest": {
+      "title": "Work / Safety Request",
+      "description": "Work and safety action requests submitted between personnel",
+      "type": "object",
+      "properties": {
+        "senderUid": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderPosition": { "type": "string" },
+        "receiverUid": { "type": "string" },
+        "receiverName": { "type": "string" },
+        "receiverNameAndPosition": { "type": "string" },
+        "content": { "type": "string" },
+        "isUrgent": { "type": "boolean" },
+        "category": { "type": "string", "enum": ["SAFETY", "WORK"] },
+        "status": { "type": "string", "enum": ["PENDING", "RESOLVED", "REJECTED"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "resolvedAt": { "type": "string", "format": "date-time" },
+        "remarks": { "type": "string" }
+      },
+      "required": ["senderUid", "receiverUid", "content", "category", "status", "createdAt"]
     }
   },
   "firestore": {
@@ -796,6 +817,10 @@
     "/perceivedTempSignatures/{sigId}": {
       "schema": "PerceivedTempSignature",
       "description": "Monthly signatures for perceived temperature safety records"
+    },
+    "/workRequests/{requestId}": {
+      "schema": "WorkRequest",
+      "description": "Work and safety action requests submitted between personnel"
     }
   }
 }

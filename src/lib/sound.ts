@@ -14,7 +14,9 @@ export class AlertSoundPlayer {
         this.audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
       if (this.audioCtx.state === 'suspended') {
-        this.audioCtx.resume();
+        this.audioCtx.resume().catch((err) => {
+          console.warn("AudioContext resume failed or blocked by gesture:", err);
+        });
       }
     } catch (e) {
       console.warn("AudioContext initialization failed:", e);
@@ -121,7 +123,10 @@ export class AlertSoundPlayer {
 
       // 2. Play using Capacitor Native TTS on Android/iOS devices (100% reliable)
       if (Capacitor.isNativePlatform()) {
-        this.speakNativeDevice(cleanText);
+        this.speakNativeDevice(cleanText).catch(err => {
+          console.warn("speakNativeDevice promise rejected:", err);
+          this.speakNative(cleanText);
+        });
         return;
       }
 
@@ -170,7 +175,7 @@ export class AlertSoundPlayer {
     
     if (Capacitor.isNativePlatform()) {
       try {
-        TextToSpeech.stop();
+        TextToSpeech.stop().catch(err => console.warn("Failed to stop native TTS:", err));
       } catch (err) {
         console.warn("Failed to stop native TTS:", err);
       }

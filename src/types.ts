@@ -40,12 +40,45 @@ export interface UserProfile {
   basePressure?: number;
   ghostGuardEnabled?: boolean;
   lightTheme?: boolean;
+  highContrast?: boolean;
+  fontSizeScale?: 'normal' | 'large' | 'xlarge';
+  pinnedShortcuts?: string[];
   lastMovementAt?: string;
   isImmobile?: boolean;
   isFalling?: boolean;
   fallDetectedAt?: string;
   hasImpacted?: boolean;
   impactDetectedAt?: string;
+  workScheduleSettings?: EmployeeWorkScheduleSettings;
+}
+
+export type SchedulePresetType = 'REGULAR' | 'EARLY' | 'OFFICE' | 'NIGHT' | 'CUSTOM';
+
+export interface DaySpecificSchedule {
+  enabled: boolean;
+  workStartTime: string; // "HH:mm"
+  workEndTime: string;   // "HH:mm"
+  lunchStartTime?: string;
+  lunchEndTime?: string;
+}
+
+export interface EmployeeWorkScheduleSettings {
+  scheduleType: SchedulePresetType;
+  workStartTime: string; // "HH:mm", default: "08:00"
+  workEndTime: string;   // "HH:mm", default: "17:00"
+  workDays: number[];    // [0, 1, 2, 3, 4, 5, 6] (0 = Sun, 1 = Mon, ... 6 = Sat), default: [1, 2, 3, 4, 5]
+  autoCheckInEnabled: boolean; // default: true
+  autoCheckOutEnabled: boolean; // default: true
+  preShiftArrivalWindowMinutes: number; // in minutes, e.g. 60 (arrival 60m before workStartTime triggers check-in)
+  autoTriggerAnytimeOnWorkDays: boolean; // default: false (if true, triggers whenever arriving inside geofence on work day)
+  lunchStartTime: string; // default: "12:00"
+  lunchEndTime: string;   // default: "13:00"
+  preShiftReminderEnabled: boolean; // default: true
+  preShiftReminderMinutes: number; // default: 15 (minutes before workStartTime)
+  postShiftReminderEnabled: boolean; // default: true
+  overtimeBaselineMode?: 'STANDARD_HOURS' | 'EXACT_CLOCKOUT';
+  daySpecificSchedules?: Record<number, DaySpecificSchedule>;
+  updatedAt?: string;
 }
 
 export interface SafetyScoreLog {
@@ -153,6 +186,27 @@ export interface StatutoryCompletion {
   status: 'COMPLETED';
 }
 
+export interface AttendanceLocationSettings {
+  centerLat: number;
+  centerLng: number;
+  locationName?: string;
+  checkInRadius: number; // in meters (default 1000m = 1km)
+  checkOutRadius: number; // in meters (default 2000m = 2km)
+  geofenceBufferMeters?: number; // in meters (default 500m geofencing buffer / tolerance)
+  locationRetentionMinutes?: number; // in minutes (default 15 minutes minimum validity retention)
+  pendingExitTimeoutMinutes: number; // in minutes (default 120min = 2 hours)
+  autoClockInEnabled?: boolean; // default true
+  autoClockOutEnabled?: boolean; // default true
+  coreStartHour: number; // default 8
+  coreStartMin: number; // default 0
+  coreEndHour: number; // default 17
+  coreEndMin: number; // default 0
+  lunchStartHour: number; // default 12
+  lunchEndHour: number; // default 13
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
 export interface AttendanceLog {
   id: string;
   uid: string;
@@ -177,6 +231,15 @@ export interface Attendance {
   overtimeHours?: number; // Overtime hours
   memo?: string;
   leaveType?: 'ANNUAL' | 'AM_HALF' | 'PM_HALF';
+  autoClockIn?: boolean;
+  autoClockOut?: boolean;
+  autoClockOutReason?: string;
+  clockInLat?: number;
+  clockInLng?: number;
+  clockOutLat?: number;
+  clockOutLng?: number;
+  pendingExitSince?: string | null;
+  lastVerifiedInsideAt?: string | null;
 }
 
 export interface AccidentCase {

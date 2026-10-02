@@ -136,8 +136,8 @@ export const RequestCenter: React.FC = () => {
       setRequests(filtered);
       setLoading(false);
     }, (error) => {
-      console.error("Error fetching requests:", error);
       setLoading(false);
+      handleFirestoreError(error, OperationType.GET, 'workRequests');
     });
 
     return () => unsubscribe();
@@ -207,8 +207,8 @@ export const RequestCenter: React.FC = () => {
       // Play sound
       AlertSoundPlayer.playChime();
     } catch (error) {
-      console.error("Error creating request:", error);
       toast.error('요청 사항을 등록하는 도중 오류가 발생했습니다.');
+      handleFirestoreError(error, OperationType.CREATE, 'workRequests');
     } finally {
       setIsSubmitting(false);
     }
@@ -240,8 +240,8 @@ export const RequestCenter: React.FC = () => {
       toast.success('요청을 해결 완료 처리하였습니다.');
       AlertSoundPlayer.playChime();
     } catch (error) {
-      console.error("Error resolving request:", error);
       toast.error('상태를 업데이트하는 도중 오류가 발생했습니다.');
+      handleFirestoreError(error, OperationType.UPDATE, `workRequests/${request.id}`);
     }
   };
 
@@ -280,8 +280,8 @@ export const RequestCenter: React.FC = () => {
       setSelectedRequestToReject(null);
       setRejectReason('');
     } catch (error) {
-      console.error("Error rejecting request:", error);
       toast.error('상태를 업데이트하는 도중 오류가 발생했습니다.');
+      handleFirestoreError(error, OperationType.UPDATE, `workRequests/${selectedRequestToReject.id}`);
     }
   };
 

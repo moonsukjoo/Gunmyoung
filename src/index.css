@@ -41,6 +41,57 @@
   --primary-foreground: #FFFFFF;
 }
 
+/* High Contrast Mode (고대비 모드) */
+.high-contrast {
+  --border: #ffffff !important;
+  --muted-foreground: #f8fafc !important;
+  --foreground: #ffffff !important;
+  --card: #0b0f19 !important;
+  --background: #000000 !important;
+  --primary: #60a5fa !important;
+}
+
+.high-contrast.light-theme,
+.light-theme.high-contrast {
+  --border: #000000 !important;
+  --muted-foreground: #020617 !important;
+  --foreground: #000000 !important;
+  --card: #ffffff !important;
+  --background: #ffffff !important;
+  --primary: #1d4ed8 !important;
+  --muted: #e2e8f0 !important;
+}
+
+.high-contrast * {
+  text-shadow: none !important;
+}
+
+.high-contrast body {
+  font-weight: 600 !important;
+}
+
+.high-contrast .border,
+.high-contrast [class*="border-"] {
+  border-width: max(1.5px, 1px);
+}
+
+/* Font Size Scales (글자 크기 스케일) */
+html.font-scale-large {
+  font-size: 112.5%; /* 18px base */
+}
+
+html.font-scale-large body {
+  font-weight: 500;
+}
+
+html.font-scale-xlarge {
+  font-size: 125%; /* 20px base */
+}
+
+html.font-scale-xlarge body {
+  font-weight: 700;
+}
+
 @layer base {
   body {
     @apply bg-background text-foreground font-sans antialiased overflow-x-hidden transition-colors duration-300;

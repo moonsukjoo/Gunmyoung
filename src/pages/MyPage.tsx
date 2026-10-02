@@ -38,7 +38,11 @@ import {
   Info,
   Users,
   Utensils,
-  Sparkles
+  Sparkles,
+  Contrast,
+  Type,
+  Sliders,
+  Palette
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -51,6 +55,7 @@ import { format } from 'date-fns';
 import { motion } from 'framer-motion';
 import { PinKeypad } from '@/components/PinKeypad';
 import { requestNotificationPermission } from '@/services/notificationService';
+import SignatureCanvas from 'react-signature-canvas';
 
 export const MyPage: React.FC = () => {
   const { profile } = useAuth();
@@ -70,6 +75,48 @@ export const MyPage: React.FC = () => {
   );
   const [evacuationStatus, setEvacuationStatus] = useState<any>(null);
   const [hasConfirmed, setHasConfirmed] = useState(false);
+  const [isEvacSignOpen, setIsEvacSignOpen] = useState(false);
+  const evacSigPad = React.useRef<SignatureCanvas>(null);
+  const [isSubmittingEvac, setIsSubmittingEvac] = useState(false);
+
+  const handleEvacConfirmSafety = async () => {
+    if (!profile || !evacuationStatus?.isActive || hasConfirmed) return;
+    
+    let signatureUrl = '';
+    if (evacSigPad.current) {
+      if (evacSigPad.current.isEmpty()) {
+        toast.error('서명을 그려주세요.');
+        return;
+      }
+      signatureUrl = evacSigPad.current.getTrimmedCanvas().toDataURL('image/png');
+    }
+
+    setIsSubmittingEvac(true);
+    try {
+      const { setDoc, increment } = await import('firebase/firestore');
+      const checkinRef = doc(db, 'evacuations', evacuationStatus.id, 'checkins', profile.uid);
+      await setDoc(checkinRef, {
+        uid: profile.uid,
+        displayName: profile.displayName,
+        departmentName: profile.departmentName || '소속 없음',
+        confirmedAt: new Date().toISOString(),
+        signatureUrl: signatureUrl
+      });
+
+      // Increment global confirmed count
+      await updateDoc(doc(db, 'evacuation', 'status'), {
+        confirmedCount: increment(1)
+      });
+
+      toast.success('안전 대피 보고가 완료되었습니다.');
+      setIsEvacSignOpen(false);
+    } catch (err) {
+      console.error("Safety confirmation error:", err);
+      toast.error('확인 처리 중 오류가 발생했습니다.');
+    } finally {
+      setIsSubmittingEvac(false);
+    }
+  };
 
   React.useEffect(() => {
     if (!profile) return;
@@ -285,6 +332,28 @@ export const MyPage: React.FC = () => {
     }
   };
 
+  const toggleHighContrast = async () => {
+    if (!profile) return;
+    try {
+      const newValue = !profile.highContrast;
+      await updateDoc(doc(db, 'users', profile.uid), { highContrast: newValue });
+      toast.success(newValue ? '고대비 모드가 활성화되었습니다.' : '고대비 모드가 해제되었습니다.');
+    } catch (error) {
+      toast.error('고대비 설정 변경 실패');
+    }
+  };
+
+  const handleSetFontSizeScale = async (scale: 'normal' | 'large' | 'xlarge') => {
+    if (!profile) return;
+    try {
+      await updateDoc(doc(db, 'users', profile.uid), { fontSizeScale: scale });
+      const labels = { normal: '기본 크기', large: '크게 (112%)', xlarge: '매우 크게 (125%)' };
+      toast.success(`글자 크기: ${labels[scale]}`);
+    } catch (error) {
+      toast.error('글자 크기 변경 실패');
+    }
+  };
+
   const handleToggleGhostGuard = async () => {
     if (!profile) return;
     setIsUpdating(true);
@@ -306,6 +375,7 @@ export const MyPage: React.FC = () => {
       items: [
         { label: '작업지시서 작성', icon: ClipboardList, to: '/work-instruction', color: 'text-blue-600', bgColor: 'bg-blue-500/10', roles: ['TEAM_LEADER', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER', 'CEO'] },
         { label: '근태관리', icon: Navigation, to: '/attendance', color: 'text-indigo-600', bgColor: 'bg-indigo-500/10' },
+        { label: '근무시간/자동출퇴근 설정', icon: Sliders, to: '/attendance/settings', color: 'text-cyan-600', bgColor: 'bg-cyan-500/10' },
         { label: '안전 보건 교육', icon: BookOpen, to: '/training', color: 'text-emerald-600', bgColor: 'bg-emerald-500/10' },
         { label: '교육 이수증', icon: Trophy, onClick: () => setIsExamHistoryOpen(true), color: 'text-amber-600', bgColor: 'bg-amber-500/10' },
       ]
@@ -360,11 +430,48 @@ export const MyPage: React.FC = () => {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button 
-              onClick={toggleTheme}
-              className="w-10 h-10 bg-card border border-border/40 rounded-2xl flex items-center justify-center text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10 hover:border-amber-500/10 transition-all active:scale-90 cursor-pointer"
-              title={profile?.lightTheme ? "어두운 모드로 변경" : "밝은 모드로 변경"}
+              onClick={async () => {
+                if (!profile) return;
+                // Cycle: Dark -> Light -> High Contrast -> Dark
+                try {
+                  if (profile.highContrast) {
+                    await updateDoc(doc(db, 'users', profile.uid), {
+                      lightTheme: false,
+                      highContrast: false
+                    });
+                    toast.success('다크 모드가 적용되었습니다.');
+                  } else if (profile.lightTheme) {
+                    await updateDoc(doc(db, 'users', profile.uid), {
+                      highContrast: true
+                    });
+                    toast.success('고대비 모드가 적용되었습니다.');
+                  } else {
+                    await updateDoc(doc(db, 'users', profile.uid), {
+                      lightTheme: true,
+                      highContrast: false
+                    });
+                    toast.success('라이트 모드가 적용되었습니다.');
+                  }
+                } catch {
+                  toast.error('테마 전환 실패');
+                }
+              }}
+              className="w-10 h-10 bg-card border border-border/40 rounded-2xl flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 hover:border-primary/20 transition-all active:scale-90 cursor-pointer"
+              title={
+                profile?.highContrast 
+                  ? "현재 고대비 모드 (클릭 시 다크 모드로 변경)" 
+                  : profile?.lightTheme 
+                    ? "현재 라이트 모드 (클릭 시 고대비 모드로 변경)" 
+                    : "현재 다크 모드 (클릭 시 라이트 모드로 변경)"
+              }
             >
-              {profile?.lightTheme ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+              {profile?.highContrast ? (
+                <Contrast className="w-5 h-5 text-amber-500" />
+              ) : profile?.lightTheme ? (
+                <Moon className="w-5 h-5" />
+              ) : (
+                <Sun className="w-5 h-5 text-amber-400" />
+              )}
             </button>
             <button 
               onClick={handleLogout}
@@ -399,7 +506,7 @@ export const MyPage: React.FC = () => {
             <p className="text-[10px] font-bold opacity-60 truncate">{evacuationStatus.reason || '비상 상황 소집령'}</p>
           </div>
           {!hasConfirmed && (
-            <Button size="sm" className="bg-rose-600 text-white rounded-xl h-8 px-4 text-[10px] font-black shrink-0 cursor-pointer" onClick={() => toast.info('서명해주세요!')}>
+            <Button size="sm" className="bg-rose-600 text-white rounded-xl h-8 px-4 text-[10px] font-black shrink-0 cursor-pointer" onClick={() => setIsEvacSignOpen(true)}>
               확인
             </Button>
           )}
@@ -520,8 +627,171 @@ export const MyPage: React.FC = () => {
         )}
       </div>
 
-      {/* 4. System Settings - Compact Grid */}
-      <div className="pt-4 space-y-4">
+      {/* 4. Display & Accessibility Settings (화면 및 접근성 설정) */}
+      <div className="pt-2 space-y-4">
+        <div className="flex items-center gap-2 px-1">
+          <Palette className="w-3.5 h-3.5 text-primary" />
+          <h4 className="text-[11px] font-black text-foreground uppercase tracking-[0.2em]">
+            화면 및 테마 설정
+          </h4>
+        </div>
+
+        {/* Theme Mode Selector Card (라이트 / 다크 / 고대비 모드) */}
+        <Card className="bg-card border border-border/50 rounded-3xl p-4 shadow-sm space-y-4">
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-black text-foreground">디스플레이 테마</span>
+              <span className="text-[10px] font-bold text-muted-foreground">THEME MODE</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              작업 환경과 시인성에 맞춰 화면 스타일을 선택할 수 있습니다.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2.5">
+            {/* 1. 다크 모드 */}
+            <button
+              onClick={async () => {
+                if (!profile) return;
+                try {
+                  await updateDoc(doc(db, 'users', profile.uid), {
+                    lightTheme: false,
+                    highContrast: false
+                  });
+                  toast.success('다크 모드가 적용되었습니다.');
+                } catch {
+                  toast.error('설정 변경 실패');
+                }
+              }}
+              className={cn(
+                "p-3 rounded-2xl border flex flex-col items-center gap-2 text-center transition-all cursor-pointer",
+                !profile?.lightTheme && !profile?.highContrast
+                  ? "bg-primary/10 border-primary text-primary shadow-sm ring-2 ring-primary/20"
+                  : "bg-card/60 border-border/40 text-muted-foreground hover:bg-muted"
+              )}
+            >
+              <div className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 text-slate-100 flex items-center justify-center shadow-inner">
+                <Moon className="w-4.5 h-4.5" />
+              </div>
+              <div>
+                <p className="text-[11px] font-black text-foreground">다크 모드</p>
+                <p className="text-[9px] font-bold text-muted-foreground mt-0.5">기본 어두움</p>
+              </div>
+            </button>
+
+            {/* 2. 라이트 모드 */}
+            <button
+              onClick={async () => {
+                if (!profile) return;
+                try {
+                  await updateDoc(doc(db, 'users', profile.uid), {
+                    lightTheme: true,
+                    highContrast: false
+                  });
+                  toast.success('라이트 모드가 적용되었습니다.');
+                } catch {
+                  toast.error('설정 변경 실패');
+                }
+              }}
+              className={cn(
+                "p-3 rounded-2xl border flex flex-col items-center gap-2 text-center transition-all cursor-pointer",
+                profile?.lightTheme && !profile?.highContrast
+                  ? "bg-primary/10 border-primary text-primary shadow-sm ring-2 ring-primary/20"
+                  : "bg-card/60 border-border/40 text-muted-foreground hover:bg-muted"
+              )}
+            >
+              <div className="w-9 h-9 rounded-xl bg-amber-100 border border-amber-200 text-amber-600 flex items-center justify-center shadow-inner">
+                <Sun className="w-4.5 h-4.5" />
+              </div>
+              <div>
+                <p className="text-[11px] font-black text-foreground">라이트 모드</p>
+                <p className="text-[9px] font-bold text-muted-foreground mt-0.5">밝고 선명함</p>
+              </div>
+            </button>
+
+            {/* 3. 고대비 모드 */}
+            <button
+              onClick={async () => {
+                if (!profile) return;
+                try {
+                  await updateDoc(doc(db, 'users', profile.uid), {
+                    highContrast: true
+                  });
+                  toast.success('고대비 모드가 적용되었습니다.');
+                } catch {
+                  toast.error('설정 변경 실패');
+                }
+              }}
+              className={cn(
+                "p-3 rounded-2xl border flex flex-col items-center gap-2 text-center transition-all cursor-pointer",
+                profile?.highContrast
+                  ? "bg-amber-500/15 border-amber-500 text-amber-500 shadow-sm ring-2 ring-amber-500/30"
+                  : "bg-card/60 border-border/40 text-muted-foreground hover:bg-muted"
+              )}
+            >
+              <div className="w-9 h-9 rounded-xl bg-black border-2 border-white text-white flex items-center justify-center shadow-inner">
+                <Contrast className="w-4.5 h-4.5" />
+              </div>
+              <div>
+                <p className="text-[11px] font-black text-foreground">고대비 모드</p>
+                <p className="text-[9px] font-bold text-amber-500 mt-0.5">최대 명암비</p>
+              </div>
+            </button>
+          </div>
+
+          {/* Font Size Scaling (글자 크기 조정 옵션) */}
+          <div className="pt-2 border-t border-border/40 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Type className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-black text-foreground">글자 크기 배율</span>
+              </div>
+              <span className="text-[10px] font-bold text-muted-foreground">
+                {profile?.fontSizeScale === 'large' ? '112% 확대' : profile?.fontSizeScale === 'xlarge' ? '125% 최대' : '100% 표준'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                onClick={() => handleSetFontSizeScale('normal')}
+                className={cn(
+                  "py-2 px-2.5 rounded-xl border text-center transition-all cursor-pointer",
+                  !profile?.fontSizeScale || profile?.fontSizeScale === 'normal'
+                    ? "bg-primary text-primary-foreground font-black border-primary shadow-xs"
+                    : "bg-card border-border/40 text-muted-foreground hover:bg-muted font-bold"
+                )}
+              >
+                <span className="text-xs">기본 (100%)</span>
+              </button>
+              <button
+                onClick={() => handleSetFontSizeScale('large')}
+                className={cn(
+                  "py-2 px-2.5 rounded-xl border text-center transition-all cursor-pointer",
+                  profile?.fontSizeScale === 'large'
+                    ? "bg-primary text-primary-foreground font-black border-primary shadow-xs"
+                    : "bg-card border-border/40 text-muted-foreground hover:bg-muted font-bold"
+                )}
+              >
+                <span className="text-sm font-black">크게 (112%)</span>
+              </button>
+              <button
+                onClick={() => handleSetFontSizeScale('xlarge')}
+                className={cn(
+                  "py-2 px-2.5 rounded-xl border text-center transition-all cursor-pointer",
+                  profile?.fontSizeScale === 'xlarge'
+                    ? "bg-primary text-primary-foreground font-black border-primary shadow-xs"
+                    : "bg-card border-border/40 text-muted-foreground hover:bg-muted font-bold"
+                )}
+              >
+                <span className="text-base font-black">최대 (125%)</span>
+              </button>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* 5. System Settings - Compact Grid */}
+      <div className="pt-2 space-y-4">
         <div className="flex items-center gap-2 px-1">
           <span className="w-1.5 h-1.5 bg-primary rounded-full"></span>
           <h4 className="text-[11px] font-black text-muted-foreground/60 uppercase tracking-[0.2em]">
@@ -678,6 +948,67 @@ export const MyPage: React.FC = () => {
            <div className="p-6 border-t border-border">
               <Button className="w-full h-14 bg-muted text-foreground font-black rounded-2xl hover:bg-muted/80" onClick={() => setIsExamHistoryOpen(false)}>닫기</Button>
            </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEvacSignOpen} onOpenChange={setIsEvacSignOpen}>
+        <DialogContent className="bg-card border border-border text-foreground max-w-sm rounded-3xl p-6">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black text-foreground flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-rose-500 animate-pulse" /> 비상 대피 안전 서명
+            </DialogTitle>
+            <DialogDescription className="text-xs font-bold text-muted-foreground">
+              안전하게 대피 완료했음을 확인하고 서명해 주세요.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4 space-y-3">
+            <p className="text-xs text-muted-foreground font-bold leading-normal">
+              캔버스 영역에 드래그하거나 손가락 터치로 서명을 작성해 주세요.
+            </p>
+            <div className="border border-border/80 rounded-2xl overflow-hidden bg-white">
+              <SignatureCanvas
+                ref={evacSigPad}
+                penColor="black"
+                canvasProps={{
+                  className: "w-full h-40 cursor-crosshair bg-white"
+                }}
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="flex flex-row justify-end gap-2 p-0">
+            <Button 
+              type="button" 
+              variant="ghost" 
+              onClick={() => {
+                if (evacSigPad.current) {
+                  evacSigPad.current.clear();
+                }
+              }} 
+              className="rounded-xl font-bold bg-muted"
+            >
+              초기화
+            </Button>
+            <div className="flex gap-2">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setIsEvacSignOpen(false)} 
+                className="rounded-xl font-bold"
+              >
+                취소
+              </Button>
+              <Button 
+                type="button" 
+                onClick={handleEvacConfirmSafety} 
+                disabled={isSubmittingEvac}
+                className="rounded-xl font-bold bg-rose-600 text-white hover:bg-rose-700"
+              >
+                {isSubmittingEvac ? '제출 중...' : '확인 완료'}
+              </Button>
+            </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

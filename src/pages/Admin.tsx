@@ -47,8 +47,12 @@ import {
   Utensils,
   History,
   BookOpen,
-  User
+  User,
+  UserCheck,
+  MapPin,
+  Navigation
 } from 'lucide-react';
+import { useAutoAttendance } from '@/components/AutoAttendanceProvider';
 import { db } from '@/firebase';
 import { collection, query, onSnapshot, updateDoc, doc, setDoc, getDocs, where, addDoc, deleteDoc, orderBy, limit } from 'firebase/firestore';
 import { UserProfile } from '@/types';
@@ -88,6 +92,12 @@ import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
 
 export const Admin: React.FC = () => {
   const { user, profile } = useAuth();
+  const { 
+    locationSettings, 
+    currentLocation, 
+    saveCurrentLocationAsBasePoint, 
+    updateCustomLocationSettings 
+  } = useAutoAttendance();
   const navigate = useNavigate();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]);
@@ -99,11 +109,13 @@ export const Admin: React.FC = () => {
   const [isSnailRaceSettingsOpen, setIsSnailRaceSettingsOpen] = useState(false);
   const [isFishingSettingsOpen, setIsFishingSettingsOpen] = useState(false);
   const [isRouletteSettingsOpen, setIsRouletteSettingsOpen] = useState(false);
+  const [isLadderSettingsOpen, setIsLadderSettingsOpen] = useState(false);
   const [isPermissionSettingsOpen, setIsPermissionSettingsOpen] = useState(false);
   const [isSafetySensorSettingsOpen, setIsSafetySensorSettingsOpen] = useState(false);
   const [isSafetyTimeoutSettingsOpen, setIsSafetyTimeoutSettingsOpen] = useState(false);
   const [isEmergencyOpen, setIsEmergencyOpen] = useState(false);
   const [isDBResetOpen, setIsDBResetOpen] = useState(false);
+  const [isLocationSettingOpen, setIsLocationSettingOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [resetConfirmText, setResetConfirmText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -125,6 +137,7 @@ export const Admin: React.FC = () => {
     { id: 'legend', name: '황금 전설 고기', multiplier: 500, probability: 0.01, icon: '👑' }
   ]);
   const [rouletteProbs, setRouletteProbs] = useState<number[]>([0.35, 0.3, 0.2, 0.1, 0.03, 0.02]);
+  const [ladderProbs, setLadderProbs] = useState<number[]>([0.75, 0.25]);
 
   const isExcludedRole = profile && (
     ['EMPLOYEE', 'WORKER'].includes(profile.role?.toUpperCase() || '') || 
@@ -150,6 +163,8 @@ export const Admin: React.FC = () => {
     sosTimeout: 15
   });
   const [bannerText, setBannerText] = useState('안전한 하루가 되세요');
+  const [safetyManagerDefaultName, setSafetyManagerDefaultName] = useState('김주영');
+  const [isSafetyManagerSettingsOpen, setIsSafetyManagerSettingsOpen] = useState(false);
   const [evacuationStatus, setEvacuationStatus] = useState<any>(null);
   const [evacuationCheckins, setEvacuationCheckins] = useState<any[]>([]);
 
@@ -228,6 +243,7 @@ export const Admin: React.FC = () => {
             setFishingSettings(migrated);
           }
           setRouletteProbs(data.rouletteProbabilities || [0.35, 0.3, 0.2, 0.1, 0.03, 0.02]);
+          setLadderProbs(data.ladderProbabilities || [0.35, 0.35, 0.20, 0.10]);
        }
     }, (error) => {
        handleFirestoreError(error, OperationType.GET, 'settings/entertainment');
@@ -248,10 +264,19 @@ export const Admin: React.FC = () => {
       handleFirestoreError(error, OperationType.GET, 'settings/safety_sensors');
     });
 
+    const unsubCompany = onSnapshot(doc(db, 'settings', 'company'), (snap) => {
+      if (snap.exists() && snap.data().safetyManagerName) {
+        setSafetyManagerDefaultName(snap.data().safetyManagerName);
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/company');
+    });
+
     return () => {
       unsubBanner();
       unsubShipRace();
       unsubSafetySensors();
+      unsubCompany();
     };
   }, [profile]);
 
@@ -405,13 +430,16 @@ export const Admin: React.FC = () => {
       { to: '/notifications', label: '공지사항 관리', icon: Megaphone, permission: 'notice_mgmt', color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
       { onClick: () => setIsBannerSettingsOpen(true), label: '배너 문구 설정', icon: Megaphone, permission: 'admin', color: 'text-violet-400', bgColor: 'bg-violet-500/20' },
       { to: '/coupons', label: '포상/룰렛 관리', icon: Trophy, permission: 'praise_coupon', color: 'text-amber-400', bgColor: 'bg-amber-500/20' },
-      { onClick: () => setIsShipRaceSettingsOpen(true), label: '조선소 레이싱 확률 설정', icon: Radio, permission: 'admin', color: 'text-orange-400', bgColor: 'bg-orange-500/20', requiresCEO: true },
-      { onClick: () => setIsSnailRaceSettingsOpen(true), label: '달팽이 레이스 확률 설정', icon: Radio, permission: 'admin', color: 'text-emerald-400', bgColor: 'bg-emerald-500/20', requiresCEO: true },
-      { onClick: () => setIsFishingSettingsOpen(true), label: '건명 낚시 확률 설정', icon: Anchor, permission: 'admin', color: 'text-cyan-400', bgColor: 'bg-cyan-500/20', requiresCEO: true },
-      { onClick: () => setIsRouletteSettingsOpen(true), label: '건명 룰렛 확률 설정', icon: Target, permission: 'admin', color: 'text-rose-400', bgColor: 'bg-rose-500/20', requiresCEO: true },
+      { onClick: () => setIsShipRaceSettingsOpen(true), label: '조선소 레이싱 확률 설정', icon: Radio, permissions: ['admin', 'praise_coupon'], color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
+      { onClick: () => setIsSnailRaceSettingsOpen(true), label: '달팽이 레이스 확률 설정', icon: Radio, permissions: ['admin', 'praise_coupon'], color: 'text-emerald-400', bgColor: 'bg-emerald-500/20' },
+      { onClick: () => setIsFishingSettingsOpen(true), label: '건명 낚시 확률 설정', icon: Anchor, permissions: ['admin', 'praise_coupon'], color: 'text-cyan-400', bgColor: 'bg-cyan-500/20' },
+      { onClick: () => setIsRouletteSettingsOpen(true), label: '건명 룰렛 확률 설정', icon: Target, permissions: ['admin', 'praise_coupon'], color: 'text-rose-400', bgColor: 'bg-rose-500/20' },
+      { onClick: () => setIsLadderSettingsOpen(true), label: '건명 사다리 확률 설정', icon: Radio, permissions: ['admin', 'praise_coupon'], color: 'text-amber-400', bgColor: 'bg-amber-500/20' },
       { onClick: () => setIsSafetySensorSettingsOpen(true), label: '충격 감지 감도 설정', icon: ShieldAlert, permission: 'admin', color: 'text-red-400', bgColor: 'bg-red-500/20', requiresCEO: true },
       { onClick: () => setIsShipSettingsOpen(true), label: '함선 파츠 확률', icon: Ship, permission: 'admin', color: 'text-blue-300', bgColor: 'bg-blue-500/20', requiresCEO: true },
       { onClick: () => setIsPermissionSettingsOpen(true), label: '사용자 권한 관리', icon: ShieldCheck, permission: 'admin', color: 'text-slate-300', bgColor: 'bg-slate-500/20', requiresCEO: true },
+      { onClick: () => setIsSafetyManagerSettingsOpen(true), label: '기본 소장(안전책임자) 성함 설정', icon: UserCheck, permission: 'admin', color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
+      { onClick: () => setIsLocationSettingOpen(true), label: 'GPS 자동 출퇴근/기준점 설정', icon: MapPin, permission: 'admin', color: 'text-sky-400', bgColor: 'bg-sky-500/20' },
       { onClick: () => setIsDBResetOpen(true), label: '실운영 데이터 일괄 초기화', icon: AlertTriangle, permission: 'admin', color: 'text-rose-500', bgColor: 'bg-rose-500/20', requiresCEO: true },
     ]
   };
@@ -978,6 +1006,78 @@ export const Admin: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={isLadderSettingsOpen} onOpenChange={setIsLadderSettingsOpen}>
+        <DialogContent className="bg-card border border-border rounded-3xl text-foreground max-w-sm p-6 overflow-hidden flex flex-col shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-black text-xl text-foreground">건명 사다리 타기 확률 설정</DialogTitle>
+            <DialogDescription className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
+              사다리 타기 결과별 당첨 확률을 실시간으로 설정합니다.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4 border-y border-border my-4 overflow-y-auto max-h-[60vh]">
+            {[
+              { label: '꽝 (0배)', index: 0 },
+              { label: '4배 당첨!', index: 1 }
+            ].map((item) => (
+              <div key={item.index} className="space-y-2">
+                <div className="flex justify-between items-center text-[10px] font-black text-amber-500 uppercase tracking-widest">
+                   <span>{item.label}</span>
+                   <span className="text-foreground">{((ladderProbs[item.index] || 0) * 100).toFixed(1)}%</span>
+                </div>
+                <input 
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={ladderProbs[item.index] || 0}
+                  onChange={(e) => {
+                    const updated = [...ladderProbs];
+                    updated[item.index] = parseFloat(e.target.value);
+                    setLadderProbs(updated);
+                  }}
+                  className="w-full accent-amber-500 h-1.5 bg-muted rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+            ))}
+
+            <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
+               <p className="text-[10px] font-black text-emerald-600 text-center uppercase tracking-widest">
+                  확률 합계: {ladderProbs.reduce((a, b) => a + b, 0).toFixed(2)} (1.0 권장)
+               </p>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              className="flex-1 h-12 rounded-2xl border-border text-foreground font-black hover:bg-muted"
+              onClick={() => setIsLadderSettingsOpen(false)}
+            >
+              취소
+            </Button>
+            <Button 
+              className="flex-1 h-12 bg-amber-500 text-slate-950 font-black rounded-2xl shadow-lg shadow-amber-500/20 hover:bg-amber-600 transition-all"
+              onClick={async () => {
+                try {
+                  await setDoc(doc(db, 'settings', 'entertainment'), { 
+                    ladderProbabilities: ladderProbs,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: profile?.uid
+                  }, { merge: true });
+                  toast.success('사다리 타기 확률 설정이 저장되었습니다.');
+                  setIsLadderSettingsOpen(false);
+                } catch (e) {
+                  toast.error('설정 저장 중 오류가 발생했습니다.');
+                }
+              }}
+            >
+              설정 저장
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       
       <Dialog open={isShipRaceSettingsOpen} onOpenChange={setIsShipRaceSettingsOpen}>
         <DialogContent className="bg-card border border-border rounded-3xl text-foreground max-w-sm p-6 shadow-2xl">
@@ -1099,6 +1199,41 @@ export const Admin: React.FC = () => {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={isSafetyManagerSettingsOpen} onOpenChange={setIsSafetyManagerSettingsOpen}>
+        <DialogContent className="bg-card border border-border rounded-3xl text-foreground max-w-sm p-6 shadow-2xl">
+           <DialogHeader>
+             <DialogTitle className="font-black text-foreground">기본 소장(안전책임자) 성함 설정</DialogTitle>
+             <DialogDescription className="text-xs font-bold text-muted-foreground mt-1">
+               새 작업지시 및 일일점검지 작성 시 기본으로 입력될 소장 성함을 설정합니다.
+             </DialogDescription>
+           </DialogHeader>
+           <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">소장(안전보건관리책임자) 성함</Label>
+                <Input 
+                  value={safetyManagerDefaultName} 
+                  onChange={(e) => setSafetyManagerDefaultName(e.target.value)}
+                  className="bg-muted border border-border h-12 rounded-xl text-foreground font-bold"
+                  placeholder="예: 김주영"
+                />
+              </div>
+           </div>
+           <Button className="w-full h-14 bg-primary text-primary-foreground font-black rounded-2xl shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all" onClick={async () => {
+             try {
+               await setDoc(doc(db, 'settings', 'company'), { 
+                 safetyManagerName: safetyManagerDefaultName,
+                 updatedAt: new Date().toISOString(),
+                 updatedBy: profile?.uid
+               }, { merge: true });
+               toast.success('기본 소장 성함이 저장되었습니다.'); 
+               setIsSafetyManagerSettingsOpen(false);
+             } catch (e) {
+               toast.error('설정 저장 중 오류가 발생했습니다.');
+             }
+           }}>저장하기</Button>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isPermissionSettingsOpen} onOpenChange={setIsPermissionSettingsOpen}>
         <DialogContent className="bg-card border border-border rounded-3xl text-foreground max-w-md p-0 overflow-hidden flex flex-col max-h-[80vh] shadow-2xl">
            <div className="p-8 pb-4">
@@ -1181,6 +1316,103 @@ export const Admin: React.FC = () => {
                 ));
               })()}
            </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isLocationSettingOpen} onOpenChange={setIsLocationSettingOpen}>
+        <DialogContent className="bg-card border border-border rounded-3xl text-foreground max-w-md w-[95%] p-6 overflow-hidden flex flex-col shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-black text-xl text-foreground flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-primary" />
+              GPS 위치 기반 자동 출퇴근 설정
+            </DialogTitle>
+            <DialogDescription className="text-xs font-bold text-muted-foreground">
+              전사 직원에게 실시간 적용되는 사업장 출퇴근 기준점 및 지오펜싱 규칙을 관리합니다.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-3 text-xs">
+            {/* GPS capture block */}
+            <div className="bg-muted/40 p-4 rounded-2xl border border-border space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="font-black text-foreground">내 현재 GPS 좌표 수신</span>
+                <Badge variant="outline" className="text-[10px]">
+                  {currentLocation ? '수신 정상' : '수신 대기'}
+                </Badge>
+              </div>
+              <p className="text-[11px] text-muted-foreground font-mono">
+                위도: {currentLocation?.latitude?.toFixed(6) || '--'} / 경도: {currentLocation?.longitude?.toFixed(6) || '--'}
+              </p>
+              <Button
+                type="button"
+                onClick={async () => {
+                  const ok = await saveCurrentLocationAsBasePoint();
+                  if (ok) setIsLocationSettingOpen(false);
+                }}
+                className="w-full h-11 rounded-xl bg-primary text-primary-foreground font-black text-xs gap-1.5 shadow-md shadow-primary/20"
+              >
+                <MapPin className="w-4 h-4" />
+                현재 내 위치를 사업장 기준점으로 즉시 등록
+              </Button>
+            </div>
+
+            {/* Current Reference Location details */}
+            <div className="p-4 bg-muted/30 rounded-2xl border border-border space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-black uppercase text-muted-foreground tracking-wider">등록된 기준점 위치</span>
+                <span className="font-mono text-xs font-black text-primary">
+                  {locationSettings?.centerLat?.toFixed(6) || '미등록'}, {locationSettings?.centerLng?.toFixed(6) || '미등록'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="p-3 bg-card border border-border/50 rounded-xl">
+                  <span className="text-[10px] font-bold text-muted-foreground block">출근 인정 반경</span>
+                  <span className="text-sm font-black text-emerald-500">
+                    {locationSettings?.checkInRadius || 1000}m (1km)
+                  </span>
+                </div>
+                <div className="p-3 bg-card border border-border/50 rounded-xl">
+                  <span className="text-[10px] font-bold text-muted-foreground block">퇴근 이탈 반경</span>
+                  <span className="text-sm font-black text-amber-500">
+                    {locationSettings?.checkOutRadius || 2000}m (2km)
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-card border border-border/50 rounded-xl flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-muted-foreground block">이탈 후 퇴근 확정 대기시간</span>
+                  <span className="text-sm font-black text-foreground">
+                    {locationSettings?.pendingExitTimeoutMinutes || 120}분 (2시간)
+                  </span>
+                </div>
+                <Badge className="bg-blue-500/10 text-blue-500 border-none text-[10px] font-bold">
+                  2시간 경과 시 확정
+                </Badge>
+              </div>
+
+              <div className="p-3 bg-background/50 border border-border/40 rounded-xl space-y-1">
+                <span className="text-[10px] font-black text-foreground block">근무 및 잔업 시간 계산 기준</span>
+                <ul className="text-[11px] text-muted-foreground space-y-0.5 list-disc pl-4 font-bold">
+                  <li>정규 근무: 08:00 ~ 17:00 (기본 8시간 인정)</li>
+                  <li>점심시간: 12:00 ~ 13:00 (1시간 공제)</li>
+                  <li>석식/휴게시간: 17:00 ~ 17:30 (30분 공제 후 잔업 시작)</li>
+                  <li>잔업 정산: 17:30 이후 30분 단위 (예: 17:40 퇴근 ➔ 0시간 / 18:30 퇴근 ➔ 1시간)</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              className="w-full rounded-2xl font-black h-12"
+              onClick={() => setIsLocationSettingOpen(false)}
+            >
+              닫기
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
