@@ -22,7 +22,10 @@ import {
   Minus,
   Save,
   Download,
-  FileText
+  FileText,
+  Camera,
+  XCircle,
+  Calendar
 } from 'lucide-react';
 import { 
   Dialog, 
@@ -46,6 +49,7 @@ export const SafetyRanking: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDeptId, setSelectedDeptId] = useState<string>('all');
   const [activeView, setActiveView] = useState<'INDIVIDUAL' | 'TEAM' | 'LOGS'>('INDIVIDUAL');
+  const [selectedMonth, setSelectedMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
   const [loading, setLoading] = useState(true);
 
   const [isAdjustmentOpen, setIsAdjustmentOpen] = useState(false);
@@ -53,6 +57,7 @@ export const SafetyRanking: React.FC = () => {
   const [scoreDelta, setScoreDelta] = useState<string>('');
   const [adjustmentType, setAdjustmentType] = useState<'REWARD' | 'PENALTY'>('REWARD');
   const [reason, setReason] = useState('');
+  const [photoUrl, setPhotoUrl] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   const isAdmin = profile && (profile.role === 'CEO');
@@ -95,20 +100,40 @@ export const SafetyRanking: React.FC = () => {
       .sort((a, b) => (b.safetyScore ?? 100) - (a.safetyScore ?? 100));
   }, [users, searchTerm, selectedDeptId]);
 
-  const userMonthlyStats = useMemo(() => {
-    const now = new Date();
-    const currentMonthStart = startOfMonth(now);
-    const prevMonthStart = startOfMonth(subMonths(now, 1));
-    const stats: Record<string, { currentMonthDelta: number, prevMonthDelta: number }> = {};
+  const filteredLogs = useMemo(() => {
+    return logs.filter(l => l.createdAt.startsWith(selectedMonth));
+  }, [logs, selectedMonth]);
 
+  // Calculate monthly stats per target user for the selectedMonth
+  const monthlyStatsByTarget = useMemo(() => {
+    const stats: Record<string, { delta: number; latestPhoto?: string }> = {};
     logs.forEach(log => {
-      const logDate = new Date(log.createdAt);
-      if (!stats[log.targetUid]) stats[log.targetUid] = { currentMonthDelta: 0, prevMonthDelta: 0 };
-      if (logDate >= currentMonthStart) stats[log.targetUid].currentMonthDelta += log.scoreDelta;
-      else if (logDate >= prevMonthStart) stats[log.targetUid].prevMonthDelta += log.scoreDelta;
+      if (log.createdAt.startsWith(selectedMonth)) {
+        if (!stats[log.targetUid]) {
+          stats[log.targetUid] = { delta: 0, latestPhoto: undefined };
+        }
+        stats[log.targetUid].delta += log.scoreDelta;
+        if (!stats[log.targetUid].latestPhoto && log.photoUrl) {
+          stats[log.targetUid].latestPhoto = log.photoUrl;
+        }
+      }
     });
     return stats;
-  }, [logs]);
+  }, [logs, selectedMonth]);
+
+  // Calculate monthly score delta by department
+  const monthlyDeptDelta = useMemo(() => {
+    const map: Record<string, number> = {};
+    logs.forEach(log => {
+      if (log.createdAt.startsWith(selectedMonth)) {
+        const user = users.find(u => u.uid === log.targetUid);
+        if (user?.departmentId) {
+          map[user.departmentId] = (map[user.departmentId] || 0) + log.scoreDelta;
+        }
+      }
+    });
+    return map;
+  }, [logs, users, selectedMonth]);
 
   const teamRankings = useMemo(() => {
     const deptMap: Record<string, { id: string; name: string; totalScore: number; count: number; average: number }> = {};
@@ -124,9 +149,15 @@ export const SafetyRanking: React.FC = () => {
   }, [users]);
 
   const handleAdjustScore = async () => {
-    if (!targetUser || !scoreDelta || !reason || !profile) return;
+    if (!targetUser || !scoreDelta || !reason || !profile) {
+      toast.error('점수와 사유를 모두 입력해주세요.');
+      return;
+    }
     const delta = adjustmentType === 'REWARD' ? parseInt(scoreDelta) : -parseInt(scoreDelta);
-    if (isNaN(delta)) return;
+    if (isNaN(delta)) {
+      toast.error('올바른 숫자를 입력해주세요.');
+      return;
+    }
 
     setIsSaving(true);
     const prevScore = targetUser.safetyScore ?? 100;
@@ -145,14 +176,17 @@ export const SafetyRanking: React.FC = () => {
         newScore: newScore,
         reason,
         type: delta > 0 ? 'REWARD' : 'PENALTY',
+        photoUrl: photoUrl || undefined,
         createdAt: new Date().toISOString()
       });
 
-      toast.success('점수가 업데이트되었습니다.');
+      toast.success('점수 및 현장 첨부사진이 등록되었습니다.');
       setIsAdjustmentOpen(false);
       setScoreDelta('');
       setReason('');
+      setPhotoUrl('');
     } catch (error) {
+      console.error("Safety score adjustment error:", error);
       toast.error('오류가 발생했습니다.');
     } finally {
       setIsSaving(false);
@@ -160,58 +194,137 @@ export const SafetyRanking: React.FC = () => {
   };
 
   const handleExportExcel = () => {
-    if (activeView === 'INDIVIDUAL') {
-      const data = filteredUsers.map((u, idx) => ({
-        '순위': idx + 1,
-        '성명': u.displayName,
-        '사번': u.employeeId,
-        '부서': u.departmentName,
-        '안전지수': u.safetyScore || 100
-      }));
-      exportToExcel(data, '개인별_안전지수', '랭킹');
-    } else if (activeView === 'TEAM') {
-      const data = teamRankings.map((t, idx) => ({
-        '순위': idx + 1,
-        '팀명': t.name,
-        '팀원수': t.count,
-        '평균지수': t.average.toFixed(1)
-      }));
-      exportToExcel(data, '팀별_안전지수', '팀랭킹');
-    } else {
-      const data = logs.map(l => ({
-        '대상자': l.targetName,
-        '점수변동': l.scoreDelta,
-        '변동후': l.newScore,
-        '사유': l.reason,
-        '관리자': l.adminName,
-        '일시': format(new Date(l.createdAt), 'yyyy-MM-dd HH:mm')
-      }));
-      exportToExcel(data, '안전지수_히스토리', '히스토리');
+    try {
+      if (activeView === 'INDIVIDUAL') {
+        const data = filteredUsers.map((u, idx) => {
+          const stats = monthlyStatsByTarget[u.uid];
+          const delta = stats?.delta ?? 0;
+          return {
+            '순위': idx + 1,
+            '성명': u.displayName,
+            '사번': u.employeeId,
+            '부서': u.departmentName || '-',
+            '현재 안전지수': u.safetyScore || 100,
+            [`${selectedMonth} 변동점수`]: delta > 0 ? `+${delta}` : delta
+          };
+        });
+        exportToExcel(data, `개인별_안전지수_${selectedMonth}`, '랭킹');
+      } else if (activeView === 'TEAM') {
+        const data = teamRankings.map((t, idx) => {
+          const delta = monthlyDeptDelta[t.id] ?? 0;
+          return {
+            '순위': idx + 1,
+            '팀명': t.name,
+            '팀원수': t.count,
+            '평균지수': t.average.toFixed(1),
+            [`${selectedMonth} 변동합계`]: delta > 0 ? `+${delta}` : delta
+          };
+        });
+        exportToExcel(data, `팀별_안전지수_${selectedMonth}`, '팀랭킹');
+      } else {
+        const data = filteredLogs.map(l => ({
+          '일시': format(new Date(l.createdAt), 'yyyy-MM-dd HH:mm'),
+          '대상자': l.targetName,
+          '점수변동': l.scoreDelta,
+          '변동후': l.newScore,
+          '사유': l.reason,
+          '현장사진 첨부': l.photoUrl ? '유 (첨부됨)' : '무',
+          '관리자': l.adminName
+        }));
+        exportToExcel(data, `안전지수_히스토리_${selectedMonth}`, '히스토리');
+      }
+      toast.success('엑셀 다운로드 완료');
+    } catch (error) {
+      console.error('Excel export error:', error);
+      toast.error('엑셀 변환 중 오류가 발생했습니다.');
     }
-    toast.success('엑셀 다운로드 완료');
+  };
+
+  // Direct monthly safety inspection photo report PDF download
+  const handleExportMonthlyPhotoPDF = async () => {
+    try {
+      toast.loading(`${selectedMonth} 안전점검 사진 리포트를 생성 중입니다...`, { id: 'safety-pdf' });
+      const title = `안전 지수 변동 및 현장점검 리포트 (${selectedMonth})`;
+      const headers = ['일시', '대상자', '소속 부서', '변동 점수', '변동 사유', '현장 사진'];
+      const data = filteredLogs.map(l => {
+        const user = users.find(u => u.uid === l.targetUid);
+        return [
+          format(new Date(l.createdAt), 'yyyy-MM-dd HH:mm'),
+          l.targetName,
+          user?.departmentName || '현장팀',
+          l.scoreDelta > 0 ? `+${l.scoreDelta}점` : `${l.scoreDelta}점`,
+          l.reason,
+          l.photoUrl || '(사진없음)'
+        ];
+      });
+
+      await exportToPDF(title, headers, data, `안전점검사진보고서_${selectedMonth}`);
+      toast.success(`${selectedMonth} 안전점검 사진 PDF 리포트 다운로드 완료`, { id: 'safety-pdf' });
+    } catch (error) {
+      console.error('Safety photo PDF export failed:', error);
+      toast.error('PDF 생성 중 오류가 발생했습니다.', { id: 'safety-pdf' });
+    }
   };
 
   const handleExportPDF = async () => {
-    let title = '안전 지수 보고서';
-    let headers: string[] = [];
-    let data: any[][] = [];
+    try {
+      toast.loading('안전 지수 PDF 리포트를 생성 중입니다...', { id: 'safety-pdf' });
+      let title = `안전 지수 보고서 (${selectedMonth})`;
+      let headers: string[] = [];
+      let data: any[][] = [];
 
-    if (activeView === 'INDIVIDUAL') {
-      title = '개인별 안전 지수 랭킹 리포트';
-      headers = ['순위', '성명', '부서', '지수'];
-      data = filteredUsers.map((u, idx) => [idx + 1, u.displayName, u.departmentName, u.safetyScore || 100]);
-    } else if (activeView === 'TEAM') {
-      title = '팀별 안전 지수 평균 리포트';
-      headers = ['순위', '팀명', '인원', '평균'];
-      data = teamRankings.map((t, idx) => [idx + 1, t.name, t.count, t.average.toFixed(1)]);
-    } else {
-      title = '안전 지수 변동 히스토리 리포트';
-      headers = ['대상', '변동', '잔여', '사유'];
-      data = logs.map(l => [l.targetName, l.scoreDelta > 0 ? `+${l.scoreDelta}` : l.scoreDelta, l.newScore, l.reason]);
+      if (activeView === 'INDIVIDUAL') {
+        title = `개인별 안전 지수 현황 리포트 (${selectedMonth})`;
+        headers = ['순위', '성명', '사번', '부서', '현재 지수', `${selectedMonth} 변동`, '현장 점검사진'];
+        data = filteredUsers.map((u, idx) => {
+          const stats = monthlyStatsByTarget[u.uid];
+          const delta = stats?.delta ?? 0;
+          const photo = stats?.latestPhoto || '(사진없음)';
+          return [
+            idx + 1,
+            u.displayName,
+            u.employeeId || '-',
+            u.departmentName || '-',
+            `${u.safetyScore ?? 100}점`,
+            delta > 0 ? `+${delta}점` : delta < 0 ? `${delta}점` : '0점',
+            photo
+          ];
+        });
+      } else if (activeView === 'TEAM') {
+        title = `팀별 안전 지수 현황 리포트 (${selectedMonth})`;
+        headers = ['순위', '팀명', '인원', '평균 지수', `${selectedMonth} 변동합계`];
+        data = teamRankings.map((t, idx) => {
+          const delta = monthlyDeptDelta[t.id] ?? 0;
+          return [
+            idx + 1,
+            t.name,
+            `${t.count}명`,
+            `${t.average.toFixed(1)}점`,
+            delta > 0 ? `+${delta}점` : delta < 0 ? `${delta}점` : '0점'
+          ];
+        });
+      } else {
+        title = `안전 지수 변동 및 현장점검 리포트 (${selectedMonth})`;
+        headers = ['일시', '대상자', '소속 부서', '변동 점수', '변동 사유', '현장 사진'];
+        data = filteredLogs.map(l => {
+          const user = users.find(u => u.uid === l.targetUid);
+          return [
+            format(new Date(l.createdAt), 'yyyy-MM-dd HH:mm'),
+            l.targetName,
+            user?.departmentName || '현장팀',
+            l.scoreDelta > 0 ? `+${l.scoreDelta}점` : `${l.scoreDelta}점`,
+            l.reason,
+            l.photoUrl || '(사진없음)'
+          ];
+        });
+      }
+
+      await exportToPDF(title, headers, data, `안전지수_${activeView}_${selectedMonth}`);
+      toast.success('안전지수 PDF 리포트가 성공적으로 다운로드되었습니다.', { id: 'safety-pdf' });
+    } catch (error) {
+      console.error('Safety PDF export failed:', error);
+      toast.error('PDF 생성 중 오류가 발생했습니다.', { id: 'safety-pdf' });
     }
-
-    await exportToPDF(title, headers, data, '안전지수_보고서');
-    toast.success('PDF 리포트 생성 완료');
   };
 
   return (
@@ -240,6 +353,35 @@ export const SafetyRanking: React.FC = () => {
           </Button>
         </div>
       </header>
+
+      {/* Persistent Month Selector Bar for All Views */}
+      <div className="bg-card p-4 rounded-2xl border border-border shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0">
+            <Calendar className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-xs font-black text-muted-foreground">보고서 조회 및 다운로드 기준 월</div>
+            <div className="text-sm font-black text-foreground">{selectedMonth.replace('-', '년 ')}월 현황</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <input 
+            type="month"
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="flex-1 sm:flex-none bg-muted px-4 py-2.5 rounded-xl text-xs font-black border border-border text-foreground cursor-pointer"
+          />
+          <Button 
+            variant="default"
+            size="sm"
+            onClick={handleExportMonthlyPhotoPDF}
+            className="h-10 px-3.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs gap-1.5 shadow-sm shrink-0"
+          >
+            <FileText className="w-4 h-4" /> 월별 사진리포트 PDF
+          </Button>
+        </div>
+      </div>
 
       <div className="bg-muted/50 p-1 rounded-2xl flex gap-1">
         {(['INDIVIDUAL', 'TEAM', 'LOGS'] as const).map((view) => (
@@ -295,6 +437,11 @@ export const SafetyRanking: React.FC = () => {
                         {user.safetyScore ?? 100}
                         <span className="text-[10px] ml-1 opacity-60">pts</span>
                       </div>
+                      {monthlyStatsByTarget[user.uid]?.delta !== undefined && monthlyStatsByTarget[user.uid].delta !== 0 && (
+                        <div className={cn("text-[10px] font-black", monthlyStatsByTarget[user.uid].delta > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500")}>
+                          {selectedMonth.slice(5)}월: {monthlyStatsByTarget[user.uid].delta > 0 ? `+${monthlyStatsByTarget[user.uid].delta}` : monthlyStatsByTarget[user.uid].delta}pts
+                        </div>
+                      )}
                     </div>
                     {isAdmin && (
                       <Button 
@@ -322,7 +469,14 @@ export const SafetyRanking: React.FC = () => {
                     <div className="w-10 h-10 bg-primary/20 text-primary flex items-center justify-center rounded-xl font-black">
                       {idx + 1}
                     </div>
-                    <span className="text-lg font-black text-foreground">{team.name}</span>
+                    <div>
+                      <span className="text-lg font-black text-foreground">{team.name}</span>
+                      {monthlyDeptDelta[team.id] !== undefined && monthlyDeptDelta[team.id] !== 0 && (
+                        <span className={cn("ml-2 text-xs font-black", monthlyDeptDelta[team.id] > 0 ? "text-emerald-500" : "text-red-500")}>
+                          ({selectedMonth.slice(5)}월 {monthlyDeptDelta[team.id] > 0 ? `+${monthlyDeptDelta[team.id]}` : monthlyDeptDelta[team.id]}pts)
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="text-right">
                      <span className="text-2xl font-black text-primary">{team.average.toFixed(1)}</span>
@@ -338,36 +492,51 @@ export const SafetyRanking: React.FC = () => {
         )}
 
         {activeView === 'LOGS' && (
-          <div className="space-y-2">
-            {logs.map((log) => (
-              <div key={log.id} className="bg-card p-5 rounded-2xl border border-border flex items-start gap-4">
-                <div className={cn(
-                  "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
-                  log.type === 'REWARD' ? "bg-emerald-500/20 text-emerald-500" : "bg-red-500/20 text-red-500"
-                )}>
-                  {log.type === 'REWARD' ? <Plus className="w-5 h-5" /> : <Minus className="w-5 h-5" />}
-                </div>
-                <div className="flex-1 overflow-hidden">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm font-black text-foreground">{log.targetName}</span>
-                    <span className={cn("text-xs font-black", log.scoreDelta > 0 ? "text-emerald-500" : "text-red-500")}>
-                      {log.scoreDelta > 0 ? `+${log.scoreDelta}` : log.scoreDelta}
-                    </span>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between px-2">
+              <span className="text-xs font-black text-muted-foreground">{selectedMonth.replace('-', '년 ')}월 현장점검 및 점수변동 기록</span>
+              <span className="text-xs font-bold text-muted-foreground">총 {filteredLogs.length}건</span>
+            </div>
+            <div className="space-y-2">
+              {filteredLogs.length === 0 ? (
+                <div className="text-center py-16 text-muted-foreground font-bold text-xs bg-card rounded-2xl border border-border">해당 월의 히스토리가 없습니다.</div>
+              ) : (
+                filteredLogs.map((log) => (
+                  <div key={log.id} className="bg-card p-5 rounded-2xl border border-border flex items-start gap-4">
+                    <div className={cn(
+                      "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                      log.type === 'REWARD' ? "bg-emerald-500/20 text-emerald-500" : "bg-red-500/20 text-red-500"
+                    )}>
+                      {log.type === 'REWARD' ? <Plus className="w-5 h-5" /> : <Minus className="w-5 h-5" />}
+                    </div>
+                    <div className="flex-1 overflow-hidden">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-sm font-black text-foreground">{log.targetName}</span>
+                        <span className={cn("text-xs font-black", log.scoreDelta > 0 ? "text-emerald-500" : "text-red-500")}>
+                          {log.scoreDelta > 0 ? `+${log.scoreDelta}` : log.scoreDelta}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground font-bold">{log.reason}</p>
+                      {log.photoUrl && (
+                        <div className="mt-3">
+                          <img src={log.photoUrl} alt="Log Photo" className="w-20 h-20 rounded-xl object-cover border border-border shadow-sm" />
+                        </div>
+                      )}
+                      <p className="text-[10px] text-muted-foreground/40 mt-2 font-bold">{format(new Date(log.createdAt), 'yyyy.MM.dd')}</p>
+                    </div>
                   </div>
-                  <p className="text-xs text-muted-foreground font-bold">{log.reason}</p>
-                  <p className="text-[10px] text-muted-foreground/40 mt-2 font-bold">{format(new Date(log.createdAt), 'yyyy.MM.dd')}</p>
-                </div>
-              </div>
-            ))}
+                ))
+              )}
+            </div>
           </div>
         )}
       </div>
 
       <Dialog open={isAdjustmentOpen} onOpenChange={setIsAdjustmentOpen}>
-        <DialogContent className="bg-card border-none rounded-3xl text-foreground">
+        <DialogContent className="bg-card border-none rounded-3xl text-foreground max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl font-black flex items-center gap-2">
-              <Star className="w-5 h-5 text-amber-500" /> 점수 조정
+              <Star className="w-5 h-5 text-amber-500" /> 점수 조정 및 사진 첨부
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-6 pt-4">
@@ -401,6 +570,64 @@ export const SafetyRanking: React.FC = () => {
                 onChange={e => setReason(e.target.value)} 
                 className="bg-muted border-border h-14 rounded-2xl font-bold"
              />
+
+             <div className="space-y-2">
+               <label className="text-[11px] font-black text-muted-foreground uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                 <Camera className="w-3.5 h-3.5 text-primary" /> 현장 사진 첨부 (선택)
+               </label>
+               <input 
+                 type="file" 
+                 accept="image/*"
+                 onChange={(e) => {
+                   const file = e.target.files?.[0];
+                   if (file) {
+                     const reader = new FileReader();
+                     reader.onload = (event) => {
+                       const img = new Image();
+                       img.onload = () => {
+                         const canvas = document.createElement('canvas');
+                         let width = img.width;
+                         let height = img.height;
+                         const MAX_WIDTH = 600;
+                         const MAX_HEIGHT = 600;
+                         if (width > height) {
+                           if (width > MAX_WIDTH) {
+                             height *= MAX_WIDTH / width;
+                             width = MAX_WIDTH;
+                           }
+                         } else {
+                           if (height > MAX_HEIGHT) {
+                             width *= MAX_HEIGHT / height;
+                             height = MAX_HEIGHT;
+                           }
+                         }
+                         canvas.width = width;
+                         canvas.height = height;
+                         const ctx = canvas.getContext('2d');
+                         ctx?.drawImage(img, 0, 0, width, height);
+                         const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                         setPhotoUrl(dataUrl);
+                       };
+                       img.src = event.target?.result as string;
+                     };
+                     reader.readAsDataURL(file);
+                   }
+                 }}
+                 className="h-14 bg-muted border-2 border-border rounded-2xl text-xs font-bold text-foreground file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-primary file:text-white cursor-pointer w-full pt-2"
+               />
+               {photoUrl && (
+                 <div className="mt-2 relative w-20 h-20 rounded-2xl overflow-hidden border border-border shadow-md">
+                   <img src={photoUrl} alt="Preview" className="w-full h-full object-cover" />
+                   <button 
+                     type="button"
+                     onClick={() => setPhotoUrl('')}
+                     className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 text-xs"
+                   >
+                     <XCircle className="w-3 h-3" />
+                   </button>
+                 </div>
+               )}
+             </div>
           </div>
           <DialogFooter className="mt-4">
             <Button onClick={handleAdjustScore} disabled={isSaving} className="w-full h-14 bg-primary text-white font-black rounded-2xl">

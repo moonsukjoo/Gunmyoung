@@ -93,6 +93,7 @@ export interface SafetyScoreLog {
   newScore: number;
   reason: string;
   type: 'PENALTY' | 'REWARD';
+  photoUrl?: string;
   createdAt: string;
 }
 
@@ -384,6 +385,7 @@ export interface PraiseCoupon {
   points: number;
   createdAt: string;
   status?: 'PENDING' | 'COMPLETED';
+  photoUrl?: string;
 }
 
 export interface RedemptionRequest {

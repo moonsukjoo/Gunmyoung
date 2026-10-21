@@ -17,11 +17,11 @@ import {
   SheetTitle, 
   SheetTrigger 
 } from '@/components/ui/sheet';
-import { Gift, Trophy, Settings, MapPin, Search, ShieldCheck, Download, History, Check, ChevronsUpDown, User, ChevronRight, XCircle } from 'lucide-react';
+import { Gift, Trophy, Settings, MapPin, Search, ShieldCheck, Download, History, Check, ChevronsUpDown, User, ChevronRight, XCircle, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
 import * as XLSX from 'xlsx';
-import { exportToExcel } from '@/lib/exportUtils';
+import { exportToExcel, exportToPDF } from '@/lib/exportUtils';
 import { 
   Table, 
   TableBody, 
@@ -58,14 +58,20 @@ export const Coupons: React.FC = () => {
   const [couponHistory, setCouponHistory] = useState<PraiseCoupon[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'give' | 'history' | 'settings'>('give');
+  const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7));
   
   const [giveCouponForm, setGiveCouponForm] = useState({
     date: new Date().toISOString().split('T')[0],
     time: new Date().toTimeString().slice(0, 5),
     location: '',
     reason: '',
-    points: 1
+    points: 1,
+    photoUrl: ''
   });
+
+  const filteredCouponHistory = React.useMemo(() => {
+    return couponHistory.filter(c => c.date.startsWith(selectedMonth));
+  }, [couponHistory, selectedMonth]);
 
   useEffect(() => {
     if (!profile) return;
@@ -109,7 +115,7 @@ export const Coupons: React.FC = () => {
 
   const exportCouponsToExcel = () => {
     try {
-      const exportData = couponHistory.map(c => {
+      const exportData = filteredCouponHistory.map(c => {
         const receiver = users.find(u => u.uid === c.receiverUid);
         return {
           '날짜': c.date,
@@ -125,11 +131,34 @@ export const Coupons: React.FC = () => {
         };
       });
 
-      exportToExcel(exportData, `칭찬쿠폰지급내역_${new Date().toISOString().split('T')[0]}`, "칭찬쿠폰 내역");
+      exportToExcel(exportData, `칭찬쿠폰지급내역_${selectedMonth}`, "칭찬쿠폰 내역");
       toast.success('칭찬쿠폰 내역 엑셀 파일이 다운로드되었습니다.');
     } catch (error) {
       console.error("Excel export error:", error);
       toast.error('엑셀 변환 중 오류가 발생했습니다.');
+    }
+  };
+
+  const exportCouponsToPDF = async () => {
+    try {
+      const headers = ['일시', '대상자', '부서', '포인트', '사유', '현장사진'];
+      const data = filteredCouponHistory.map(c => {
+        const receiver = users.find(u => u.uid === c.receiverUid);
+        return [
+          `${c.date} ${c.time}`,
+          c.receiverName,
+          receiver?.departmentName || '-',
+          `${c.points}P`,
+          c.reason,
+          c.photoUrl || '(사진없음)'
+        ];
+      });
+
+      await exportToPDF(`칭찬쿠폰 지급 및 첨부내역 리포트 (${selectedMonth})`, headers, data, '칭찬쿠폰_지급내역');
+      toast.success('칭찬쿠폰 내역 PDF 리포트가 생성되었습니다.');
+    } catch (error) {
+      console.error("PDF export error:", error);
+      toast.error('PDF 생성 중 오류가 발생했습니다.');
     }
   };
 
@@ -160,7 +189,8 @@ export const Coupons: React.FC = () => {
         location: giveCouponForm.location,
         reason: giveCouponForm.reason,
         points: giveCouponForm.points,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        photoUrl: giveCouponForm.photoUrl || undefined
       };
 
       await addDoc(collection(db, 'praiseCoupons'), couponData);
@@ -177,9 +207,10 @@ export const Coupons: React.FC = () => {
 
       toast.success('쿠폰이 성공적으로 지급되었습니다.');
       setSelectedUser('');
-      setGiveCouponForm({ ...giveCouponForm, location: '', reason: '' });
-    } catch (error) {
-      toast.error('지급 중 오류가 발생했습니다.');
+      setGiveCouponForm({ ...giveCouponForm, location: '', reason: '', photoUrl: '' });
+    } catch (error: any) {
+      console.error("Coupon give error:", error);
+      toast.error(`지급 중 오류가 발생했습니다: ${error?.message || error}`);
     }
   };
 
@@ -415,6 +446,63 @@ export const Coupons: React.FC = () => {
                   </div>
 
                   <div className="space-y-2">
+                    <label className="text-[11px] font-black text-muted-foreground uppercase tracking-widest ml-1">현장 사진 첨부 (선택사항)</label>
+                    <Input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (uploadEvent) => {
+                            const img = new Image();
+                            img.onload = () => {
+                              const canvas = document.createElement('canvas');
+                              let width = img.width;
+                              let height = img.height;
+                              const MAX_WIDTH = 600;
+                              const MAX_HEIGHT = 600;
+                              if (width > height) {
+                                if (width > MAX_WIDTH) {
+                                  height *= MAX_WIDTH / width;
+                                  width = MAX_WIDTH;
+                                }
+                              } else {
+                                if (height > MAX_HEIGHT) {
+                                  width *= MAX_HEIGHT / height;
+                                  height = MAX_HEIGHT;
+                                }
+                              }
+                              canvas.width = width;
+                              canvas.height = height;
+                              const ctx = canvas.getContext('2d');
+                              ctx?.drawImage(img, 0, 0, width, height);
+                              const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                              setGiveCouponForm(prev => ({ ...prev, photoUrl: dataUrl }));
+                              toast.success('사진이 압축 및 첨부되었습니다.');
+                            };
+                            img.src = uploadEvent.target?.result as string;
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="h-14 bg-muted border-2 border-border rounded-2xl text-xs font-bold text-foreground file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-emerald-500 file:text-white cursor-pointer"
+                    />
+                    {giveCouponForm.photoUrl && (
+                      <div className="mt-2 relative w-20 h-20 rounded-2xl overflow-hidden border border-border shadow-md">
+                        <img src={giveCouponForm.photoUrl} alt="Attached Preview" className="w-full h-full object-cover" />
+                        <button 
+                          type="button"
+                          onClick={() => setGiveCouponForm({ ...giveCouponForm, photoUrl: '' })}
+                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 text-xs"
+                        >
+                          <XCircle className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
                     <label className="text-[11px] font-black text-muted-foreground uppercase tracking-widest ml-1">칭찬 사유</label>
                     <textarea 
                       placeholder="사원에게 전달될 칭찬 사유를 정성껏 작성해주세요" 
@@ -435,19 +523,39 @@ export const Coupons: React.FC = () => {
 
         {activeTab === 'history' && (
           <section className="w-full space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="bg-card p-4 rounded-2xl border border-border flex items-center justify-between">
+              <span className="text-xs font-black text-muted-foreground">조회 월 선택</span>
+              <input 
+                type="month"
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="bg-muted px-4 py-2 rounded-xl text-xs font-black border border-border text-foreground"
+              />
+            </div>
+
             <div className="flex items-center justify-between gap-4 px-2">
               <div className="flex items-center gap-3">
                 <div className="w-2 h-5 bg-primary rounded-full" />
-                <h3 className="text-base font-black text-foreground uppercase tracking-widest">지급 내역</h3>
+                <h3 className="text-base font-black text-foreground uppercase tracking-widest">지급 내역 ({selectedMonth})</h3>
               </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={exportCouponsToExcel}
-                className="h-11 px-4 gap-2 font-black rounded-2xl border-border bg-muted hover:bg-card text-foreground shadow-sm flex items-center"
-              >
-                <Download className="w-4 h-4 text-emerald-500" /> 엑셀 저장
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={exportCouponsToPDF}
+                  className="h-11 px-4 gap-2 font-black rounded-2xl border-border bg-muted hover:bg-card text-foreground shadow-sm flex items-center"
+                >
+                  <FileText className="w-4 h-4 text-rose-500" /> PDF 저장
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={exportCouponsToExcel}
+                  className="h-11 px-4 gap-2 font-black rounded-2xl border-border bg-muted hover:bg-card text-foreground shadow-sm flex items-center"
+                >
+                  <Download className="w-4 h-4 text-emerald-500" /> 엑셀 저장
+                </Button>
+              </div>
             </div>
 
             <Card className="border-none shadow-xl bg-card rounded-[2rem] overflow-hidden border border-border">
@@ -459,20 +567,21 @@ export const Coupons: React.FC = () => {
                         <TableHead className="text-[11px] font-black text-muted-foreground uppercase tracking-widest py-5 pl-8">일시</TableHead>
                         <TableHead className="text-[11px] font-black text-muted-foreground uppercase tracking-widest py-5">대상자</TableHead>
                         <TableHead className="text-[11px] font-black text-muted-foreground uppercase tracking-widest py-5 text-center">포인트</TableHead>
+                        <TableHead className="text-[11px] font-black text-muted-foreground uppercase tracking-widest py-5 text-center">현장사진</TableHead>
                         <TableHead className="text-[11px] font-black text-muted-foreground uppercase tracking-widest py-5 pr-8">사유</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {historyLoading ? (
                         <TableRow>
-                          <TableCell colSpan={4} className="text-center py-20 text-muted-foreground font-bold">로딩 중...</TableCell>
+                          <TableCell colSpan={5} className="text-center py-20 text-muted-foreground font-bold">로딩 중...</TableCell>
                         </TableRow>
-                      ) : couponHistory.length === 0 ? (
+                      ) : filteredCouponHistory.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={4} className="text-center py-20 text-muted-foreground font-bold italic uppercase tracking-widest">데이터가 없습니다.</TableCell>
+                          <TableCell colSpan={5} className="text-center py-20 text-muted-foreground font-bold italic uppercase tracking-widest">해당 월의 데이터가 없습니다.</TableCell>
                         </TableRow>
                       ) : (
-                        couponHistory.map((c) => (
+                        filteredCouponHistory.map((c) => (
                           <TableRow key={c.id} className="border-border hover:bg-muted/50 transition-colors">
                             <TableCell className="pl-8 py-5">
                               <div className="flex flex-col">
@@ -487,6 +596,13 @@ export const Coupons: React.FC = () => {
                               </div>
                             </TableCell>
                             <TableCell className="py-5 font-black text-emerald-500 text-sm text-center">+{c.points}P</TableCell>
+                            <TableCell className="py-5 text-center">
+                              {c.photoUrl ? (
+                                <img src={c.photoUrl} alt="coupon-photo" className="w-10 h-10 rounded-xl object-cover mx-auto border border-border shadow-xs" />
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
                             <TableCell className="pr-8 py-5">
                               <p className="text-[11px] font-bold text-muted-foreground line-clamp-2 max-w-[150px] leading-relaxed">{c.reason}</p>
                             </TableCell>

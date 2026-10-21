@@ -41,13 +41,24 @@ const STEPS = [
 
 const TIME_PRESETS = ['17:00', '18:00', '19:00', '20:00', '21:00'];
 
+const WORK_CATEGORIES = [
+  '용접 및 조립',
+  '그라인딩 및 표면처리',
+  '블록 탑재 및 정렬',
+  '전기 및 케이블 포설',
+  '안전 점검 및 TBM',
+  '자재 반출입 및 정리',
+  '도장 및 보수',
+  '기타 일반 업무'
+];
+
 export const PersonalWorkLog: React.FC = () => {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [logDate, setLogDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [tasks, setTasks] = useState<{ content: string; hours: string }[]>([{ content: '', hours: '' }]);
+  const [tasks, setTasks] = useState<{ content: string; hours: string; category: string }[]>([{ content: '', hours: '', category: '' }]);
   const [clockOutTime, setClockOutTime] = useState('18:00');
   const [recentLogs, setRecentLogs] = useState<IndividualWorkLog[]>([]);
   
@@ -113,7 +124,7 @@ export const PersonalWorkLog: React.FC = () => {
   const handleCopyPreviousLog = () => {
     if (recentLogs.length > 0) {
       const lastLog = recentLogs[0];
-      setTasks(lastLog.tasks.map(t => ({ ...t })));
+      setTasks(lastLog.tasks.map(t => ({ content: t.content, hours: t.hours, category: '' })));
       setClockOutTime(lastLog.clockOutTime);
       toast.success('전일 작업 내용을 불러왔습니다.');
     } else {
@@ -140,7 +151,7 @@ export const PersonalWorkLog: React.FC = () => {
 
   const handleAddTask = () => {
     if (tasks.length < 5) {
-      setTasks([...tasks, { content: '', hours: '' }]);
+      setTasks([...tasks, { content: '', hours: '', category: '' }]);
     } else {
       toast.error('작업 항목은 최대 5개까지 가능합니다.');
     }
@@ -148,13 +159,13 @@ export const PersonalWorkLog: React.FC = () => {
 
   const handleRemoveTask = (idx: number) => {
     if (tasks.length === 1) {
-      setTasks([{ content: '', hours: '' }]);
+      setTasks([{ content: '', hours: '', category: '' }]);
       return;
     }
     setTasks(tasks.filter((_, i) => i !== idx));
   };
 
-  const updateTask = (idx: number, field: 'content' | 'hours', value: string) => {
+  const updateTask = (idx: number, field: 'content' | 'hours' | 'category', value: string) => {
     const newTasks = [...tasks];
     newTasks[idx][field] = value;
     setTasks(newTasks);
@@ -448,25 +459,45 @@ export const PersonalWorkLog: React.FC = () => {
                           </button>
                         )}
                       </div>
-                      <div className="flex gap-2">
-                        <div className="flex-1">
-                          <Input 
-                            placeholder="예: 102블록 하부 용접 및 그라인딩 작업"
-                            value={task.content}
-                            onChange={(e) => updateTask(idx, 'content', e.target.value)}
-                            className="bg-card border-border rounded-xl text-sm font-bold text-foreground h-12"
-                          />
-                        </div>
-                        <div className="w-24 relative">
-                          <Input 
-                            placeholder="시간"
-                            type="number"
-                            step="0.5"
-                            value={task.hours}
-                            onChange={(e) => updateTask(idx, 'hours', e.target.value)}
-                            className="bg-card border-border rounded-xl text-center font-black pr-6 text-foreground h-12"
-                          />
-                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-black text-muted-foreground">시간</span>
+                      <div className="space-y-2.5">
+                        <select
+                          value={task.category || ''}
+                          onChange={(e) => {
+                            const cat = e.target.value;
+                            const newTasks = [...tasks];
+                            newTasks[idx].category = cat;
+                            if (cat && !newTasks[idx].content.includes(cat)) {
+                              newTasks[idx].content = `[${cat}] ${newTasks[idx].content.replace(/^\[.*?\]\s*/, '')}`;
+                            }
+                            setTasks(newTasks);
+                          }}
+                          className="w-full bg-card border border-border rounded-xl text-xs font-black text-foreground h-11 px-3 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        >
+                          <option value="">⚙️ 작업 카테고리 선택 (빠른 입력)</option>
+                          {WORK_CATEGORIES.map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                            <Input 
+                              placeholder="세부 작업 내용 입력 (예: 102블록 하부 용접)"
+                              value={task.content}
+                              onChange={(e) => updateTask(idx, 'content', e.target.value)}
+                              className="bg-card border-border rounded-xl text-sm font-bold text-foreground h-12"
+                            />
+                          </div>
+                          <div className="w-24 relative">
+                            <Input 
+                              placeholder="시간"
+                              type="number"
+                              step="0.5"
+                              value={task.hours}
+                              onChange={(e) => updateTask(idx, 'hours', e.target.value)}
+                              className="bg-card border-border rounded-xl text-center font-black pr-6 text-foreground h-12"
+                            />
+                            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-black text-muted-foreground">시간</span>
+                          </div>
                         </div>
                       </div>
                     </div>
