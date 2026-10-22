@@ -38,7 +38,7 @@ import {
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { exportToExcel, exportToPDF } from '@/lib/exportUtils';
+import { exportToExcel, exportToPDF, exportPhotoCardPDF, ReportCardItem } from '@/lib/exportUtils';
 import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
 
 export const SafetyRanking: React.FC = () => {
@@ -240,26 +240,37 @@ export const SafetyRanking: React.FC = () => {
     }
   };
 
-  // Direct monthly safety inspection photo report PDF download
+  // Direct monthly safety inspection photo report PDF download (4 items per page)
   const handleExportMonthlyPhotoPDF = async () => {
     try {
-      toast.loading(`${selectedMonth} 안전점검 사진 리포트를 생성 중입니다...`, { id: 'safety-pdf' });
-      const title = `안전 지수 변동 및 현장점검 리포트 (${selectedMonth})`;
-      const headers = ['일시', '대상자', '소속 부서', '변동 점수', '변동 사유', '현장 사진'];
-      const data = filteredLogs.map(l => {
+      toast.loading(`${selectedMonth} 안전점검 사진 리포트(1페이지 4건)를 생성 중입니다...`, { id: 'safety-pdf' });
+      const items: ReportCardItem[] = filteredLogs.map((l, idx) => {
         const user = users.find(u => u.uid === l.targetUid);
-        return [
-          format(new Date(l.createdAt), 'yyyy-MM-dd HH:mm'),
-          l.targetName,
-          user?.departmentName || '현장팀',
-          l.scoreDelta > 0 ? `+${l.scoreDelta}점` : `${l.scoreDelta}점`,
-          l.reason,
-          l.photoUrl || '(사진없음)'
-        ];
+        const isReward = l.scoreDelta > 0;
+        return {
+          id: l.id,
+          itemNumber: idx + 1,
+          date: format(new Date(l.createdAt), 'yyyy-MM-dd HH:mm'),
+          targetName: l.targetName,
+          targetSub: `${user?.departmentName || '현장팀'} / ${user?.employeeId || '사원'}`,
+          categoryBadge: isReward ? '안전 모범 포상' : '안전수칙 위반',
+          categoryType: isReward ? 'reward' : 'penalty',
+          scoreBadge: isReward ? `+${l.scoreDelta}점` : `${l.scoreDelta}점`,
+          scoreBadgeType: isReward ? 'positive' : 'negative',
+          authorName: `점검/관리자: ${l.adminName}`,
+          reason: l.reason,
+          photoUrl: l.photoUrl || undefined
+        };
       });
 
-      await exportToPDF(title, headers, data, `안전점검사진보고서_${selectedMonth}`);
-      toast.success(`${selectedMonth} 안전점검 사진 PDF 리포트 다운로드 완료`, { id: 'safety-pdf' });
+      await exportPhotoCardPDF({
+        title: `안전 지수 변동 및 현장점검 리포트 (${selectedMonth})`,
+        subtitle: `총 ${items.length}건 등록 (1페이지 4건 표준 양식, 총 ${Math.ceil(items.length / 4) || 1}페이지)`,
+        monthStr: selectedMonth,
+        items,
+        fileName: `안전점검사진보고서_${selectedMonth}`
+      });
+      toast.success(`${selectedMonth} 안전점검 사진 PDF 리포트(1페이지 4건) 다운로드 완료`, { id: 'safety-pdf' });
     } catch (error) {
       console.error('Safety photo PDF export failed:', error);
       toast.error('PDF 생성 중 오류가 발생했습니다.', { id: 'safety-pdf' });
@@ -269,58 +280,67 @@ export const SafetyRanking: React.FC = () => {
   const handleExportPDF = async () => {
     try {
       toast.loading('안전 지수 PDF 리포트를 생성 중입니다...', { id: 'safety-pdf' });
-      let title = `안전 지수 보고서 (${selectedMonth})`;
-      let headers: string[] = [];
-      let data: any[][] = [];
 
       if (activeView === 'INDIVIDUAL') {
-        title = `개인별 안전 지수 현황 리포트 (${selectedMonth})`;
-        headers = ['순위', '성명', '사번', '부서', '현재 지수', `${selectedMonth} 변동`, '현장 점검사진'];
-        data = filteredUsers.map((u, idx) => {
+        const items: ReportCardItem[] = filteredUsers.map((u, idx) => {
           const stats = monthlyStatsByTarget[u.uid];
           const delta = stats?.delta ?? 0;
-          const photo = stats?.latestPhoto || '(사진없음)';
-          return [
-            idx + 1,
-            u.displayName,
-            u.employeeId || '-',
-            u.departmentName || '-',
-            `${u.safetyScore ?? 100}점`,
-            delta > 0 ? `+${delta}점` : delta < 0 ? `${delta}점` : '0점',
-            photo
-          ];
+          const photo = stats?.latestPhoto;
+          return {
+            id: u.uid,
+            itemNumber: idx + 1,
+            date: `${selectedMonth} 랭킹`,
+            targetName: u.displayName,
+            targetSub: `${u.departmentName || '현장'} / ${u.employeeId || '사원'}`,
+            categoryBadge: idx < 3 ? `TOP ${idx + 1}` : '안전관리 대상',
+            categoryType: idx < 3 ? 'reward' : 'info',
+            scoreBadge: `${u.safetyScore ?? 100}점`,
+            scoreBadgeType: (u.safetyScore ?? 100) >= 100 ? 'positive' : 'negative',
+            authorName: `월간 변동: ${delta > 0 ? `+${delta}` : delta}점`,
+            reason: `${u.displayName} 사원의 현재 안전 지수는 ${u.safetyScore ?? 100}점이며, ${selectedMonth} 누적 변동 점수는 ${delta > 0 ? `+${delta}` : delta}점입니다.`,
+            photoUrl: photo || undefined
+          };
+        });
+
+        await exportPhotoCardPDF({
+          title: `개인별 안전 지수 현황 리포트 (${selectedMonth})`,
+          subtitle: `총 ${items.length}명 등록 (1페이지 4건 표준 양식, 총 ${Math.ceil(items.length / 4) || 1}페이지)`,
+          monthStr: selectedMonth,
+          items,
+          fileName: `개인별_안전지수_${selectedMonth}`
         });
       } else if (activeView === 'TEAM') {
-        title = `팀별 안전 지수 현황 리포트 (${selectedMonth})`;
-        headers = ['순위', '팀명', '인원', '평균 지수', `${selectedMonth} 변동합계`];
-        data = teamRankings.map((t, idx) => {
+        const items: ReportCardItem[] = teamRankings.map((t, idx) => {
           const delta = monthlyDeptDelta[t.id] ?? 0;
-          return [
-            idx + 1,
-            t.name,
-            `${t.count}명`,
-            `${t.average.toFixed(1)}점`,
-            delta > 0 ? `+${delta}점` : delta < 0 ? `${delta}점` : '0점'
-          ];
+          return {
+            id: t.id,
+            itemNumber: idx + 1,
+            date: `${selectedMonth} 팀 랭킹`,
+            targetName: t.name,
+            targetSub: `소속 인원: ${t.count}명`,
+            categoryBadge: `팀 순위 ${idx + 1}위`,
+            categoryType: idx === 0 ? 'reward' : 'info',
+            scoreBadge: `평균 ${t.average.toFixed(1)}점`,
+            scoreBadgeType: t.average >= 100 ? 'positive' : 'neutral',
+            authorName: `팀 변동합계: ${delta > 0 ? `+${delta}` : delta}점`,
+            reason: `${t.name} 소속 인원 ${t.count}명의 평균 안전 지수는 ${t.average.toFixed(1)}점이며, ${selectedMonth} 동안 팀 내 총 점수 변동 합계는 ${delta > 0 ? `+${delta}` : delta}점입니다.`
+          };
+        });
+
+        await exportPhotoCardPDF({
+          title: `팀별 안전 지수 현황 리포트 (${selectedMonth})`,
+          subtitle: `총 ${items.length}개 팀 등록 (1페이지 4건 표준 양식, 총 ${Math.ceil(items.length / 4) || 1}페이지)`,
+          monthStr: selectedMonth,
+          items,
+          fileName: `팀별_안전지수_${selectedMonth}`
         });
       } else {
-        title = `안전 지수 변동 및 현장점검 리포트 (${selectedMonth})`;
-        headers = ['일시', '대상자', '소속 부서', '변동 점수', '변동 사유', '현장 사진'];
-        data = filteredLogs.map(l => {
-          const user = users.find(u => u.uid === l.targetUid);
-          return [
-            format(new Date(l.createdAt), 'yyyy-MM-dd HH:mm'),
-            l.targetName,
-            user?.departmentName || '현장팀',
-            l.scoreDelta > 0 ? `+${l.scoreDelta}점` : `${l.scoreDelta}점`,
-            l.reason,
-            l.photoUrl || '(사진없음)'
-          ];
-        });
+        // LOGS
+        await handleExportMonthlyPhotoPDF();
+        return;
       }
 
-      await exportToPDF(title, headers, data, `안전지수_${activeView}_${selectedMonth}`);
-      toast.success('안전지수 PDF 리포트가 성공적으로 다운로드되었습니다.', { id: 'safety-pdf' });
+      toast.success('안전지수 PDF 리포트(1페이지 4건)가 성공적으로 다운로드되었습니다.', { id: 'safety-pdf' });
     } catch (error) {
       console.error('Safety PDF export failed:', error);
       toast.error('PDF 생성 중 오류가 발생했습니다.', { id: 'safety-pdf' });

@@ -20,8 +20,7 @@ import {
 import { Gift, Trophy, Settings, MapPin, Search, ShieldCheck, Download, History, Check, ChevronsUpDown, User, ChevronRight, XCircle, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
-import * as XLSX from 'xlsx';
-import { exportToExcel, exportToPDF } from '@/lib/exportUtils';
+import { exportToExcel, exportToPDF, exportPhotoCardPDF, ReportCardItem } from '@/lib/exportUtils';
 import { 
   Table, 
   TableBody, 
@@ -141,24 +140,37 @@ export const Coupons: React.FC = () => {
 
   const exportCouponsToPDF = async () => {
     try {
-      const headers = ['일시', '대상자', '부서', '포인트', '사유', '현장사진'];
-      const data = filteredCouponHistory.map(c => {
+      toast.loading(`${selectedMonth} 칭찬쿠폰 4건/페이지 PDF 리포트를 생성 중입니다...`, { id: 'coupon-pdf' });
+      const items: ReportCardItem[] = filteredCouponHistory.map((c, idx) => {
         const receiver = users.find(u => u.uid === c.receiverUid);
-        return [
-          `${c.date} ${c.time}`,
-          c.receiverName,
-          receiver?.departmentName || '-',
-          `${c.points}P`,
-          c.reason,
-          c.photoUrl || '(사진없음)'
-        ];
+        return {
+          id: c.id,
+          itemNumber: idx + 1,
+          date: `${c.date} ${c.time}`,
+          targetName: c.receiverName,
+          targetSub: `${receiver?.departmentName || '부서미지정'} / ${receiver?.employeeId || receiver?.position || '사원'}`,
+          categoryBadge: '칭찬쿠폰',
+          categoryType: 'reward',
+          scoreBadge: `+${c.points}P`,
+          scoreBadgeType: 'positive',
+          authorName: `지급자: ${c.senderName}`,
+          location: c.location,
+          reason: c.reason,
+          photoUrl: c.photoUrl || undefined
+        };
       });
 
-      await exportToPDF(`칭찬쿠폰 지급 및 첨부내역 리포트 (${selectedMonth})`, headers, data, '칭찬쿠폰_지급내역');
-      toast.success('칭찬쿠폰 내역 PDF 리포트가 생성되었습니다.');
+      await exportPhotoCardPDF({
+        title: `칭찬쿠폰 지급 및 현장내역 리포트 (${selectedMonth})`,
+        subtitle: `총 ${items.length}건 등록 (1페이지 4건 표준 양식, 총 ${Math.ceil(items.length / 4) || 1}페이지)`,
+        monthStr: selectedMonth,
+        items,
+        fileName: `칭찬쿠폰_지급내역_${selectedMonth}`
+      });
+      toast.success(`${selectedMonth} 칭찬쿠폰 PDF 리포트(1페이지 4건)가 생성되었습니다.`, { id: 'coupon-pdf' });
     } catch (error) {
       console.error("PDF export error:", error);
-      toast.error('PDF 생성 중 오류가 발생했습니다.');
+      toast.error('PDF 생성 중 오류가 발생했습니다.', { id: 'coupon-pdf' });
     }
   };
 
