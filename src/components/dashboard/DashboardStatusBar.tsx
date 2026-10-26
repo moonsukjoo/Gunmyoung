@@ -20,6 +20,8 @@ import {
 } from '@/components/ui/dialog';
 
 interface DashboardStatusBarProps {
+  isGpsAttendanceEnabled?: boolean;
+  toggleGpsAttendance?: (enabled: boolean) => Promise<boolean>;
   isLocationRetentionActive: boolean;
   retentionRemainingMinutes: number;
   isInsideCheckInZone: boolean;
@@ -31,6 +33,8 @@ interface DashboardStatusBarProps {
 }
 
 export const DashboardStatusBar: React.FC<DashboardStatusBarProps> = ({
+  isGpsAttendanceEnabled = false,
+  toggleGpsAttendance,
   isLocationRetentionActive,
   retentionRemainingMinutes,
   isInsideCheckInZone,
@@ -52,77 +56,124 @@ export const DashboardStatusBar: React.FC<DashboardStatusBarProps> = ({
     <>
       {/* Balanced 2-Column Status Bar (Left: Workplace GPS / Right: Safety Sensor) */}
       <div className="grid grid-cols-2 gap-2">
-        {/* Left: GPS & Workplace Geofence Status */}
+        {/* Left: GPS & Workplace Geofence Status with ON/OFF Control */}
         <div 
           onClick={() => {
-            if (isLocationRetentionActive) {
+            if (isGpsAttendanceEnabled && isLocationRetentionActive) {
               setIsRetentionModalOpen(true);
             }
           }}
           className={cn(
             "relative flex items-center justify-between p-2.5 rounded-2xl bg-card/75 backdrop-blur-md border border-border/70 shadow-2xs transition-all",
-            isLocationRetentionActive && "border-amber-500/40 bg-amber-500/5 cursor-pointer hover:bg-amber-500/10"
+            !isGpsAttendanceEnabled ? "border-border/40 bg-muted/20" :
+            isLocationRetentionActive ? "border-amber-500/40 bg-amber-500/5 cursor-pointer hover:bg-amber-500/10" : "border-border/70"
           )}
         >
           <div className="flex items-center gap-2 min-w-0">
             {/* Status Pulse Indicator */}
             <span className="relative flex h-2.5 w-2.5 shrink-0">
-              <span className={cn(
-                "animate-ping absolute inline-flex h-full w-full rounded-full opacity-75",
-                isLocationRetentionActive 
-                  ? "bg-amber-400" 
-                  : isInsideCheckInZone 
-                    ? "bg-emerald-400" 
-                    : "bg-muted-foreground"
-              )} />
-              <span className={cn(
-                "relative inline-flex rounded-full h-2.5 w-2.5",
-                isLocationRetentionActive 
-                  ? "bg-amber-500" 
-                  : isInsideCheckInZone 
-                    ? "bg-emerald-500" 
-                    : "bg-muted-foreground/60"
-              )} />
+              {isGpsAttendanceEnabled ? (
+                <>
+                  <span className={cn(
+                    "animate-ping absolute inline-flex h-full w-full rounded-full opacity-75",
+                    isLocationRetentionActive 
+                      ? "bg-amber-400" 
+                      : isInsideCheckInZone 
+                        ? "bg-emerald-400" 
+                        : "bg-muted-foreground"
+                  )} />
+                  <span className={cn(
+                    "relative inline-flex rounded-full h-2.5 w-2.5",
+                    isLocationRetentionActive 
+                      ? "bg-amber-500" 
+                      : isInsideCheckInZone 
+                        ? "bg-emerald-500" 
+                        : "bg-muted-foreground/60"
+                  )} />
+                </>
+              ) : (
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-slate-400 dark:bg-slate-600" />
+              )}
             </span>
 
             <div className="min-w-0">
               <div className="flex items-center gap-1">
-                <p className="text-xs font-black text-foreground truncate whitespace-nowrap break-keep">
-                  {isLocationRetentionActive 
-                    ? `위치유지 (${retentionRemainingMinutes}분)` 
-                    : isInsideCheckInZone 
-                      ? "사업장 버퍼권" 
-                      : "사업장 외"}
+                <p className={cn(
+                  "text-xs font-black truncate whitespace-nowrap break-keep",
+                  isGpsAttendanceEnabled ? "text-foreground" : "text-muted-foreground"
+                )}>
+                  {!isGpsAttendanceEnabled
+                    ? "GPS 출근 OFF"
+                    : isLocationRetentionActive 
+                      ? `위치유지 (${retentionRemainingMinutes}분)` 
+                      : isInsideCheckInZone 
+                        ? "사업장 버퍼권" 
+                        : "사업장 외"}
                 </p>
-                {isLocationRetentionActive && (
+                {isGpsAttendanceEnabled && isLocationRetentionActive && (
                   <Info className="w-3 h-3 text-amber-500 shrink-0" />
                 )}
               </div>
               <p className="text-[10px] font-bold text-muted-foreground truncate">
-                {isLocationRetentionActive 
-                  ? "신호 소실 방어" 
-                  : isInsideCheckInZone 
-                    ? `${formattedDist} • 정상` 
-                    : `${formattedDist} • 인식대기`}
+                {!isGpsAttendanceEnabled
+                  ? "수동 출퇴근 모드"
+                  : isLocationRetentionActive 
+                    ? "신호 소실 방어" 
+                    : isInsideCheckInZone 
+                      ? `${formattedDist} • 정상` 
+                      : `${formattedDist} • 인식대기`}
               </p>
             </div>
           </div>
 
-          {/* GPS Single-Refresh Button */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 shrink-0 ml-1 cursor-pointer"
-            onClick={(e) => {
-              e.stopPropagation();
-              refreshLocation();
-              toast.info('GPS 위치를 새로고침했습니다.');
-            }}
-            title="GPS 새로고침"
-          >
-            <RefreshCw className="w-3 h-3" />
-          </Button>
+          {/* GPS Quick ON / OFF & Refresh Buttons */}
+          <div className="flex items-center gap-0.5 shrink-0 ml-1">
+            {!isGpsAttendanceEnabled ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-6 px-2 text-[10px] font-black rounded-lg border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer shadow-2xs whitespace-nowrap break-keep"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleGpsAttendance?.(true);
+                }}
+                title="GPS 자동 출퇴근 기능 켜기"
+              >
+                켜기
+              </Button>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    refreshLocation();
+                    toast.info('GPS 위치를 새로고침했습니다.');
+                  }}
+                  title="GPS 새로고침"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-1.5 text-[9.5px] font-bold text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg cursor-pointer whitespace-nowrap break-keep"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleGpsAttendance?.(false);
+                  }}
+                  title="GPS 자동 출퇴근 끄기 (수동 모드로 전환)"
+                >
+                  끄기
+                </Button>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Right: Safety Sensor & Test Controller */}

@@ -8,8 +8,8 @@ export const DEFAULT_EMPLOYEE_SCHEDULE_SETTINGS: EmployeeWorkScheduleSettings = 
   workStartTime: '08:00',
   workEndTime: '17:00',
   workDays: [1, 2, 3, 4, 5], // Monday ~ Friday
-  autoCheckInEnabled: true,
-  autoCheckOutEnabled: true,
+  autoCheckInEnabled: false, // Default OFF per user request
+  autoCheckOutEnabled: false, // Default OFF per user request
   preShiftArrivalWindowMinutes: 60, // 60 minutes before scheduled start time
   autoTriggerAnytimeOnWorkDays: false,
   lunchStartTime: '12:00',

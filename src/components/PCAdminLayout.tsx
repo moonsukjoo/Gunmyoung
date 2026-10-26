@@ -119,7 +119,7 @@ const PCAdminLayout: React.FC<PCAdminLayoutProps> = ({ children, title }) => {
     {
       group: '안전 보건 교육 및 포상',
       items: [
-        { id: 'safety', label: '지표별 안전지수 설정', icon: ShieldCheck, to: '/admin/pc/safety' },
+        { id: 'safety', label: '안전지수 점수 및 이력 관리', icon: ShieldCheck, to: '/admin/pc/safety' },
         { id: 'training', label: '법정 안전교육 관리', icon: HardHat, to: '/admin/pc/training' },
         { id: 'redemption', label: '포상 현물 신청 관리', icon: Settings, to: '/admin/pc/redemption' },
         { id: 'coupons', label: '안전 포상/쿠폰 관리', icon: Trophy, to: '/admin/pc/coupons' },

@@ -51,6 +51,8 @@ interface PendingExitState {
 }
 
 interface AutoAttendanceContextType {
+  isGpsAttendanceEnabled: boolean;
+  toggleGpsAttendance: (enabled: boolean) => Promise<boolean>;
   locationSettings: AttendanceLocationSettings | null;
   employeeSchedule: EmployeeWorkScheduleSettings | null;
   todayScheduledHours: {
@@ -90,6 +92,23 @@ const AutoAttendanceContext = createContext<AutoAttendanceContextType | undefine
 
 export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { profile } = useAuth();
+
+  // 🛰️ Master GPS Attendance Feature Toggle (Default: FALSE / Inactive per user request)
+  const [isGpsAttendanceEnabled, setIsGpsAttendanceEnabled] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('attendance_gps_feature_enabled');
+      if (stored !== null) {
+        return stored === 'true';
+      }
+    } catch (e) {}
+    return false; // Default: OFF / Inactive
+  });
+
+  const isGpsAttendanceEnabledRef = useRef<boolean>(isGpsAttendanceEnabled);
+  useEffect(() => {
+    isGpsAttendanceEnabledRef.current = isGpsAttendanceEnabled;
+  }, [isGpsAttendanceEnabled]);
+
   const [locationSettings, setLocationSettings] = useState<AttendanceLocationSettings | null>(null);
   const [employeeSchedule, setEmployeeSchedule] = useState<EmployeeWorkScheduleSettings | null>(() => profile?.workScheduleSettings || null);
   const [currentLocation, setCurrentLocation] = useState<CurrentLocation | null>(null);
@@ -101,6 +120,10 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [isForeground, setIsForeground] = useState(true);
   const [lastSyncTime, setLastSyncTime] = useState<number>(Date.now());
+
+  useEffect(() => {
+    pendingExitStateRef.current = pendingExitState;
+  }, [pendingExitState]);
 
   // Load employee's personalized schedule settings
   useEffect(() => {
@@ -144,6 +167,11 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
   const lastExitAlertTimeRef = useRef<number>(0);
   const lastEntryPushTimeRef = useRef<number>(0);
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isRefreshingLocationRef = useRef<boolean>(false);
+  const lastLocationRefreshTimeRef = useRef<number>(0);
+  const pendingExitStateRef = useRef<PendingExitState | null>(null);
+  const syncOnForegroundRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  const handleAppBackgroundedRef = useRef<() => void>(() => {});
 
   // Request push notification permission only after user authentication
   useEffect(() => {
@@ -275,17 +303,34 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
       return;
     }
 
+    const isForce = options?.forceHighAccuracy && options?.maximumAge === 0;
+
+    // 🛑 If GPS attendance feature is disabled, ignore non-forced background queries
+    if (!isGpsAttendanceEnabledRef.current && !isForce) {
+      return Promise.resolve();
+    }
+
+    const now = Date.now();
+    if (!isForce) {
+      if (isRefreshingLocationRef.current) return;
+      if (now - lastLocationRefreshTimeRef.current < 8000) return; // 8s debounce to prevent GNSS chip spinning
+    }
+    isRefreshingLocationRef.current = true;
+    lastLocationRefreshTimeRef.current = now;
+
     const highAcc = options?.forceHighAccuracy ?? isForegroundRef.current;
     const maxAge = options?.maximumAge ?? (isForegroundRef.current ? 5000 : 30000);
-    const timeout = highAcc ? 15000 : 25000;
+    const timeout = highAcc ? 12000 : 20000;
 
     return new Promise((resolve) => {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
+          isRefreshingLocationRef.current = false;
           handlePositionUpdate(pos);
           resolve();
         },
         (err) => {
+          isRefreshingLocationRef.current = false;
           handlePositionError(err);
           resolve();
         },
@@ -334,6 +379,11 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
   const syncOnForeground = useCallback(async () => {
     isForegroundRef.current = true;
     setIsForeground(true);
+
+    // 🛑 If GPS attendance is disabled, do not perform any GPS or geofence operations
+    if (!isGpsAttendanceEnabledRef.current) {
+      return;
+    }
 
     // 1. Immediately switch watcher to responsive high-accuracy mode
     startWatcher(true);
@@ -442,7 +492,12 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
     ).catch(() => {});
 
     setLastSyncTime(Date.now());
-  }, [startWatcher, refreshLocation, todayAttendance, locationSettings, specialDates, profile?.uid, currentLocation, distanceToCenter, determineFirstExitSince, pendingExitState, employeeSchedule]);
+  }, [startWatcher, refreshLocation, todayAttendance, locationSettings, specialDates, profile?.uid, currentLocation, distanceToCenter, determineFirstExitSince, employeeSchedule]);
+
+  // Keep latest refs of handlers to avoid re-triggering lifecycle listeners
+  useEffect(() => {
+    syncOnForegroundRef.current = syncOnForeground;
+  }, [syncOnForeground]);
 
   const handleAppBackgrounded = useCallback(() => {
     isForegroundRef.current = false;
@@ -450,13 +505,20 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
     startWatcher(false);
   }, [startWatcher]);
 
+  useEffect(() => {
+    handleAppBackgroundedRef.current = handleAppBackgrounded;
+  }, [handleAppBackgrounded]);
+
   // Lifecycle listeners for Foreground/Background transitions (Web + Capacitor)
+  // Mounted once per authenticated user session to prevent memory leaks and bridge spam
   useEffect(() => {
     if (!profile?.uid) return;
 
     // Initial start: zero-battery on-demand mode (clear any active GNSS watchers)
     startWatcher(isForegroundRef.current);
-    refreshLocation({ forceHighAccuracy: true });
+    if (isGpsAttendanceEnabledRef.current) {
+      refreshLocation({ forceHighAccuracy: true });
+    }
 
     // Periodic 1-minute light check for morning/evening alarm arrival
     const intervalTimer = setInterval(() => {
@@ -464,7 +526,9 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
         todayAttendance,
         employeeSchedule,
         (_type) => {
-          refreshLocation({ forceHighAccuracy: true }).catch(() => {});
+          if (isGpsAttendanceEnabledRef.current) {
+            refreshLocation({ forceHighAccuracy: true }).catch(() => {});
+          }
         }
       ).catch(() => {});
     }, 60000);
@@ -472,29 +536,29 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
     // 1. Web visibilitychange (Tab switch, browser minimization, screen on/off)
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        syncOnForeground();
+        syncOnForegroundRef.current?.();
       } else {
-        handleAppBackgrounded();
+        handleAppBackgroundedRef.current?.();
       }
     };
 
     // 2. Window focus & pageshow
     const handleFocus = () => {
-      syncOnForeground();
+      syncOnForegroundRef.current?.();
     };
 
     const handlePageShow = () => {
-      syncOnForeground();
+      syncOnForegroundRef.current?.();
     };
 
     // 3. Network online reconnection
     const handleOnline = () => {
-      syncOnForeground();
+      syncOnForegroundRef.current?.();
     };
 
     // 4. Mobile / Cordova resume
     const handleResume = () => {
-      syncOnForeground();
+      syncOnForegroundRef.current?.();
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -509,9 +573,9 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
       if (Capacitor.isNativePlatform?.() || typeof CapApp !== 'undefined') {
         CapApp.addListener('appStateChange', (state) => {
           if (state.isActive) {
-            syncOnForeground();
+            syncOnForegroundRef.current?.();
           } else {
-            handleAppBackgrounded();
+            handleAppBackgroundedRef.current?.();
           }
         }).then((h) => {
           capListenerHandle = h;
@@ -537,7 +601,7 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
         capListenerHandle.remove();
       }
     };
-  }, [syncOnForeground, handleAppBackgrounded, startWatcher, refreshLocation]);
+  }, [profile?.uid, startWatcher, refreshLocation]);
 
   // 6. Automated Attendance State Machine (Check-in, Departure Pending, and Confirmed Check-out with Buffer & Retention)
   const geofenceBufferMeters = locationSettings?.geofenceBufferMeters ?? 500;
@@ -549,7 +613,7 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
   const isOutsideCheckOutZone = distanceToCenter !== null && locationSettings !== null && distanceToCenter >= effectiveCheckOutRadius;
 
   useEffect(() => {
-    if (!profile?.uid || !locationSettings || distanceToCenter === null) return;
+    if (!isGpsAttendanceEnabled || !profile?.uid || !locationSettings || distanceToCenter === null) return;
 
     const checkInRadius = locationSettings.checkInRadius || 1000;
     const checkOutRadius = locationSettings.checkOutRadius || 2000;
@@ -764,7 +828,7 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
     if (checkIntervalRef.current) clearInterval(checkIntervalRef.current);
 
     checkIntervalRef.current = setInterval(() => {
-      if (!profile?.uid || !todayAttendance?.clockIn || todayAttendance?.clockOut) {
+      if (!isGpsAttendanceEnabled || !profile?.uid || !todayAttendance?.clockIn || todayAttendance?.clockOut) {
         setPendingExitState(null);
         return;
       }
@@ -840,15 +904,7 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
     };
   }, [profile?.uid, todayAttendance, locationSettings, specialDates, currentLocation, distanceToCenter, determineFirstExitSince]);
 
-  // Periodic Attendance Push Alert Checker (runs every 30 seconds to catch 07:30, 17:00, 18:00, 19:00 exact minute triggers)
-  useEffect(() => {
-    checkAndTriggerScheduledAttendanceAlerts(todayAttendance).catch(() => {});
-    const alertInterval = setInterval(() => {
-      checkAndTriggerScheduledAttendanceAlerts(todayAttendance).catch(() => {});
-    }, 30000);
-
-    return () => clearInterval(alertInterval);
-  }, [todayAttendance]);
+  // Periodic Attendance Push Alert Checker: handled cleanly by the 1-minute interval in lifecycle effect
 
   // 8. 1-Click Save Current GPS as Base Point (기준점 등록)
   const saveCurrentLocationAsBasePoint = async (): Promise<boolean> => {
@@ -958,9 +1014,48 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
     }
   };
 
+  const toggleGpsAttendance = async (enabled: boolean): Promise<boolean> => {
+    try {
+      setIsGpsAttendanceEnabled(enabled);
+      try {
+        localStorage.setItem('attendance_gps_feature_enabled', enabled ? 'true' : 'false');
+      } catch (e) {}
+
+      // If user is manager/admin, update global setting
+      if (profile && ['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER'].includes(profile.role)) {
+        await updateCustomLocationSettings({
+          gpsAttendanceEnabled: enabled,
+          autoClockInEnabled: enabled,
+          autoClockOutEnabled: enabled
+        }).catch(() => {});
+      }
+
+      if (enabled) {
+        toast.success('🛰️ GPS 출퇴근 기능 활성화', {
+          description: '사업장 진입 시 위치 기반 자동 출근 감지가 시작됩니다.'
+        });
+        refreshLocation({ forceHighAccuracy: true, maximumAge: 0 }).catch(() => {});
+      } else {
+        toast.info('🛑 GPS 출퇴근 기능 비활성화 (수동 모드)', {
+          description: 'GPS 자동 감지가 중지되었으며 수동 출퇴근 모드로 전환되었습니다.'
+        });
+        setCurrentLocation(null);
+        setDistanceToCenter(null);
+        setIsTracking(false);
+        setPendingExitState(null);
+      }
+      return true;
+    } catch (e: any) {
+      toast.error('설정 저장 실패: ' + (e?.message || ''));
+      return false;
+    }
+  };
+
   return (
     <AutoAttendanceContext.Provider
       value={{
+        isGpsAttendanceEnabled,
+        toggleGpsAttendance,
         locationSettings,
         employeeSchedule,
         todayScheduledHours,

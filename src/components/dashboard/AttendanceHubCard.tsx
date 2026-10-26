@@ -30,6 +30,7 @@ interface AttendanceHubCardProps {
     remainingSeconds: number;
     progressPercent: number;
   } | null;
+  isGpsAttendanceEnabled?: boolean;
 }
 
 export const AttendanceHubCard: React.FC<AttendanceHubCardProps> = ({
@@ -40,7 +41,8 @@ export const AttendanceHubCard: React.FC<AttendanceHubCardProps> = ({
   isClockingOut,
   handleClockIn,
   handleClockOut,
-  pendingExitState
+  pendingExitState,
+  isGpsAttendanceEnabled = false
 }) => {
   const navigate = useNavigate();
   const [showWeekly, setShowWeekly] = useState(false);
@@ -88,6 +90,15 @@ export const AttendanceHubCard: React.FC<AttendanceHubCardProps> = ({
               <span className="font-mono text-[11px] font-bold text-muted-foreground bg-muted/70 px-1.5 py-0.5 rounded-md shrink-0">
                 {currentTimeStr}
               </span>
+              {isGpsAttendanceEnabled ? (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-bold border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10">
+                  GPS ON
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-bold border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10">
+                  수동 모드 (GPS OFF)
+                </Badge>
+              )}
             </div>
             <p className="text-[11px] font-bold text-muted-foreground truncate">
               {format(new Date(), 'yyyy년 M월 d일 (EEEE)', { locale: ko })}

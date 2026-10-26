@@ -297,7 +297,7 @@ service cloud.firestore {
     
     match /safetyScoreLogs/{logId} {
       allow read: if isAuthenticated();
-      allow create: if isHRManager() || isSafetyManager();
+      allow create, update: if isHRManager() || isSafetyManager() || isCoreAdmin();
       allow delete: if isHRManager() || isSafetyManager() || isCoreAdmin();
     }
 

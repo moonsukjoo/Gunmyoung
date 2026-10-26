@@ -196,8 +196,9 @@ export interface AttendanceLocationSettings {
   geofenceBufferMeters?: number; // in meters (default 500m geofencing buffer / tolerance)
   locationRetentionMinutes?: number; // in minutes (default 15 minutes minimum validity retention)
   pendingExitTimeoutMinutes: number; // in minutes (default 120min = 2 hours)
-  autoClockInEnabled?: boolean; // default true
-  autoClockOutEnabled?: boolean; // default true
+  gpsAttendanceEnabled?: boolean; // Master GPS Attendance feature toggle (default false)
+  autoClockInEnabled?: boolean; // default false
+  autoClockOutEnabled?: boolean; // default false
   coreStartHour: number; // default 8
   coreStartMin: number; // default 0
   coreEndHour: number; // default 17

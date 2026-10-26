@@ -26,8 +26,9 @@ export const DEFAULT_ATTENDANCE_LOCATION_SETTINGS: AttendanceLocationSettings = 
   geofenceBufferMeters: 500, // 500m 허용 오차 범위 (Geofencing Buffer)
   locationRetentionMinutes: 15, // 15분 위치 유지 모드 (GPS 일시 소실/지터 방지)
   pendingExitTimeoutMinutes: 120, // 2시간(120분) 경과 시 확정
-  autoClockInEnabled: true,
-  autoClockOutEnabled: true,
+  gpsAttendanceEnabled: false, // Default OFF per user request
+  autoClockInEnabled: false,
+  autoClockOutEnabled: false,
   coreStartHour: 8,
   coreStartMin: 0,
   coreEndHour: 17,

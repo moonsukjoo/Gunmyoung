@@ -145,6 +145,8 @@ const ProtectedRoute = ({ children, roles, permission, permissions }: { children
 function BackButtonHandler() {
   const navigate = useNavigate();
   const location = useLocation();
+  const locationRef = React.useRef(location.pathname);
+  locationRef.current = location.pathname;
   const lastBackPressedRef = React.useRef<number>(0);
 
   useEffect(() => {
@@ -155,13 +157,13 @@ function BackButtonHandler() {
     let isMounted = true;
     let activeListener: any = null;
 
-    CapApp.addListener('backButton', (data) => {
-      const currentPath = location.pathname;
+    CapApp.addListener('backButton', () => {
+      const currentPath = locationRef.current;
       
       // If we are on home/dashboard or login page, exit on double back press
       if (currentPath === '/' || currentPath === '/login' || currentPath === '/admin/pc-dashboard') {
         const now = Date.now();
-        if (now - lastBackPressedRef.current < 2000) {
+        if (lastBackPressedRef.current > 0 && now - lastBackPressedRef.current < 2000) {
           CapApp.exitApp();
         } else {
           lastBackPressedRef.current = now;
@@ -180,56 +182,23 @@ function BackButtonHandler() {
       } else {
         l.remove();
       }
+    }).catch(e => {
+      console.warn("Capacitor backButton listener failed:", e);
     });
 
     return () => {
       isMounted = false;
-      if (activeListener) {
+      if (activeListener && typeof activeListener.remove === 'function') {
         activeListener.remove();
       }
     };
-  }, [location.pathname, navigate]);
+  }, [navigate]);
 
   return null;
 }
 
 function AppContent() {
   const { profile } = useAuth();
-  
-  // Request Geolocation permissions automatically on app startup ONLY after authentication
-  useEffect(() => {
-    if (!profile?.uid) return;
-
-    const requestInitialLocationPermission = async () => {
-      try {
-        if (Capacitor.isNativePlatform()) {
-          // Native app: check and request Geolocation permissions using Capacitor Geolocation
-          const status = await Geolocation.checkPermissions();
-          if (status.location !== 'granted' && status.coarseLocation !== 'granted') {
-            await Geolocation.requestPermissions();
-          }
-        } else {
-          // Web Browsers: prompt for location permission gently with a dummy fast query
-          if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-              () => {},
-              () => {},
-              { enableHighAccuracy: false, timeout: 5000 }
-            );
-          }
-        }
-      } catch (err) {
-        console.warn('Silent startup location permission request failed:', err);
-      }
-    };
-
-    // Small delay to let UI mount smoothly without freezing initial paint
-    const timer = setTimeout(() => {
-      requestInitialLocationPermission();
-    }, 800);
-
-    return () => clearTimeout(timer);
-  }, [profile?.uid]);
   
   useLayoutEffect(() => {
     if (profile?.lightTheme) {
@@ -301,7 +270,7 @@ function AppContent() {
             <Route path="/admin/pc/attendance" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="admin"><PCAdminAttendance /></ProtectedRoute>} />
             <Route path="/admin/pc/leave" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="admin"><PCAdminLeave /></ProtectedRoute>} />
             <Route path="/admin/pc/payslip" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="admin"><PCAdminPayslip /></ProtectedRoute>} />
-            <Route path="/admin/pc/safety" element={<ProtectedRoute roles={['CEO']} permission="admin"><PCAdminSafety /></ProtectedRoute>} />
+            <Route path="/admin/pc/safety" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER']} permission="admin"><PCAdminSafety /></ProtectedRoute>} />
             <Route path="/admin/pc/attendance-status" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER']} permission="admin"><AdminAttendanceStatus /></ProtectedRoute>} />
             <Route path="/admin/pc/notices" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="admin"><PCAdminNotices /></ProtectedRoute>} />
             <Route path="/admin/pc/worklog" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER']} permission="admin"><PCAdminWorkLog /></ProtectedRoute>} />

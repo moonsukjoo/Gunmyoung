@@ -44,6 +44,7 @@ import { testTriggerAttendanceAlert } from '@/services/attendanceNotificationSch
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 
 export const AttendanceSettings: React.FC = () => {
   const navigate = useNavigate();
@@ -56,7 +57,9 @@ export const AttendanceSettings: React.FC = () => {
     isInsideCheckInZone, 
     todayAttendance,
     isForeground,
-    refreshLocation
+    refreshLocation,
+    isGpsAttendanceEnabled,
+    toggleGpsAttendance
   } = useAutoAttendance();
 
   // Local form state
@@ -567,7 +570,78 @@ export const AttendanceSettings: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* 4. Auto Attendance Trigger Engine Options */}
+        {/* 4. GPS Attendance Master Switch Card */}
+        <Card className={cn(
+          "border transition-all shadow-sm",
+          isGpsAttendanceEnabled 
+            ? "border-emerald-500/40 bg-emerald-500/[0.02]" 
+            : "border-amber-500/40 bg-amber-500/[0.02]"
+        )}>
+          <CardHeader className="pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className={cn(
+                  "p-2 rounded-lg shrink-0",
+                  isGpsAttendanceEnabled 
+                    ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400" 
+                    : "bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400"
+                )}>
+                  <MapPin className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <CardTitle className="text-base text-slate-900 dark:text-white">
+                      GPS 위치 기반 출퇴근 기능 (마스터 스위치)
+                    </CardTitle>
+                    <Badge variant={isGpsAttendanceEnabled ? "default" : "outline"} className={cn(
+                      "text-xs font-black",
+                      isGpsAttendanceEnabled 
+                        ? "bg-emerald-600 text-white hover:bg-emerald-700" 
+                        : "border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40"
+                    )}>
+                      {isGpsAttendanceEnabled ? "GPS 기능 켜짐 (ON)" : "GPS 기능 꺼짐 (OFF - 안정 모드)"}
+                    </Badge>
+                  </div>
+                  <CardDescription className="text-xs text-slate-500 mt-1">
+                    {isGpsAttendanceEnabled 
+                      ? "현재 GPS 위치 조회가 활성화되어 사업장 반경을 체크합니다." 
+                      : "앱 실행 시 렉/멈춤 현상을 방지하기 위해 기본 비활성화되어 있습니다. 수동 출퇴근 버튼으로 안전하게 출퇴근을 기록할 수 있습니다."}
+                  </CardDescription>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 self-end sm:self-center shrink-0">
+                <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                  {isGpsAttendanceEnabled ? "ON" : "OFF"}
+                </span>
+                <Switch
+                  checked={isGpsAttendanceEnabled}
+                  onCheckedChange={async (checked) => {
+                    await toggleGpsAttendance(checked);
+                  }}
+                />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="text-xs p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+              <span className="text-slate-600 dark:text-slate-400 leading-relaxed">
+                💡 <strong>안내:</strong> 현재 기기 부하 및 초기 멈춤을 원천 차단하기 위해 기본값은 OFF입니다. 수동 출퇴근은 GPS와 상관없이 홈 화면에서 원터치로 즉시 작동합니다.
+              </span>
+              <Button
+                type="button"
+                variant={isGpsAttendanceEnabled ? "destructive" : "default"}
+                size="sm"
+                onClick={() => toggleGpsAttendance(!isGpsAttendanceEnabled)}
+                className="h-7 text-xs font-bold shrink-0 self-end sm:self-center"
+              >
+                {isGpsAttendanceEnabled ? "GPS 기능 끄기" : "GPS 기능 켜기"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 5. Auto Attendance Trigger Engine Options */}
         <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">

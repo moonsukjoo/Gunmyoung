@@ -62,6 +62,7 @@ import {
   Radio
 } from 'lucide-react';
 import { db } from '@/firebase';
+import { Capacitor } from '@capacitor/core';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, limit, orderBy, getDocs, Timestamp, setDoc } from 'firebase/firestore';
 import { Attendance, Notice, Role, AccidentCase, LeaveRequest, Task, UserProfile } from '@/types';
 import { format, startOfMonth, subMonths, differenceInDays } from 'date-fns';
@@ -337,7 +338,9 @@ export const Dashboard: React.FC = () => {
     geofenceBufferMeters,
     pendingExitState,
     todayAttendance,
-    refreshLocation 
+    refreshLocation,
+    isGpsAttendanceEnabled,
+    toggleGpsAttendance
   } = useAutoAttendance();
   const [weeklyAttendanceMap, setWeeklyAttendanceMap] = useState<Record<string, Attendance>>({});
   const [specialDates, setSpecialDates] = useState<Record<string, any>>({});
@@ -507,8 +510,12 @@ export const Dashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // Only intercept if we are on the primary home dashboard view to prevent random navigation capture
-    // Check if back interceptor state has already been pushed to prevent duplicating junk history entries
+    // On native mobile platforms (Capacitor), the hardware back button is handled cleanly by App.tsx BackButtonHandler
+    if (Capacitor.isNativePlatform()) {
+      return;
+    }
+
+    // Web browser only: prevent accidental browser page exit on home
     const currentState = window.history.state;
     const hasInterceptor = currentState && currentState.isBackInterceptor;
 
@@ -539,7 +546,7 @@ export const Dashboard: React.FC = () => {
       const lastBack = sessionStorage.getItem('last_back_clicked_time');
       const lastTime = lastBack ? parseInt(lastBack, 10) : 0;
 
-      if (now - lastTime < 2000) {
+      if (lastTime > 0 && now - lastTime < 2000) {
         toast.error('애플리케이션을 종료합니다...', { duration: 1500 });
         sessionStorage.removeItem('last_back_clicked_time');
         setIsAppExited(true);
@@ -1246,6 +1253,8 @@ export const Dashboard: React.FC = () => {
         isMonitoring={isMonitoring}
         startMonitoring={startMonitoring}
         geofenceBufferMeters={geofenceBufferMeters}
+        isGpsAttendanceEnabled={isGpsAttendanceEnabled}
+        toggleGpsAttendance={toggleGpsAttendance}
       />
 
       {/* 🚀 CUSTOMIZABLE QUICK ACTION SHORTCUTS (사용자 맞춤 빠른 실행 메뉴) */}
@@ -1506,6 +1515,7 @@ export const Dashboard: React.FC = () => {
         handleClockIn={handleClockIn}
         handleClockOut={handleClockOut}
         pendingExitState={pendingExitState}
+        isGpsAttendanceEnabled={isGpsAttendanceEnabled}
       />
 
       {/* 🛠️ 3. STREAMLINED ALL-SERVICES HUB (모든 서비스 4열 아이콘 런처) */}

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { Motion } from '@capacitor/motion';
+import { Capacitor } from '@capacitor/core';
 import { useAuth } from './AuthProvider';
 import { db } from '../firebase';
 import { doc, updateDoc, addDoc, collection, serverTimestamp, onSnapshot, getDocs, query, where } from 'firebase/firestore';
@@ -10,7 +11,7 @@ import { toast } from 'sonner';
 
 interface SafetySensorContextType {
   isMonitoring: boolean;
-  startMonitoring: () => void;
+  startMonitoring: () => Promise<boolean>;
   stopMonitoring: () => void;
   lastAcceleration: { x: number; y: number; z: number } | null;
 }
@@ -20,7 +21,7 @@ const SafetySensorContext = createContext<SafetySensorContextType | undefined>(u
 export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { profile } = useAuth();
   const [isMonitoring, setIsMonitoring] = useState(false);
-  const [lastAcceleration, setLastAcceleration] = useState<{ x: number; y: number; z: number } | null>(null);
+  const lastAccelerationRef = useRef<{ x: number; y: number; z: number } | null>(null);
   const [alertType, setAlertType] = useState<'FALL' | 'IMPACT' | null>(null);
   const [countdown, setCountdown] = useState(15);
   const [thresholds, setThresholds] = useState({
@@ -33,6 +34,8 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const fallStartTimeRef = useRef<number | null>(null);
   const isAlertingRef = useRef(false);
+  const monitoringStartTimeRef = useRef<number>(0);
+  const lastProcessTimeRef = useRef<number>(0);
 
   // High-fidelity sensor filtering refs
   const gravityRef = useRef({ x: 0, y: 0, z: 9.8 });
@@ -231,8 +234,11 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const startMonitoring = async () => {
     if (isMonitoring) return true;
 
+    monitoringStartTimeRef.current = Date.now();
+    gravityInitRef.current = false;
+
     // Check if actual mobile device to bind hardware motion API correctly
-    const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || Capacitor.isNativePlatform();
     if (!isMobileDevice) {
       setIsMonitoring(true);
       return true;
@@ -259,30 +265,31 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
           return;
         }
 
+        // Throttle high-frequency hardware sensor interrupts to max 25Hz to keep JS main thread smooth
+        const now = Date.now();
+        if (now - lastProcessTimeRef.current < 40) {
+          return;
+        }
+        lastProcessTimeRef.current = now;
+
         // 2. Physical sensors exhibit thermal and electronic noise; perfect (0,0,0) is physically impossible.
-        // If all readings are 0, it means we are on a desktop browser simulation or inactive/unsupported environment.
         if (x === 0 && y === 0 && z === 0) {
           return;
         }
 
         // Determine raw magnitude of the incoming vector
         const rawMag = Math.sqrt(x * x + y * y + z * z);
-
-        // 3. Reject near-zero readings which act as weightlessness simulation in desktop/inactive states
         if (rawMag < 0.1) {
           return;
         }
 
-        // Auto-scale detection/calibration:
-        // Some devices/WebViews report acceleration in Gs (where gravity is ~1.0) rather than m/s² (where gravity is ~9.8).
-        // Track the baseline magnitude with an exponential moving average to calibrate scale.
+        // Auto-scale detection/calibration (Gs vs m/s²)
         if (typeof (window as any)._avgRawMagnitude === 'undefined') {
           (window as any)._avgRawMagnitude = rawMag;
         } else {
           (window as any)._avgRawMagnitude = 0.05 * rawMag + 0.95 * (window as any)._avgRawMagnitude;
         }
 
-        // If the baseline raw magnitude is low (less than 3.0), multiply standard values by 9.8 to convert G-force to m/s²
         const isGForceUnit = (window as any)._avgRawMagnitude < 3.0;
         const scaleFactor = isGForceUnit ? 9.8 : 1.0;
 
@@ -290,15 +297,17 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
         const sy = y * scaleFactor;
         const sz = z * scaleFactor;
 
-        setLastAcceleration({ x: sx, y: sy, z: sz });
+        // Store acceleration in ref without triggering full-app re-renders
+        lastAccelerationRef.current = { x: sx, y: sy, z: sz };
 
         // Initialize gravity direction vector on first reading using normalized values
         if (!gravityInitRef.current) {
           gravityRef.current = { x: sx, y: sy, z: sz };
           gravityInitRef.current = true;
+          return; // Let gravity baseline establish
         }
 
-        // Apply a low-pass filter to isolate stable gravity vector (alpha = 0.9)
+        // Apply low-pass filter to isolate stable gravity vector (alpha = 0.9)
         const alpha = 0.9;
         const g = gravityRef.current;
         g.x = alpha * g.x + (1 - alpha) * sx;
@@ -315,7 +324,6 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
         const linearMagnitude = Math.sqrt(linearX * linearX + linearY * linearY + linearZ * linearZ);
 
         // Keep track of recent rapid movement peaks to detect active phone shaking
-        const now = Date.now();
         peaksHistoryRef.current = peaksHistoryRef.current.filter(t => now - t < 1500);
         if (linearMagnitude > 14.5) {
           const lastPeak = peaksHistoryRef.current[peaksHistoryRef.current.length - 1] || 0;
@@ -332,29 +340,32 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
           isShakingActiveRef.current = false;
         }
 
-        // Physics-driven adaptivity: Respect chosen admin sensitivity levels with a logical safety floor of 15.0 m/s²
+        // Startup calibration grace period (first 2.5 seconds): don't trigger alerts while sensors initialize
+        if (now - monitoringStartTimeRef.current < 2500) {
+          return;
+        }
+
+        // Physics-driven adaptivity: Respect chosen admin sensitivity levels with a logical safety floor
         const impactLimit = Math.max(15.0, thresholds.impact || 45.0);
         const fallLimit = Math.max(1.8, Math.min(4.5, thresholds.fall || 3.0));
         const monitorDuration = Math.max(120, thresholds.duration || 180);
 
         // Fall detection uses raw magnitude:
         // Free-fall results in near-zero gravity force.
-        // We block fall detection if the phone is being actively shaken or exhibits high linear acceleration.
         const rawMagnitudeNormalized = Math.sqrt(sx * sx + sy * sy + sz * sz);
         const isDeviceFreeFalling = rawMagnitudeNormalized < fallLimit && linearMagnitude < 6.0 && !isShakingActiveRef.current;
 
         if (isDeviceFreeFalling) {
           if (!fallStartTimeRef.current) {
-            fallStartTimeRef.current = Date.now();
-          } else if (Date.now() - fallStartTimeRef.current > monitorDuration) {
+            fallStartTimeRef.current = now;
+          } else if (now - fallStartTimeRef.current > monitorDuration) {
             triggerAlert('FALL');
           }
         } else {
           fallStartTimeRef.current = null;
         }
 
-        // To trigger an IMPACT alert, we check if the linear acceleration exceeds the configured limit.
-        // For testing and high sensitivity, we allow shaking to trigger it if linearMagnitude is high enough.
+        // To trigger an IMPACT alert, check linear acceleration
         const activeImpactLimit = isShakingActiveRef.current 
           ? Math.max(impactLimit * 1.2, 50.0) 
           : impactLimit;
@@ -364,28 +375,31 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }
       };
 
-      try {
-        if (Motion && typeof Motion.addListener === 'function') {
-          await Motion.addListener('accel', (event) => {
+      // Selectively register Capacitor native Motion plugin OR web devicemotion (NEVER both simultaneously)
+      let capHandle: any = null;
+      if (Capacitor.isNativePlatform() && Motion && typeof Motion.addListener === 'function') {
+        try {
+          capHandle = await Motion.addListener('accel', (event) => {
             const { x, y, z } = event.accelerationIncludingGravity;
             processMotion(x, y, z);
           });
+          (window as any)._safetySensorCapHandle = capHandle;
+        } catch (e) {
+          console.warn("Capacitor Motion listener failed, falling back to web event:", e);
         }
-      } catch (e) {
-        console.warn("Capacitor Motion listener failed:", e);
       }
 
-      const handleWebMotion = (event: DeviceMotionEvent) => {
-        const acc = event.accelerationIncludingGravity;
-        if (!acc) return;
-        processMotion(acc.x || 0, acc.y || 0, acc.z || 0);
-      };
-
-      window.addEventListener('devicemotion', handleWebMotion);
-      const cleanup = () => {
-        window.removeEventListener('devicemotion', handleWebMotion);
-      };
-      (window as any)._safetySensorCleanup = cleanup;
+      if (!capHandle) {
+        const handleWebMotion = (event: DeviceMotionEvent) => {
+          const acc = event.accelerationIncludingGravity;
+          if (!acc) return;
+          processMotion(acc.x || 0, acc.y || 0, acc.z || 0);
+        };
+        window.addEventListener('devicemotion', handleWebMotion);
+        (window as any)._safetySensorCleanup = () => {
+          window.removeEventListener('devicemotion', handleWebMotion);
+        };
+      }
 
       setIsMonitoring(true);
       return true;
@@ -397,6 +411,10 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const stopMonitoring = () => {
     try {
+      if ((window as any)._safetySensorCapHandle && typeof (window as any)._safetySensorCapHandle.remove === 'function') {
+        (window as any)._safetySensorCapHandle.remove();
+        delete (window as any)._safetySensorCapHandle;
+      }
       if (Motion && typeof Motion.removeAllListeners === 'function') {
         Motion.removeAllListeners();
       }
@@ -421,7 +439,6 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, []);
 
   // Automatically start monitoring if profile exists
-  // BUT we don't block on errors here anymore
   useEffect(() => {
      if (profile && !isMonitoring) {
         startMonitoring().catch(e => console.error("Auto-start monitoring failed:", e));
@@ -429,7 +446,7 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [profile]);
 
   return (
-    <SafetySensorContext.Provider value={{ isMonitoring, startMonitoring, stopMonitoring, lastAcceleration }}>
+    <SafetySensorContext.Provider value={{ isMonitoring, startMonitoring, stopMonitoring, lastAcceleration: lastAccelerationRef.current }}>
       {children}
       
       {/* Emergency Overlay */}
