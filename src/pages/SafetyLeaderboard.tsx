@@ -17,7 +17,7 @@ import {
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/components/AuthProvider';
-import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
+import { handleFirestoreError, OperationType } from '@/firebase';
 
 export const SafetyLeaderboard: React.FC = () => {
   const { profile } = useAuth();
@@ -256,3 +256,5 @@ export const SafetyLeaderboard: React.FC = () => {
     </div>
   );
 };
+
+export default SafetyLeaderboard;

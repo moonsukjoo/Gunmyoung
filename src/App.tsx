@@ -14,30 +14,33 @@ import { Capacitor } from '@capacitor/core';
 import { Geolocation } from '@capacitor/geolocation';
 import { App as CapApp } from '@capacitor/app';
 
-// Lazy load components to reduce initial bundle size with auto-retry and cache-busting self-healing
+// Lazy load components with robust multi-attempt retry
 const lazyWithRetry = <T extends React.ComponentType<any>>(
-  componentImport: () => Promise<{ default: T }>
+  componentImport: () => Promise<{ default: T } | any>
 ): React.LazyExoticComponent<T> => {
-  return lazy(() =>
-    componentImport().catch((error) => {
-      console.warn("Dynamic import failed. Attempting to recover dynamically...", error);
-      return new Promise<{ default: T }>((resolve, reject) => {
-        // Retry shortly
-        setTimeout(() => {
-          componentImport()
-            .then(resolve)
-            .catch((err) => {
-              console.error("Recovery failed, performing cache-busting reload...", err);
-              // append cache-busting parameter to URL and force reload the page to get the fresh bundles
-              const url = new URL(window.location.href);
-              url.searchParams.set('reload_ts', Date.now().toString());
-              window.location.replace(url.toString());
-              reject(err);
-            });
-        }, 1000);
-      });
-    })
-  );
+  return lazy(async () => {
+    let lastError: any;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const module = await componentImport();
+        if (module && typeof module === 'object') {
+          if (module.default) return { default: module.default as T };
+          // Fallback to first exported React component
+          const firstExport = Object.values(module).find(v => typeof v === 'function');
+          if (firstExport) return { default: firstExport as T };
+        }
+        return module;
+      } catch (err) {
+        lastError = err;
+        console.warn(`Dynamic import attempt ${attempt} failed:`, err);
+        if (attempt < 3) {
+          await new Promise((r) => setTimeout(r, 300 * attempt));
+        }
+      }
+    }
+    console.error("All dynamic import attempts failed:", lastError);
+    throw lastError;
+  });
 };
 
 const Admin = lazyWithRetry(() => import('./pages/Admin').then(m => ({ default: m.Admin })));
@@ -298,6 +301,7 @@ function AppContent() {
             <Route path="/training" element={<ProtectedRoute><TrainingList /></ProtectedRoute>} />
             <Route path="/training-mgmt" element={<ProtectedRoute roles={['CEO', 'SAFETY_MANAGER']} permission="training_mgmt"><TrainingManagement /></ProtectedRoute>} />
             <Route path="/safety-score" element={<ProtectedRoute roles={['CEO']}><SafetyRanking /></ProtectedRoute>} />
+            <Route path="/safety-ranking" element={<ProtectedRoute><SafetyLeaderboard /></ProtectedRoute>} />
             <Route path="/safety-leaderboard" element={<ProtectedRoute><SafetyLeaderboard /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
@@ -323,6 +327,10 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
     console.error("App Error caught by Boundary:", error, errorInfo);
   }
 
+  handleReset = () => {
+    this.setState({ hasError: false, error: null });
+  };
+
   render() {
     if (this.state.hasError) {
       return (
@@ -334,16 +342,19 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
           <p className="text-muted-foreground mb-6 font-bold text-sm max-w-md mx-auto">{this.state.error?.message}</p>
           <div className="flex flex-col gap-3 w-full max-w-xs">
             <button 
-              onClick={() => window.location.reload()}
-              className="h-14 bg-primary text-primary-foreground rounded-2xl font-black shadow-lg shadow-primary/20"
+              onClick={this.handleReset}
+              className="h-14 bg-primary text-primary-foreground rounded-2xl font-black shadow-lg shadow-primary/20 cursor-pointer"
             >
-              새로고침
+              다시 시도
             </button>
             <button 
-              onClick={() => window.location.href = '/'}
-              className="h-14 bg-muted text-foreground rounded-2xl font-black border border-border"
+              onClick={() => {
+                this.setState({ hasError: false, error: null });
+                window.location.href = '/';
+              }}
+              className="h-14 bg-muted text-foreground rounded-2xl font-black border border-border cursor-pointer"
             >
-              처음으로 돌아가기
+              홈으로 이동
             </button>
           </div>
         </div>

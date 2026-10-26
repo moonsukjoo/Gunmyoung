@@ -39,7 +39,7 @@ import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { exportToExcel, exportToPDF, exportPhotoCardPDF, ReportCardItem } from '@/lib/exportUtils';
-import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
+import { handleFirestoreError, OperationType } from '@/firebase';
 
 export const SafetyRanking: React.FC = () => {
   const { profile } = useAuth();
@@ -659,3 +659,5 @@ export const SafetyRanking: React.FC = () => {
     </div>
   );
 };
+
+export default SafetyRanking;
