@@ -165,12 +165,15 @@ export const Coupons: React.FC = () => {
         subtitle: `총 ${items.length}건 등록 (1페이지 4건 표준 양식, 총 ${Math.ceil(items.length / 4) || 1}페이지)`,
         monthStr: selectedMonth,
         items,
-        fileName: `칭찬쿠폰_지급내역_${selectedMonth}`
+        fileName: `칭찬쿠폰_지급내역_${selectedMonth}`,
+        onProgress: (cur, tot) => {
+          toast.loading(`${selectedMonth} 칭찬쿠폰 PDF 리포트 생성 중... (${cur}/${tot} 쪽)`, { id: 'coupon-pdf' });
+        }
       });
-      toast.success(`${selectedMonth} 칭찬쿠폰 PDF 리포트(1페이지 4건)가 생성되었습니다.`, { id: 'coupon-pdf' });
+      toast.success(`${selectedMonth} 칭찬쿠폰 PDF 리포트(1페이지 4건)가 준비되었습니다.`, { id: 'coupon-pdf' });
     } catch (error) {
       console.error("PDF export error:", error);
-      toast.error('PDF 생성 중 오류가 발생했습니다.', { id: 'coupon-pdf' });
+      toast.error('PDF 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.', { id: 'coupon-pdf' });
     }
   };
 

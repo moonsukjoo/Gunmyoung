@@ -522,13 +522,16 @@ export const PCAdminSafety: React.FC = () => {
         subtitle: `총 ${items.length}건 등록 (1페이지 4건 표준 사진대지 양식, 총 ${Math.ceil(items.length / 4) || 1}페이지)`,
         monthStr: selectedMonth,
         items,
-        fileName: `안전점검사진보고서_${selectedMonth}`
+        fileName: `안전점검사진보고서_${selectedMonth}`,
+        onProgress: (cur, tot) => {
+          toast.loading(`${selectedMonth} 사진대지 생성 중... (${cur}/${tot} 쪽)`, { id: 'safety-pdf' });
+        }
       });
 
       toast.success(`${selectedMonth} 안전점검 사진 PDF(1페이지 4건) 다운로드 완료`, { id: 'safety-pdf' });
     } catch (err) {
       console.error('PDF export failed:', err);
-      toast.error('PDF 생성 중 오류가 발생했습니다.', { id: 'safety-pdf' });
+      toast.error('PDF 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.', { id: 'safety-pdf' });
     }
   };
 

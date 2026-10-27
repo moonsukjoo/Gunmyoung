@@ -11,9 +11,8 @@ export const CompanyLogo: React.FC<LogoProps> = ({ className, size = '100%' }) =
   if (error) {
     return (
       <div 
-        className={`flex items-center justify-center bg-primary text-white font-black text-[10px] rounded-sm ${className || ''}`}
+        className={`flex items-center justify-center bg-primary text-white font-black text-[10px] rounded-sm select-none ${className || ''}`}
         style={{ width: size, height: size }}
-        title="Logo load failed"
       >
         건명
       </div>
@@ -23,11 +22,10 @@ export const CompanyLogo: React.FC<LogoProps> = ({ className, size = '100%' }) =
   return (
     <img 
       src="/company_logo.png" 
-      alt="Company Logo" 
+      alt="건명기업 로고" 
       className={className}
       style={{ width: size, height: size, objectFit: 'contain' }}
       onError={() => {
-        console.error("Failed to load company logo. Falling back to text logo.");
         setError(true);
       }}
     />

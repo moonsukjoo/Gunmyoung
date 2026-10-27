@@ -68,7 +68,6 @@ app.post("/api/send-email", async (req, res) => {
     });
   }
 
-  // 1. Check if SMTP configuration is set up
   const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
   const smtpPort = parseInt(process.env.SMTP_PORT || "465", 10);
   const smtpUser = process.env.SMTP_USER;
@@ -86,7 +85,6 @@ app.post("/api/send-email", async (req, res) => {
   }
 
   try {
-    // 2. Setup Nomemailer Transport
     const transporter = nodemailer.createTransport({
       host: smtpHost,
       port: smtpPort,
@@ -97,7 +95,6 @@ app.post("/api/send-email", async (req, res) => {
       }
     });
 
-    // 3. Extract pure base64 data (in case data URI prefix exists)
     let cleanBase64 = base64Data;
     if (base64Data.includes(";base64,")) {
       cleanBase64 = base64Data.split(";base64,")[1];
@@ -118,7 +115,6 @@ app.post("/api/send-email", async (req, res) => {
       ]
     };
 
-    // 4. Send actual email
     const info = await transporter.sendMail(mailOptions);
     console.log("Email sent successfully: ", info.messageId);
 
@@ -145,21 +141,6 @@ app.get("/api/health", (req, res) => {
 // Configure Vite or Static server
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
-    // Force browser to never cache any source files or scripts in development
-    app.use((req, res, next) => {
-      const originalSetHeader = res.setHeader;
-      res.setHeader = function (this: any, name: string, value: any) {
-        if (name.toLowerCase() === "cache-control") {
-          return originalSetHeader.call(this, name, "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
-        }
-        return originalSetHeader.call(this, name, value);
-      };
-      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
-      res.setHeader("Pragma", "no-cache");
-      res.setHeader("Expires", "0");
-      next();
-    });
-
     // Vite middleware for development
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({

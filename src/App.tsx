@@ -14,9 +14,10 @@ import { Capacitor } from '@capacitor/core';
 import { Geolocation } from '@capacitor/geolocation';
 import { App as CapApp } from '@capacitor/app';
 
-// Lazy load components with robust multi-attempt retry
+// Lazy load components with robust multi-attempt retry and auto-reload recovery
 const lazyWithRetry = <T extends React.ComponentType<any>>(
-  componentImport: () => Promise<{ default: T } | any>
+  componentImport: () => Promise<{ default: T } | any>,
+  pageName?: string
 ): React.LazyExoticComponent<T> => {
   return lazy(async () => {
     let lastError: any;
@@ -34,16 +35,28 @@ const lazyWithRetry = <T extends React.ComponentType<any>>(
         lastError = err;
         console.warn(`Dynamic import attempt ${attempt} failed:`, err);
         if (attempt < 3) {
-          await new Promise((r) => setTimeout(r, 300 * attempt));
+          await new Promise((r) => setTimeout(r, 400 * attempt));
         }
       }
     }
+    
+    // Auto-reload once if dynamic import failed due to server restart or network interruption
+    const key = `lazy_reload_${pageName || window.location.pathname}`;
+    const lastReload = sessionStorage.getItem(key);
+    const now = Date.now();
+    if (!lastReload || now - parseInt(lastReload, 10) > 15000) {
+      sessionStorage.setItem(key, String(now));
+      console.warn("Reloading window to recover from stale dynamic import module...");
+      window.location.reload();
+      return new Promise<{ default: T }>(() => {}); // Hold until reload
+    }
+
     console.error("All dynamic import attempts failed:", lastError);
     throw lastError;
   });
 };
 
-const Admin = lazyWithRetry(() => import('./pages/Admin').then(m => ({ default: m.Admin })));
+const Admin = lazyWithRetry(() => import('./pages/Admin').then(m => ({ default: m.default || m.Admin })), 'Admin');
 const EmployeeManagement = lazyWithRetry(() => import('./pages/EmployeeManagement').then(m => ({ default: m.EmployeeManagement })));
 const Attendance = lazyWithRetry(() => import('./pages/Attendance').then(m => ({ default: m.Attendance })));
 const AttendanceSettings = lazyWithRetry(() => import('./pages/AttendanceSettings').then(m => ({ default: m.AttendanceSettings })));
@@ -329,6 +342,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 
   handleReset = () => {
     this.setState({ hasError: false, error: null });
+    window.location.reload();
   };
 
   render() {
@@ -345,7 +359,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
               onClick={this.handleReset}
               className="h-14 bg-primary text-primary-foreground rounded-2xl font-black shadow-lg shadow-primary/20 cursor-pointer"
             >
-              다시 시도
+              새로고침 (다시 시도)
             </button>
             <button 
               onClick={() => {

@@ -243,7 +243,7 @@ export const SafetyRanking: React.FC = () => {
   // Direct monthly safety inspection photo report PDF download (4 items per page)
   const handleExportMonthlyPhotoPDF = async () => {
     try {
-      toast.loading(`${selectedMonth} 안전점검 사진 리포트(1페이지 4건)를 생성 중입니다...`, { id: 'safety-pdf' });
+      toast.loading(`${selectedMonth} 안전점검 사진 리포트(1페이지 4건)를 준비 중입니다...`, { id: 'safety-pdf' });
       const items: ReportCardItem[] = filteredLogs.map((l, idx) => {
         const user = users.find(u => u.uid === l.targetUid);
         const isReward = l.scoreDelta > 0;
@@ -268,18 +268,21 @@ export const SafetyRanking: React.FC = () => {
         subtitle: `총 ${items.length}건 등록 (1페이지 4건 표준 양식, 총 ${Math.ceil(items.length / 4) || 1}페이지)`,
         monthStr: selectedMonth,
         items,
-        fileName: `안전점검사진보고서_${selectedMonth}`
+        fileName: `안전점검사진보고서_${selectedMonth}`,
+        onProgress: (cur, tot) => {
+          toast.loading(`${selectedMonth} 사진 리포트 PDF 생성 중... (${cur}/${tot} 쪽)`, { id: 'safety-pdf' });
+        }
       });
-      toast.success(`${selectedMonth} 안전점검 사진 PDF 리포트(1페이지 4건) 다운로드 완료`, { id: 'safety-pdf' });
+      toast.success(`${selectedMonth} 안전점검 사진 PDF 리포트(1페이지 4건) 생성 완료!`, { id: 'safety-pdf' });
     } catch (error) {
       console.error('Safety photo PDF export failed:', error);
-      toast.error('PDF 생성 중 오류가 발생했습니다.', { id: 'safety-pdf' });
+      toast.error('PDF 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.', { id: 'safety-pdf' });
     }
   };
 
   const handleExportPDF = async () => {
     try {
-      toast.loading('안전 지수 PDF 리포트를 생성 중입니다...', { id: 'safety-pdf' });
+      toast.loading('안전 지수 PDF 리포트를 준비 중입니다...', { id: 'safety-pdf' });
 
       if (activeView === 'INDIVIDUAL') {
         const items: ReportCardItem[] = filteredUsers.map((u, idx) => {
@@ -307,7 +310,10 @@ export const SafetyRanking: React.FC = () => {
           subtitle: `총 ${items.length}명 등록 (1페이지 4건 표준 양식, 총 ${Math.ceil(items.length / 4) || 1}페이지)`,
           monthStr: selectedMonth,
           items,
-          fileName: `개인별_안전지수_${selectedMonth}`
+          fileName: `개인별_안전지수_${selectedMonth}`,
+          onProgress: (cur, tot) => {
+            toast.loading(`개인별 안전지수 PDF 생성 중... (${cur}/${tot} 쪽)`, { id: 'safety-pdf' });
+          }
         });
       } else if (activeView === 'TEAM') {
         const items: ReportCardItem[] = teamRankings.map((t, idx) => {
@@ -332,7 +338,10 @@ export const SafetyRanking: React.FC = () => {
           subtitle: `총 ${items.length}개 팀 등록 (1페이지 4건 표준 양식, 총 ${Math.ceil(items.length / 4) || 1}페이지)`,
           monthStr: selectedMonth,
           items,
-          fileName: `팀별_안전지수_${selectedMonth}`
+          fileName: `팀별_안전지수_${selectedMonth}`,
+          onProgress: (cur, tot) => {
+            toast.loading(`팀별 안전지수 PDF 생성 중... (${cur}/${tot} 쪽)`, { id: 'safety-pdf' });
+          }
         });
       } else {
         // LOGS
@@ -340,10 +349,10 @@ export const SafetyRanking: React.FC = () => {
         return;
       }
 
-      toast.success('안전지수 PDF 리포트(1페이지 4건)가 성공적으로 다운로드되었습니다.', { id: 'safety-pdf' });
+      toast.success('안전지수 PDF 리포트(1페이지 4건)가 성공적으로 준비되었습니다.', { id: 'safety-pdf' });
     } catch (error) {
       console.error('Safety PDF export failed:', error);
-      toast.error('PDF 생성 중 오류가 발생했습니다.', { id: 'safety-pdf' });
+      toast.error('PDF 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.', { id: 'safety-pdf' });
     }
   };
 
