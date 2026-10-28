@@ -243,6 +243,10 @@ export const SafetyRanking: React.FC = () => {
   // Direct monthly safety inspection photo report PDF download (4 items per page)
   const handleExportMonthlyPhotoPDF = async () => {
     try {
+      if (filteredLogs.length === 0) {
+        toast.info(`${selectedMonth}에 등록된 안전점검 및 사진 내역이 없습니다.`);
+        return;
+      }
       toast.loading(`${selectedMonth} 안전점검 사진 리포트(1페이지 4건)를 준비 중입니다...`, { id: 'safety-pdf' });
       const items: ReportCardItem[] = filteredLogs.map((l, idx) => {
         const user = users.find(u => u.uid === l.targetUid);
@@ -276,15 +280,19 @@ export const SafetyRanking: React.FC = () => {
       toast.success(`${selectedMonth} 안전점검 사진 PDF 리포트(1페이지 4건) 생성 완료!`, { id: 'safety-pdf' });
     } catch (error) {
       console.error('Safety photo PDF export failed:', error);
-      toast.error('PDF 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.', { id: 'safety-pdf' });
+      toast.dismiss('safety-pdf');
+      toast.error('PDF 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     }
   };
 
   const handleExportPDF = async () => {
     try {
-      toast.loading('안전 지수 PDF 리포트를 준비 중입니다...', { id: 'safety-pdf' });
-
       if (activeView === 'INDIVIDUAL') {
+        if (filteredUsers.length === 0) {
+          toast.info('조회된 임직원 데이터가 없습니다.');
+          return;
+        }
+        toast.loading('개인별 안전 지수 PDF 리포트를 준비 중입니다...', { id: 'safety-pdf' });
         const items: ReportCardItem[] = filteredUsers.map((u, idx) => {
           const stats = monthlyStatsByTarget[u.uid];
           const delta = stats?.delta ?? 0;
@@ -316,6 +324,11 @@ export const SafetyRanking: React.FC = () => {
           }
         });
       } else if (activeView === 'TEAM') {
+        if (teamRankings.length === 0) {
+          toast.info('조회된 팀별 데이터가 없습니다.');
+          return;
+        }
+        toast.loading('팀별 안전 지수 PDF 리포트를 준비 중입니다...', { id: 'safety-pdf' });
         const items: ReportCardItem[] = teamRankings.map((t, idx) => {
           const delta = monthlyDeptDelta[t.id] ?? 0;
           return {
@@ -352,7 +365,8 @@ export const SafetyRanking: React.FC = () => {
       toast.success('안전지수 PDF 리포트(1페이지 4건)가 성공적으로 준비되었습니다.', { id: 'safety-pdf' });
     } catch (error) {
       console.error('Safety PDF export failed:', error);
-      toast.error('PDF 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.', { id: 'safety-pdf' });
+      toast.dismiss('safety-pdf');
+      toast.error('PDF 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     }
   };
 

@@ -140,6 +140,10 @@ export const Coupons: React.FC = () => {
 
   const exportCouponsToPDF = async () => {
     try {
+      if (filteredCouponHistory.length === 0) {
+        toast.info(`${selectedMonth}에 등록된 칭찬쿠폰 내역이 없습니다.`);
+        return;
+      }
       toast.loading(`${selectedMonth} 칭찬쿠폰 4건/페이지 PDF 리포트를 생성 중입니다...`, { id: 'coupon-pdf' });
       const items: ReportCardItem[] = filteredCouponHistory.map((c, idx) => {
         const receiver = users.find(u => u.uid === c.receiverUid);
@@ -173,6 +177,7 @@ export const Coupons: React.FC = () => {
       toast.success(`${selectedMonth} 칭찬쿠폰 PDF 리포트(1페이지 4건)가 준비되었습니다.`, { id: 'coupon-pdf' });
     } catch (error) {
       console.error("PDF export error:", error);
+      toast.dismiss('coupon-pdf');
       toast.error('PDF 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.', { id: 'coupon-pdf' });
     }
   };

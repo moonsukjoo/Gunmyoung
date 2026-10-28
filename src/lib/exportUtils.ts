@@ -1,7 +1,69 @@
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { Capacitor } from '@capacitor/core';
 import { downloadFile } from './downloadHelper';
+
+/**
+ * Pre-downscale image in memory to prevent mobile WebView/browser memory explosion and OOM crashes.
+ * Gracefully resolves to empty string if the image fails to load or has CORS restrictions.
+ */
+const downscaleImageForReport = async (src: string, maxWidth = 360, maxHeight = 270): Promise<string> => {
+  if (!src) return '';
+  return new Promise<string>((resolve) => {
+    try {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      
+      const timer = setTimeout(() => {
+        // Timeout safeguard (1.2s max) to prevent hanging
+        resolve('');
+      }, 1200);
+
+      img.onload = () => {
+        clearTimeout(timer);
+        try {
+          let width = img.width || 300;
+          let height = img.height || 200;
+          
+          if (width <= maxWidth && height <= maxHeight) {
+            resolve(src);
+            return;
+          }
+          
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = Math.max(1, Math.round(width * ratio));
+          height = Math.max(1, Math.round(height * ratio));
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(src);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.72);
+          canvas.width = 1;
+          canvas.height = 1;
+          resolve(dataUrl);
+        } catch {
+          resolve('');
+        }
+      };
+
+      img.onerror = () => {
+        clearTimeout(timer);
+        resolve('');
+      };
+
+      img.src = src;
+    } catch {
+      resolve('');
+    }
+  });
+};
 
 /**
  * Exports data to an Excel file
@@ -33,9 +95,12 @@ export const exportToExcel = async (data: any[], fileName: string, sheetName: st
  * @param fileName Name of the file (without extension)
  */
 export const exportToPDF = async (title: string, headers: string[], data: any[][], fileName: string) => {
+  const isNative = Capacitor.isNativePlatform();
+  const renderScale = isNative ? 1.0 : 1.2;
+
   const container = document.createElement('div');
   container.style.position = 'fixed';
-  container.style.left = '-9999px';
+  container.style.left = '0';
   container.style.top = '0';
   container.style.opacity = '1';
   container.style.pointerEvents = 'none';
@@ -153,29 +218,12 @@ export const exportToPDF = async (title: string, headers: string[], data: any[][
   
   document.body.appendChild(container);
 
-  const imgs = container.querySelectorAll('img');
-  await Promise.race([
-    Promise.all(
-      Array.from(imgs).map(img => {
-        if (img.complete) return Promise.resolve();
-        return new Promise<void>((resolve) => {
-          img.onload = () => resolve();
-          img.onerror = () => {
-            img.style.display = 'none';
-            resolve();
-          };
-        });
-      })
-    ),
-    new Promise(resolve => setTimeout(resolve, 2000))
-  ]);
-
-  await new Promise(resolve => setTimeout(resolve, 100));
-  
   let canvas: HTMLCanvasElement | null = null;
   try {
+    await new Promise(resolve => setTimeout(resolve, 80));
+
     canvas = await html2canvas(container, {
-      scale: 1.2,
+      scale: renderScale,
       useCORS: true,
       allowTaint: false,
       logging: false,
@@ -183,13 +231,13 @@ export const exportToPDF = async (title: string, headers: string[], data: any[][
       scrollX: 0,
       scrollY: 0,
       width: 840,
-      windowWidth: 900,
+      windowWidth: 840,
       windowHeight: Math.max(container.scrollHeight, 840) + 20
     });
     
     let imgData: string;
     try {
-      imgData = canvas.toDataURL('image/jpeg', 0.82); 
+      imgData = canvas.toDataURL('image/jpeg', 0.80); 
     } catch {
       imgData = canvas.toDataURL('image/png');
     }
@@ -261,8 +309,8 @@ export interface PhotoCardReportOptions {
 
 /**
  * Exports data to a structured 4-items-per-page Photo Inspection / Reward Card PDF Report.
- * Designed with a memory-safe single-page streaming pipeline to prevent WebView/mobile OOM crashes.
- * Exactly 4 items per page with clear layout, sharp Korean typography, and 3-step approval stamps.
+ * Designed with a crash-proof, memory-safe single-page streaming pipeline for Android/iOS WebView & Web.
+ * Features automatic photo downscaling, 1.0 mobile raster scale, zero negative offsets, and instant GC.
  */
 export const exportPhotoCardPDF = async ({
   title,
@@ -272,10 +320,29 @@ export const exportPhotoCardPDF = async ({
   fileName,
   onProgress
 }: PhotoCardReportOptions) => {
+  const isNative = Capacitor.isNativePlatform();
+  const renderScale = isNative ? 1.0 : 1.25;
+
+  // Step 1: Pre-downscale photos in memory to prevent WebView OOM crashes
+  // Each image is reduced to max 360x270, shrinking memory from multi-MB to <30KB per image
+  const sanitizedItems: ReportCardItem[] = await Promise.all(
+    items.map(async (item) => {
+      if (item.photoUrl) {
+        try {
+          const downscaled = await downscaleImageForReport(item.photoUrl, 360, 270);
+          return { ...item, photoUrl: downscaled || undefined };
+        } catch {
+          return { ...item, photoUrl: undefined };
+        }
+      }
+      return item;
+    })
+  );
+
   // Split items into chunks of exactly 4 per page
   const chunks: ReportCardItem[][] = [];
-  for (let i = 0; i < items.length; i += 4) {
-    chunks.push(items.slice(i, i + 4));
+  for (let i = 0; i < sanitizedItems.length; i += 4) {
+    chunks.push(sanitizedItems.slice(i, i + 4));
   }
   if (chunks.length === 0) {
     chunks.push([]);
@@ -286,12 +353,12 @@ export const exportPhotoCardPDF = async ({
   const pdfWidth = pdf.internal.pageSize.getWidth(); // 210mm
   const pdfPageHeight = pdf.internal.pageSize.getHeight(); // 297mm
 
-  // Create a single offscreen page container.
-  // Rendering ONE page at a time keeps mobile memory footprint low (<20MB) and prevents OOM crashes.
+  // Create a single offscreen page container positioned safely at (0, 0) behind viewport.
+  // NEVER use left: -9999px as it triggers massive coordinate buffers & crashes Chromium on mobile!
   const pageContainer = document.createElement('div');
   pageContainer.id = 'photo-card-pdf-single-page';
   pageContainer.style.position = 'fixed';
-  pageContainer.style.left = '-9999px';
+  pageContainer.style.left = '0';
   pageContainer.style.top = '0';
   pageContainer.style.width = '840px'; 
   pageContainer.style.height = '1188px'; // Standard A4 aspect (1 : 1.414)
@@ -353,7 +420,7 @@ export const exportPhotoCardPDF = async ({
           <!-- Metadata Strip -->
           <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; font-size: 10px; font-weight: 700; color: #475569;">
             <div><span>기준 월/일시: </span><strong style="color: #0f172a;">${monthStr || new Date().toLocaleDateString('ko-KR')}</strong></div>
-            <div><span>총 데이터 건수: </span><strong style="color: #2563eb;">${items.length} 건</strong></div>
+            <div><span>총 데이터 건수: </span><strong style="color: #2563eb;">${sanitizedItems.length} 건</strong></div>
             <div><span>페이지: </span><strong style="color: #0f172a; font-weight: 900;">${pageIdx + 1} / ${totalPages} 쪽</strong></div>
             <div><span>보안 등급: </span><strong style="color: #dc2626;">대외비 (기밀보호)</strong></div>
           </div>
@@ -371,9 +438,7 @@ export const exportPhotoCardPDF = async ({
                 `;
               }
 
-              const isDataImg = item.photoUrl?.startsWith('data:image/');
-              const isHttpImg = item.photoUrl?.startsWith('http://') || item.photoUrl?.startsWith('https://');
-              const hasPhoto = Boolean(isDataImg || isHttpImg);
+              const hasPhoto = Boolean(item.photoUrl);
 
               return `
                 <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 10px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03); overflow: hidden; height: 100%;">
@@ -401,7 +466,7 @@ export const exportPhotoCardPDF = async ({
                   <!-- Card Photo Area -->
                   <div style="width: 100%; flex: 1; min-height: 180px; max-height: 240px; border-radius: 8px; overflow: hidden; background: #f8fafc; border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center; margin-bottom: 6px;">
                     ${hasPhoto ? `
-                      <img src="${item.photoUrl}" ${isHttpImg ? 'crossorigin="anonymous"' : ''} style="width: 100%; height: 100%; object-fit: cover; display: block;" onerror="this.style.display='none'" />
+                      <img src="${item.photoUrl}" style="width: 100%; height: 100%; object-fit: cover; display: block;" onerror="this.style.display='none'" />
                     ` : `
                       <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; color: #94a3b8; text-align: center;">
                         <svg style="width: 36px; height: 36px; margin-bottom: 4px; opacity: 0.5;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -440,39 +505,28 @@ export const exportPhotoCardPDF = async ({
         </div>
       `;
 
-      // Pre-load images only for the current page
-      const imgs = pageContainer.querySelectorAll('img');
-      await Promise.race([
-        Promise.all(
-          Array.from(imgs).map(img => {
-            if (img.complete) return Promise.resolve();
-            return new Promise<void>((resolve) => {
-              img.onload = () => resolve();
-              img.onerror = () => {
-                img.style.display = 'none';
-                resolve();
-              };
-            });
-          })
-        ),
-        new Promise(resolve => setTimeout(resolve, 1500))
-      ]);
-
+      // Allow DOM to settle
       await new Promise(resolve => setTimeout(resolve, 60));
 
       const canvas = await html2canvas(pageContainer, {
-        scale: 1.25, // 1050x1485 resolution: sharp text, low memory (<15MB)
+        scale: renderScale,
         useCORS: true,
         allowTaint: false,
         logging: false,
         backgroundColor: '#ffffff',
         width: 840,
-        height: 1188
+        height: 1188,
+        windowWidth: 840,
+        windowHeight: 1188,
+        x: 0,
+        y: 0,
+        scrollX: 0,
+        scrollY: 0
       });
 
       let imgData: string;
       try {
-        imgData = canvas.toDataURL('image/jpeg', 0.82);
+        imgData = canvas.toDataURL('image/jpeg', 0.80);
       } catch {
         imgData = canvas.toDataURL('image/png');
       }
@@ -489,8 +543,8 @@ export const exportPhotoCardPDF = async ({
       // Clear DOM for current page to free memory
       pageContainer.innerHTML = '';
 
-      // Give browser time for GC between pages
-      await new Promise(resolve => setTimeout(resolve, 40));
+      // Give browser/webview time for GC between pages
+      await new Promise(resolve => setTimeout(resolve, isNative ? 90 : 35));
     }
 
     const pdfBlob = pdf.output('blob');

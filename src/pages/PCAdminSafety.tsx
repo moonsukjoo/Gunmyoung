@@ -496,6 +496,10 @@ export const PCAdminSafety: React.FC = () => {
   // Export 4-items-per-page PDF Report
   const handleExportPhotoCardPDF = async () => {
     try {
+      if (filteredLogs.length === 0) {
+        toast.info(`${selectedMonth}에 등록된 안전점검 및 사진 내역이 없습니다.`);
+        return;
+      }
       toast.loading(`${selectedMonth} 안전점검 사진대지 PDF(1페이지 4건)를 생성 중입니다...`, { id: 'safety-pdf' });
       
       const items: ReportCardItem[] = filteredLogs.map((l, idx) => {
@@ -531,7 +535,8 @@ export const PCAdminSafety: React.FC = () => {
       toast.success(`${selectedMonth} 안전점검 사진 PDF(1페이지 4건) 다운로드 완료`, { id: 'safety-pdf' });
     } catch (err) {
       console.error('PDF export failed:', err);
-      toast.error('PDF 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.', { id: 'safety-pdf' });
+      toast.dismiss('safety-pdf');
+      toast.error('PDF 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     }
   };
 

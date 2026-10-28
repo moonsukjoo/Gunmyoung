@@ -1,16 +1,31 @@
+import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Device } from '@capacitor/device';
 import { Share } from '@capacitor/share';
 import { toast } from 'sonner';
 
 /**
- * Safely check the runtime platform with a fast timeout fallback
+ * Check whether we are running inside native Capacitor environment (Android/iOS)
+ */
+export const isNativePlatform = (): boolean => {
+  try {
+    return Capacitor.isNativePlatform();
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Safely check the runtime platform with instant native check
  */
 const getPlatformSafely = async (): Promise<string> => {
   try {
+    if (Capacitor.isNativePlatform()) {
+      return Capacitor.getPlatform();
+    }
     const info = await Promise.race([
       Device.getInfo(),
-      new Promise<{ platform: string }>((res) => setTimeout(() => res({ platform: 'web' }), 300))
+      new Promise<{ platform: string }>((res) => setTimeout(() => res({ platform: 'web' }), 200))
     ]);
     return info?.platform || 'web';
   } catch {
@@ -19,7 +34,27 @@ const getPlatformSafely = async (): Promise<string> => {
 };
 
 /**
- * Robust file download helper with unified Email, Native Share, and Local Device Download controls
+ * Convert Blob to Base64 cleanly and safely
+ */
+const blobToBase64 = (blob: Blob): Promise<string> => {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      try {
+        const base64String = reader.result as string;
+        resolve(base64String.split(',')[1] || '');
+      } catch (e) {
+        reject(e);
+      }
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
+/**
+ * Robust file download helper with unified Email, Native Share, and Local Device Download controls.
+ * Fully hardened for Android/iOS Capacitor WebView to prevent crashes and force-closes.
  */
 export const downloadFile = async (blob: Blob, fileName: string): Promise<boolean> => {
   // Remove any previously open modal
@@ -28,6 +63,7 @@ export const downloadFile = async (blob: Blob, fileName: string): Promise<boolea
     existingModal.parentNode.removeChild(existingModal);
   }
 
+  const isNative = isNativePlatform();
   const platform = await getPlatformSafely();
   const isPdf = fileName.toLowerCase().endsWith('.pdf');
   const savedEmail = localStorage.getItem('last_share_email') || 'tjrwnfjqm1@gmail.com';
@@ -164,50 +200,52 @@ export const downloadFile = async (blob: Blob, fileName: string): Promise<boolea
     // Action: Local Download
     downloadBtn.onclick = async () => {
       dismiss(true);
-      if (platform === 'android' || platform === 'ios') {
+      if (isNative || platform === 'android' || platform === 'ios') {
         try {
-          const reader = new FileReader();
-          const base64Promise = new Promise<string>((res, rej) => {
-            reader.onloadend = () => {
-              const str = reader.result as string;
-              res(str.split(',')[1] || '');
-            };
-            reader.onerror = rej;
-          });
-          reader.readAsDataURL(blob);
-          const base64Data = await base64Promise;
+          const base64Data = await blobToBase64(blob);
+          const safeExt = fileName.toLowerCase().endsWith('.xlsx') ? '.xlsx' : '.pdf';
+          const cleanSafeName = `gunmyoung_${Date.now()}${safeExt}`;
 
           // Attempt writing directly to Documents directory
+          let savedUri: string | null = null;
           try {
-            const cleanSafeName = `${fileName.replace(/[/\\?%*:|"<>]/g, '_')}`;
             const savedDoc = await Filesystem.writeFile({
               path: cleanSafeName,
               data: base64Data,
               directory: Directory.Documents,
               recursive: true
             });
-            toast.success(`'내 파일 > 문서' 폴더에 저장되었습니다: ${cleanSafeName}`);
-            
-            // Also invoke share sheet with files array so user can open it immediately
+            savedUri = savedDoc.uri;
+            toast.success('기기 문서 폴더에 성공적으로 저장되었습니다.');
+          } catch {
+            // Android Scoped Storage may disallow direct Documents access - fallback to Cache
+            const cached = await Filesystem.writeFile({
+              path: cleanSafeName,
+              data: base64Data,
+              directory: Directory.Cache,
+              recursive: true
+            });
+            savedUri = cached.uri;
+          }
+
+          // Open system share / save sheet so user can view or save to files/Drive/downloads
+          if (savedUri) {
             try {
               await Share.share({
                 title: fileName,
-                files: [savedDoc.uri],
-                dialogTitle: '저장된 파일 열기'
+                text: `[건명기업] ${fileName}`,
+                files: [savedUri],
+                dialogTitle: '파일 열기 및 저장'
               });
             } catch (shareErr: any) {
-              if (shareErr?.name !== 'AbortError') {
-                console.log('Share prompt dismissed');
+              if (shareErr?.name !== 'AbortError' && !shareErr?.message?.includes('canceled')) {
+                console.warn('Share intent dismissed:', shareErr);
               }
             }
-            return;
-          } catch (docErr) {
-            console.warn('Documents save failed, falling back to Native Share:', docErr);
-            await triggerNativeShare(blob, fileName);
           }
         } catch (e) {
-          console.error('Mobile download failed, fallback to web download:', e);
-          triggerWebDownload(blob, fileName);
+          console.error('Mobile download failed:', e);
+          toast.error('기기 저장 중 오류가 발생했습니다. 전용 이메일 전송을 이용해주세요.');
         }
       } else {
         triggerWebDownload(blob, fileName);
@@ -216,34 +254,29 @@ export const downloadFile = async (blob: Blob, fileName: string): Promise<boolea
     
     // Action: Native Share
     shareBtn.onclick = async () => {
-      try {
-        const file = new File([blob], fileName, { type: blob.type || (isPdf ? 'application/pdf' : 'application/octet-stream') });
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          dismiss(true);
-          try {
+      dismiss(true);
+      if (isNative || platform === 'android' || platform === 'ios') {
+        // ALWAYS use Capacitor native share on Android/iOS to prevent WebView crash
+        await triggerNativeShare(blob, fileName);
+      } else {
+        // Standard Web browser
+        try {
+          const file = new File([blob], fileName, { type: blob.type || (isPdf ? 'application/pdf' : 'application/octet-stream') });
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
             await navigator.share({
               files: [file],
               title: fileName,
               text: `[건명기업] ${fileName}`
             });
             toast.success('공유 메뉴가 오픈되었습니다.');
-          } catch (shareErr: any) {
-            if (shareErr?.name === 'AbortError') {
-              // User simply dismissed the share sheet
-              return;
-            }
-            console.warn('navigator.share failed, fallback to native share:', shareErr);
-            await triggerNativeShare(blob, fileName);
+          } else {
+            triggerWebDownload(blob, fileName);
           }
-        } else {
-          dismiss(true);
-          await triggerNativeShare(blob, fileName);
+        } catch (err: any) {
+          if (err?.name !== 'AbortError') {
+            triggerWebDownload(blob, fileName);
+          }
         }
-      } catch (err: any) {
-        if (err?.name === 'AbortError') return;
-        console.warn('Direct share failed, falling back to Native Share:', err);
-        dismiss(true);
-        await triggerNativeShare(blob, fileName);
       }
     };
     
@@ -281,27 +314,12 @@ export const downloadFile = async (blob: Blob, fileName: string): Promise<boolea
       
       try {
         await new Promise(r => setTimeout(r, 300));
-        addLog('▶ 🔒 SSL/TLS 1.2 보안 보안 터널 성립 확인.', 'text-zinc-400');
+        addLog('▶ 🔒 SSL/TLS 1.2 보안 터널 성립 확인.', 'text-zinc-400');
         
         await new Promise(r => setTimeout(r, 300));
         addLog(`▶ 📂 [${fileName}] 문서 바이너리 Base64 인코딩 진행 중...`, 'text-zinc-400');
         
-        const reader = new FileReader();
-        const base64Promise = new Promise<string>((resolve, reject) => {
-          reader.onloadend = () => {
-            try {
-              const base64String = reader.result as string;
-              const base = base64String.split(',')[1];
-              resolve(base);
-            } catch (e) {
-              reject(e);
-            }
-          };
-          reader.onerror = reject;
-        });
-        
-        reader.readAsDataURL(blob);
-        const base64Data = await base64Promise;
+        const base64Data = await blobToBase64(blob);
         
         addLog('▶ 📂 Base64 변환 완료. 페이로드 패킹 완료.', 'text-zinc-400');
         await new Promise(r => setTimeout(r, 300));
@@ -405,32 +423,13 @@ export const downloadFile = async (blob: Blob, fileName: string): Promise<boolea
         
         errShare.onclick = async () => {
           dismiss(true);
-          try {
-            const file = new File([blob], fileName, { type: blob.type || 'application/pdf' });
-            if (navigator.canShare && navigator.canShare({ files: [file] })) {
-              try {
-                await navigator.share({
-                  files: [file],
-                  title: fileName,
-                  text: `[건명기업] ${fileName}`
-                });
-              } catch (shErr: any) {
-                if (shErr?.name !== 'AbortError') {
-                  await triggerNativeShare(blob, fileName);
-                }
-              }
-            } else {
-              await triggerNativeShare(blob, fileName);
-            }
-          } catch {
-            await triggerNativeShare(blob, fileName);
-          }
+          await triggerNativeShare(blob, fileName);
         };
 
-        errDl.onclick = () => {
+        errDl.onclick = async () => {
           dismiss(true);
-          if (platform === 'android' || platform === 'ios') {
-            triggerNativeShare(blob, fileName);
+          if (isNative || platform === 'android' || platform === 'ios') {
+            await triggerNativeShare(blob, fileName);
           } else {
             triggerWebDownload(blob, fileName);
           }
@@ -442,62 +441,54 @@ export const downloadFile = async (blob: Blob, fileName: string): Promise<boolea
 
 /**
  * Mobile device Capacitor sharing action handler.
- * Fixes the Android FileUriExposedException crash by using clean ASCII temporary filename
- * and passing `files: [savedFile.uri]` instead of raw `url`.
+ * Completely crash-proof: writes to Cache with safe ASCII filename, then calls Share.share with file URI.
+ * NEVER calls triggerWebDownload on native platform.
  */
 const triggerNativeShare = async (blob: Blob, fileName: string) => {
   try {
-    const reader = new FileReader();
-    const base64Promise = new Promise<string>((resolve, reject) => {
-      reader.onloadend = () => {
-        try {
-          const base64String = reader.result as string;
-          const base64Data = base64String.split(',')[1] || '';
-          resolve(base64Data);
-        } catch (e) {
-          reject(e);
-        }
-      };
-      reader.onerror = reject;
-    });
-    
-    reader.readAsDataURL(blob);
-    const base64Data = await base64Promise;
-
-    // Use a clean ASCII filename to avoid any path encoding bugs in Android/iOS Filesystem
+    const base64Data = await blobToBase64(blob);
     const safeExt = fileName.toLowerCase().endsWith('.xlsx') ? '.xlsx' : '.pdf';
     const tempFileName = `gunmyoung_report_${Date.now()}${safeExt}`;
 
-    // Cache file locally
+    // Cache file locally (guaranteed to succeed without external permissions)
     const savedFile = await Filesystem.writeFile({
       path: tempFileName,
       data: base64Data,
       directory: Directory.Cache,
     });
     
-    // Trigger system shares using `files` array (CRITICAL FIX FOR ANDROID CRASH)
+    // Trigger system shares using `files` array
     await Share.share({
       title: fileName,
       text: `[건명기업] ${fileName}`,
-      files: [savedFile.uri], // Passes as content:// via FileProvider in Android
+      files: [savedFile.uri],
       dialogTitle: '보고서 파일 공유 및 저장'
     });
     return true;
   } catch (err: any) {
     if (err?.name === 'AbortError' || err?.message?.includes('canceled') || err?.message?.includes('cancelled')) {
-      // User cancelled share dialog
+      // User cancelled share dialog cleanly
       return true;
     }
-    console.warn('Capacitor sharing flow failed, falling back to Web direct download:', err);
-    triggerWebDownload(blob, fileName);
+    console.warn('Capacitor sharing flow warning:', err);
+    if (!isNativePlatform()) {
+      triggerWebDownload(blob, fileName);
+    } else {
+      toast.error('공유 메뉴를 열 수 없습니다. 메일 전송을 이용해주세요.');
+    }
     return false;
   }
 };
 
 /**
- * Normal web file delivery downloader
+ * Normal web file delivery downloader (ONLY called on Web / Desktop browser).
+ * Guarded against execution on native mobile WebView to prevent ActivityNotFoundException crashes.
  */
 const triggerWebDownload = (blob: Blob, fileName: string) => {
+  if (isNativePlatform()) {
+    console.warn('triggerWebDownload aborted on native platform to prevent Android WebView crash.');
+    return false;
+  }
   try {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
