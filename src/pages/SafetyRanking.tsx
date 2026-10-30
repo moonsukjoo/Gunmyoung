@@ -248,7 +248,12 @@ export const SafetyRanking: React.FC = () => {
         return;
       }
       toast.loading(`${selectedMonth} 안전점검 사진 리포트(1페이지 4건)를 준비 중입니다...`, { id: 'safety-pdf' });
-      const items: ReportCardItem[] = filteredLogs.map((l, idx) => {
+      const exportLogs = filteredLogs.length > 40 ? filteredLogs.slice(0, 40) : filteredLogs;
+      if (filteredLogs.length > 40) {
+        toast.info(`안전한 모바일 처리를 위해 최신 40건(총 10페이지)을 1페이지 4건 양식으로 생성합니다.`);
+      }
+
+      const items: ReportCardItem[] = exportLogs.map((l, idx) => {
         const user = users.find(u => u.uid === l.targetUid);
         const isReward = l.scoreDelta > 0;
         return {
@@ -293,7 +298,12 @@ export const SafetyRanking: React.FC = () => {
           return;
         }
         toast.loading('개인별 안전 지수 PDF 리포트를 준비 중입니다...', { id: 'safety-pdf' });
-        const items: ReportCardItem[] = filteredUsers.map((u, idx) => {
+        const exportUsers = filteredUsers.length > 40 ? filteredUsers.slice(0, 40) : filteredUsers;
+        if (filteredUsers.length > 40) {
+          toast.info(`안전한 모바일 처리를 위해 상위 40명(총 10페이지)을 1페이지 4건 양식으로 생성합니다.`);
+        }
+
+        const items: ReportCardItem[] = exportUsers.map((u, idx) => {
           const stats = monthlyStatsByTarget[u.uid];
           const delta = stats?.delta ?? 0;
           const photo = stats?.latestPhoto;

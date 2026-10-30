@@ -35,7 +35,11 @@ const loadImageSafely = (src?: string): Promise<HTMLImageElement | null> => {
   if (!src) return Promise.resolve(null);
   return new Promise((resolve) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    // Only set crossOrigin for remote HTTP/HTTPS URLs.
+    // Setting crossOrigin on data: or blob: URLs throws SecurityError or CORS exceptions in Android WebView.
+    if (src.startsWith('http://') || src.startsWith('https://')) {
+      img.crossOrigin = 'anonymous';
+    }
     const timer = setTimeout(() => resolve(null), 1200);
     img.onload = () => {
       clearTimeout(timer);
@@ -533,15 +537,16 @@ export const exportPhotoCardPDF = async ({
       ctx.fillText(`© ${new Date().getFullYear()} 건명기업. All Rights Reserved.`, 812, 1166);
       ctx.textAlign = 'left';
 
-      // 7. Add canvas image to jsPDF
-      const imgData = canvas.toDataURL('image/jpeg', 0.82);
+      // 7. Add canvas image to jsPDF (0.65 quality produces sharp reports at 1/4th the memory footprint)
+      const imgData = canvas.toDataURL('image/jpeg', 0.65);
       if (pageIdx > 0) {
         pdf.addPage();
       }
       pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfPageHeight);
 
-      // Brief delay to allow mobile event loop to breathe
-      await new Promise(r => setTimeout(r, 20));
+      // Clean canvas buffer and allow mobile WebView GC to reclaim memory
+      ctx.clearRect(0, 0, W, H);
+      await new Promise(r => setTimeout(r, 40));
     }
 
     const pdfBlob = pdf.output('blob');
