@@ -62,6 +62,10 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
 const downloadViaCloudGateway = async (blob: Blob, fileName: string): Promise<string> => {
   const backendBase = getBackendBaseUrl();
   const isPdf = fileName.toLowerCase().endsWith('.pdf');
+
+  console.log('[PDF DEBUG Step 5] Cloud Gateway 토큰 요청 시작', { fileName, blobSize: blob.size, backendBase });
+  toast.info('[PDF 디버그 Step 5] 백엔드 다운로드 게이트웨이에 파일 발급 토큰 요청 중...', { duration: 3000 });
+
   const base64Data = await blobToBase64(blob);
 
   let resp: Response | null = null;
@@ -76,18 +80,21 @@ const downloadViaCloudGateway = async (blob: Blob, fileName: string): Promise<st
       })
     });
   } catch (netErr: any) {
-    console.warn('Backend download gateway unreachable, using direct fallback:', netErr);
+    console.warn('[PDF DEBUG Step 5 WARN] Cloud Gateway 서버 연결 실패, direct fallback 전환:', netErr);
+    toast.warning('[PDF 디버그 Step 5] 백엔드 서버 미응답 -> 로컬 직접 다운로드 전환', { duration: 3000 });
     return fallbackDirectDownload(blob, fileName);
   }
 
   if (!resp || !resp.ok) {
-    console.warn('Backend prepare-download non-OK status, using direct fallback');
+    console.warn('[PDF DEBUG Step 5 WARN] Cloud Gateway non-OK status:', resp?.status);
+    toast.warning(`[PDF 디버그 Step 5] 게이트웨이 응답 코드 ${resp?.status} -> 로컬 직접 다운로드 전환`, { duration: 3000 });
     return fallbackDirectDownload(blob, fileName);
   }
 
   try {
     const data = await resp.json();
     if (!data.downloadUrl) {
+      console.warn('[PDF DEBUG Step 5 WARN] downloadUrl 없음, fallback 사용');
       return fallbackDirectDownload(blob, fileName);
     }
 
@@ -95,11 +102,18 @@ const downloadViaCloudGateway = async (blob: Blob, fileName: string): Promise<st
       ? data.downloadUrl 
       : `${backendBase}${data.downloadUrl}`;
 
+    console.log('[PDF DEBUG Step 6] 다운로드 토큰 발급 완료, Native Browser/DownloadManager 호출 중...', { fullDownloadUrl });
+    toast.info('[PDF 디버그 Step 6] 다운로드 URL 생성 완료 -> Native DownloadManager / Browser.open 실행', { duration: 3000 });
+
     if (isNativePlatform()) {
       try {
+        console.log('[PDF DEBUG Step 7] Native Browser.open 호출:', fullDownloadUrl);
         await Browser.open({ url: fullDownloadUrl });
+        console.log('[PDF DEBUG Step 7 Success] Browser.open 성공!');
+        toast.success('[PDF 디버그 Step 7] 안드로이드 공식 DownloadManager 개시 성공!', { duration: 4000 });
       } catch (bErr) {
-        console.warn('Browser.open failed, falling back:', bErr);
+        console.warn('[PDF DEBUG Step 7 WARN] Browser.open 실패, fallback 실행:', bErr);
+        toast.warning('[PDF 디버그 Step 7] Browser.open 실패 -> 시스템 링크 fallback 실행');
         try {
           window.open(fullDownloadUrl, '_system');
         } catch {
@@ -113,12 +127,14 @@ const downloadViaCloudGateway = async (blob: Blob, fileName: string): Promise<st
         }
       }
     } else {
+      console.log('[PDF DEBUG Step 7 Web] Web Browser download 실행');
+      toast.success('[PDF 디버그 Step 7] 웹 브라우저 파일 다운로드 실행 완료!');
       triggerWebDownload(blob, fileName);
     }
 
     return fullDownloadUrl;
   } catch (err) {
-    console.warn('Download url parsing error, using direct fallback:', err);
+    console.warn('[PDF DEBUG Step 5 ERROR] Download URL 파싱 중 오류, direct fallback 사용:', err);
     return fallbackDirectDownload(blob, fileName);
   }
 };
@@ -127,6 +143,8 @@ const downloadViaCloudGateway = async (blob: Blob, fileName: string): Promise<st
  * Direct DataURL download fallback for offline or restricted environments
  */
 const fallbackDirectDownload = async (blob: Blob, fileName: string): Promise<string> => {
+  console.log('[PDF DEBUG Fallback] Direct DataURL Download 시작', { fileName });
+  toast.info('[PDF 디버그 Fallback] Direct DataURL 직접 저장 개시');
   try {
     const isPdf = fileName.toLowerCase().endsWith('.pdf');
     const base64Data = await blobToBase64(blob);
@@ -140,9 +158,12 @@ const fallbackDirectDownload = async (blob: Blob, fileName: string): Promise<str
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { if (a.parentNode) document.body.removeChild(a); }, 1000);
+    console.log('[PDF DEBUG Fallback] DataURL click executed');
+    toast.success('[PDF 디버그 Fallback] DataURL 직접 다운로드 시도 완료!');
     return dataUrl;
   } catch (e) {
-    console.error('Fallback direct download error:', e);
+    console.error('[PDF DEBUG Fallback Error]', e);
+    toast.error(`[PDF 디버그 Fallback Error] ${(e as any)?.message || '파일 저장 실패'}`);
     throw new Error('파일 저장을 실행할 수 없습니다.');
   }
 };
