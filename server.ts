@@ -57,6 +57,62 @@ app.post("/api/auth/reset-user", async (req, res) => {
   }
 });
 
+// In-memory store for safe temporary report downloads (auto-expires in 15 minutes)
+const reportDownloadCache = new Map<string, { filename: string; buffer: Buffer; mimeType: string; expiresAt: number }>();
+
+// Periodic cleanup of expired cache
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, item] of reportDownloadCache.entries()) {
+    if (item.expiresAt < now) {
+      reportDownloadCache.delete(key);
+    }
+  }
+}, 5 * 60 * 1000);
+
+// Endpoint to prepare download token
+app.post("/api/reports/prepare-download", (req, res) => {
+  const { filename, base64Data, mimeType } = req.body;
+  if (!filename || !base64Data) {
+    return res.status(400).json({ success: false, error: "파일명 또는 데이터가 누락되었습니다." });
+  }
+
+  let cleanBase64 = base64Data;
+  if (base64Data.includes(";base64,")) {
+    cleanBase64 = base64Data.split(";base64,")[1];
+  }
+
+  const token = "rep_" + Math.random().toString(36).substring(2, 9) + "_" + Date.now();
+  const buffer = Buffer.from(cleanBase64, "base64");
+
+  reportDownloadCache.set(token, {
+    filename,
+    buffer,
+    mimeType: mimeType || (filename.endsWith(".pdf") ? "application/pdf" : "application/octet-stream"),
+    expiresAt: Date.now() + 15 * 60 * 1000 // 15 mins
+  });
+
+  return res.json({
+    success: true,
+    token,
+    downloadUrl: `/api/reports/download/${token}/${encodeURIComponent(filename)}`
+  });
+});
+
+// Endpoint to stream download with proper Content-Disposition
+app.get("/api/reports/download/:token/:filename", (req, res) => {
+  const { token } = req.params;
+  const item = reportDownloadCache.get(token);
+  if (!item) {
+    return res.status(404).send("다운로드 세션이 만료되었습니다. 앱에서 다시 다운로드 버튼을 눌러주세요.");
+  }
+
+  res.setHeader("Content-Type", item.mimeType);
+  res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(item.filename)}`);
+  res.setHeader("Content-Length", item.buffer.length);
+  return res.send(item.buffer);
+});
+
 // Real Email sending API Endpoint
 app.post("/api/send-email", async (req, res) => {
   const { to, subject, filename, base64Data } = req.body;

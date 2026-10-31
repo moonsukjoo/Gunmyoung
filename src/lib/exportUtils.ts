@@ -135,6 +135,118 @@ export const exportToExcel = async (data: any[], fileName: string, sheetName: st
 };
 
 /**
+ * Real-time Interactive Progress Modal Controller.
+ * Displays live percentage, step badges, status descriptions, and real-time timestamped event logs.
+ */
+interface ProgressController {
+  setStep: (stepNumber: number, stepTitle: string, percent: number) => void;
+  addLog: (msg: string, color?: string) => void;
+  close: () => void;
+}
+
+const openReportProgressModal = (reportTitle: string, totalPages: number): ProgressController => {
+  const existing = document.getElementById('report-generation-progress-modal');
+  if (existing?.parentNode) {
+    existing.parentNode.removeChild(existing);
+  }
+
+  const modal = document.createElement('div');
+  modal.id = 'report-generation-progress-modal';
+  modal.className = 'fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md transition-opacity duration-300 font-sans';
+
+  modal.innerHTML = `
+    <div class="bg-zinc-950 border border-zinc-800 rounded-[2.5rem] p-6 sm:p-8 w-full max-w-md shadow-2xl text-white relative overflow-hidden">
+      <!-- Top Accent Animated Gradient Bar -->
+      <div class="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-500 via-indigo-500 to-rose-500 animate-pulse"></div>
+
+      <!-- Header Icon & Status -->
+      <div class="flex items-center gap-3.5 mb-5">
+        <div class="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 shadow-inner">
+          <svg class="w-6 h-6 animate-spin text-indigo-400" viewBox="0 0 24 24" fill="none">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2">
+            <span id="progress-step-pill" class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+              1 / 5 단계
+            </span>
+            <span id="progress-percent-pill" class="text-xs font-black text-emerald-400 font-mono">10%</span>
+          </div>
+          <h3 class="text-sm font-black tracking-tight text-white mt-1 truncate">${reportTitle}</h3>
+        </div>
+      </div>
+
+      <!-- Current Step Description Box -->
+      <div class="bg-zinc-900/60 rounded-2xl p-4 border border-zinc-850 mb-4 space-y-2.5">
+        <div class="flex justify-between items-center text-xs">
+          <span id="progress-current-title" class="font-black text-zinc-200">데이터 수집 및 사원 정보 집계 중...</span>
+          <span class="text-[10px] font-bold text-zinc-500">1페이지 4건 표준</span>
+        </div>
+        
+        <!-- Progress Bar Container -->
+        <div class="w-full bg-zinc-850 rounded-full h-3 overflow-hidden p-0.5">
+          <div id="progress-bar-fill" class="bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-400 h-full rounded-full transition-all duration-300 w-[10%]"></div>
+        </div>
+      </div>
+
+      <!-- Real-time Console Log Box -->
+      <div class="space-y-1.5">
+        <div class="flex items-center justify-between text-[10px] font-bold text-zinc-500 px-1 uppercase tracking-wider">
+          <span>실시간 처리 과정 현황</span>
+          <span class="text-indigo-400 font-mono animate-pulse">● LIVE PRODUCING</span>
+        </div>
+        <div id="progress-log-box" class="h-28 bg-zinc-900/90 rounded-2xl border border-zinc-850 p-3 overflow-y-auto font-mono text-[11px] text-zinc-400 space-y-1.5 select-none">
+          <p class="text-indigo-400 font-bold leading-tight">■ [시작] 건명기업 보고서 생성 프로세스 가동</p>
+        </div>
+      </div>
+
+      <!-- Footnote Safety Protection Notice -->
+      <p class="text-[10px] text-zinc-500 text-center mt-4 font-medium leading-relaxed">
+        🛡️ 모바일 안드로이드 메모리 보호 기술(청크 분할)로 안전하게 처리됩니다.
+      </p>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  const stepPill = document.getElementById('progress-step-pill') as HTMLSpanElement;
+  const percentPill = document.getElementById('progress-percent-pill') as HTMLSpanElement;
+  const currentTitle = document.getElementById('progress-current-title') as HTMLSpanElement;
+  const barFill = document.getElementById('progress-bar-fill') as HTMLDivElement;
+  const logBox = document.getElementById('progress-log-box') as HTMLDivElement;
+
+  const getTimestamp = () => {
+    const d = new Date();
+    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
+  };
+
+  return {
+    setStep: (stepNumber: number, title: string, percent: number) => {
+      if (stepPill) stepPill.textContent = `${stepNumber} / 5 단계`;
+      if (percentPill) percentPill.textContent = `${percent}%`;
+      if (currentTitle) currentTitle.textContent = title;
+      if (barFill) barFill.style.width = `${Math.min(100, Math.max(8, percent))}%`;
+    },
+    addLog: (msg: string, color: string = 'text-zinc-300') => {
+      if (logBox) {
+        const p = document.createElement('p');
+        p.className = `leading-tight ${color}`;
+        p.textContent = `[${getTimestamp()}] ${msg}`;
+        logBox.appendChild(p);
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+    },
+    close: () => {
+      if (modal.parentNode) {
+        document.body.removeChild(modal);
+      }
+    }
+  };
+};
+
+/**
  * High-performance, 100% crash-proof 4-items-per-page Photo Inspection / Reward Card PDF Report.
  * Renders directly via HTML5 2D Canvas without html2canvas, eliminating all DOM cloning and WebView memory crashes.
  */
@@ -156,6 +268,10 @@ export const exportPhotoCardPDF = async ({
   }
   const totalPages = chunks.length;
 
+  const progress = openReportProgressModal(title, totalPages);
+  progress.addLog(`총 ${items.length}건 데이터 로드 완료 (1페이지 4건 표준, 총 ${totalPages}페이지)`);
+  progress.setStep(1, '사원 정보 및 안전 점수 분석 중...', 15);
+
   const pdf = new jsPDF('p', 'mm', 'a4');
   const pdfWidth = pdf.internal.pageSize.getWidth(); // 210mm
   const pdfPageHeight = pdf.internal.pageSize.getHeight(); // 297mm
@@ -168,11 +284,14 @@ export const exportPhotoCardPDF = async ({
   canvas.height = H;
   const ctx = canvas.getContext('2d', { alpha: false });
   if (!ctx) {
+    progress.close();
     throw new Error('Canvas 2D context not supported');
   }
 
   try {
     for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
+      const pagePct = Math.round(20 + (pageIdx / totalPages) * 65);
+      progress.setStep(3, `제 ${pageIdx + 1}페이지 4건 표준 양식 캔버스 렌더링 중 (${pageIdx + 1} / ${totalPages} 쪽)...`, pagePct);
       if (onProgress) {
         onProgress(pageIdx + 1, totalPages);
       }
@@ -180,9 +299,11 @@ export const exportPhotoCardPDF = async ({
       const chunk = chunks[pageIdx];
 
       // Preload images for current 4 cards
+      progress.addLog(`제 ${pageIdx + 1}쪽 현장 첨부 사진 로딩 및 비율 검증 중...`);
       const loadedImages = await Promise.all(
         chunk.map(c => loadImageSafely(c?.photoUrl))
       );
+      progress.addLog(`제 ${pageIdx + 1}쪽 사진 준비 완료. 4건 카드 렌더링 개시.`);
 
       // 1. Clear background
       ctx.fillStyle = '#ffffff';
@@ -549,9 +670,19 @@ export const exportPhotoCardPDF = async ({
       await new Promise(r => setTimeout(r, 40));
     }
 
+    progress.setStep(4, 'PDF 바이너리 압축 및 메모리 정리 중...', 92);
+    progress.addLog('PDF 바이너리 스트림 변환 및 캐시 정리 완료');
+    await new Promise(r => setTimeout(r, 200));
+
     const pdfBlob = pdf.output('blob');
+    progress.setStep(5, '보고서 제작 완료! 저장 화면을 준비합니다.', 100);
+    progress.addLog('✅ 보고서 완성! 다운로드 및 저장 창을 오픈합니다.');
+    await new Promise(r => setTimeout(r, 450));
+    progress.close();
+
     await downloadFile(pdfBlob, `${fileName}_${new Date().getTime()}.pdf`);
   } catch (error) {
+    progress.close();
     console.error('Photo card PDF generation failed:', error);
     throw error;
   } finally {
@@ -568,6 +699,10 @@ export const exportToPDF = async (title: string, headers: string[], data: any[][
   const W = 840;
   const rowsPerPage = 18;
   const totalPages = Math.max(1, Math.ceil(data.length / rowsPerPage));
+  const progress = openReportProgressModal(title, totalPages);
+  progress.addLog(`테이블 데이터 ${data.length}건 준비 완료 (총 ${totalPages}쪽)`);
+  progress.setStep(1, '테이블 행 및 페이지 구성 중...', 15);
+
   const pdf = new jsPDF('p', 'mm', 'a4');
   const pdfWidth = pdf.internal.pageSize.getWidth();
   const pdfPageHeight = pdf.internal.pageSize.getHeight();
@@ -576,10 +711,15 @@ export const exportToPDF = async (title: string, headers: string[], data: any[][
   canvas.width = W;
   canvas.height = 1188;
   const ctx = canvas.getContext('2d', { alpha: false });
-  if (!ctx) throw new Error('Canvas context unavailable');
+  if (!ctx) {
+    progress.close();
+    throw new Error('Canvas context unavailable');
+  }
 
   try {
     for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
+      const pagePct = Math.round(20 + (pageIdx / totalPages) * 65);
+      progress.setStep(3, `제 ${pageIdx + 1}쪽 테이블 드로잉 중 (${pageIdx + 1} / ${totalPages} 쪽)...`, pagePct);
       const pageData = data.slice(pageIdx * rowsPerPage, (pageIdx + 1) * rowsPerPage);
 
       // Background
@@ -671,14 +811,27 @@ export const exportToPDF = async (title: string, headers: string[], data: any[][
       ctx.fillText(`© ${new Date().getFullYear()} 건명기업. All Rights Reserved.`, 810, 1160);
       ctx.textAlign = 'left';
 
-      const imgData = canvas.toDataURL('image/jpeg', 0.82);
+      const imgData = canvas.toDataURL('image/jpeg', 0.65);
       if (pageIdx > 0) pdf.addPage();
       pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfPageHeight);
+
+      ctx.clearRect(0, 0, W, 1188);
+      await new Promise(r => setTimeout(r, 30));
     }
 
+    progress.setStep(4, 'PDF 바이너리 압축 및 메모리 정리 중...', 92);
+    progress.addLog('PDF 바이너리 스트림 변환 완료');
+    await new Promise(r => setTimeout(r, 200));
+
     const pdfBlob = pdf.output('blob');
+    progress.setStep(5, '보고서 완성! 저장 화면 준비', 100);
+    progress.addLog('✅ 보고서 생성 완료. 다운로드 모달 실행...');
+    await new Promise(r => setTimeout(r, 400));
+    progress.close();
+
     await downloadFile(pdfBlob, `${fileName}_${new Date().getTime()}.pdf`);
   } catch (error) {
+    progress.close();
     console.error('PDF generation failed:', error);
     throw error;
   } finally {

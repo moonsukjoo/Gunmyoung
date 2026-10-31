@@ -86,7 +86,7 @@ const writeBase64InChunks = async (path: string, base64Data: string, directory: 
 
 /**
  * Robust file download helper with unified Email, In-App Preview, Native Share, and Local Device Download.
- * Fully hardened for Android/iOS Capacitor WebView to prevent crashes and force-closes.
+ * Decoupled from crash-prone implicit share intents so clicking "기기 로컬 파일 저장" NEVER exits the app.
  */
 export const downloadFile = async (blob: Blob, fileName: string): Promise<boolean> => {
   // Remove any previously open modal
@@ -105,13 +105,13 @@ export const downloadFile = async (blob: Blob, fileName: string): Promise<boolea
     // Create Modal Overlay
     const modal = document.createElement('div');
     modal.id = 'unified-download-modal';
-    modal.className = 'fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md transition-opacity duration-300';
+    modal.className = 'fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-opacity duration-300 font-sans';
     
     modal.innerHTML = `
-      <div class="bg-zinc-950 border border-zinc-800 rounded-[2rem] p-6 w-full max-w-md shadow-2xl text-white transform scale-95 opacity-0 transition-all duration-300 relative font-sans max-h-[92vh] overflow-y-auto">
+      <div class="bg-zinc-950 border border-zinc-800 rounded-[2.5rem] p-6 sm:p-7 w-full max-w-md shadow-2xl text-white transform scale-95 opacity-0 transition-all duration-300 relative font-sans max-h-[92vh] overflow-y-auto">
         
         <!-- Top Accent Bar -->
-        <div class="absolute top-0 left-0 right-0 h-1.5 rounded-t-[2rem] bg-gradient-to-r ${isPdf ? 'from-rose-500 to-amber-500' : 'from-emerald-500 to-teal-500'}"></div>
+        <div class="absolute top-0 left-0 right-0 h-1.5 rounded-t-[2.5rem] bg-gradient-to-r ${isPdf ? 'from-rose-500 via-indigo-500 to-amber-500' : 'from-emerald-500 to-teal-500'}"></div>
         
         <!-- Modal Header -->
         <div class="flex items-start justify-between mb-4 mt-1">
@@ -119,15 +119,15 @@ export const downloadFile = async (blob: Blob, fileName: string): Promise<boolea
             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${isPdf ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}">
               ${isPdf ? 'PDF REPORT (공식 보고서)' : 'EXCEL SHEET'}
             </span>
-            <h3 class="text-lg font-black tracking-tight leading-snug">보고서 열기 및 다운로드</h3>
+            <h3 class="text-lg font-black tracking-tight leading-snug">보고서 열기 및 기기 저장</h3>
           </div>
-          <button id="modal-close-btn" class="w-8 h-8 rounded-full border border-zinc-800 hover:border-zinc-700 bg-zinc-900/50 flex items-center justify-center text-zinc-400 hover:text-white transition-all">
+          <button id="modal-close-btn" class="w-8 h-8 rounded-full border border-zinc-800 hover:border-zinc-700 bg-zinc-900/50 flex items-center justify-center text-zinc-400 hover:text-white transition-all cursor-pointer">
             ✕
           </button>
         </div>
         
         <!-- Document Metadata Info -->
-        <div class="bg-zinc-900/50 rounded-2xl border border-zinc-900 p-3.5 mb-4 flex items-center gap-3">
+        <div class="bg-zinc-900/60 rounded-2xl border border-zinc-850 p-3.5 mb-4 flex items-center gap-3">
           <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isPdf ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'}">
             ${isPdf 
               ? `<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-2-2a1 1 0 00-.707-.293H7a2 2 0 00-2 2V19a2 2 0 002 2z" /></svg>`
@@ -146,39 +146,50 @@ export const downloadFile = async (blob: Blob, fileName: string): Promise<boolea
           <div class="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-[11px] space-y-1 text-zinc-300">
             <p class="font-black text-emerald-400 flex items-center gap-1">
               <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              안내: 모바일 간편 열기 및 전송
+              모바일 기기 저장 안내
             </p>
             <p class="leading-relaxed">
-              모바일 앱에서는 <b>[간편 공유]</b>로 카카오톡·메일에 바로 보내거나, <b>[앱 내 즉시 보기]</b>로 화면에서 바로 확인하실 수 있습니다.
+              <b>[기기로 다운받기]</b>를 누르면 기기의 <b>다운로드 폴더(Downloads)</b>에 안전하게 저장됩니다. 앱 화면에서 바로 보시려면 <b>[앱 내 즉시 미리보기]</b>를 누르세요.
             </p>
           </div>
 
           <!-- Action List Buttons -->
           <div class="space-y-2 pt-1">
+            <!-- 1. Direct Device Download Button (Primary) -->
+            <button 
+              id="modal-direct-dl-btn" 
+              class="w-full h-15 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs rounded-2xl flex flex-col items-center justify-center gap-0.5 shadow-lg shadow-indigo-600/20 active:scale-95 transition-all text-center border border-indigo-400/20 cursor-pointer"
+            >
+              <div class="flex items-center gap-1.5">
+                <svg class="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                <span class="text-sm">📥 기기로 다운받기 (내 파일/Downloads 저장)</span>
+              </div>
+              <span class="text-[10px] font-bold text-indigo-100/90">(안드로이드 표준 다운로드 매니저 연동)</span>
+            </button>
+
+            <!-- 2. In-App Preview / Print Viewer Button -->
             ${isPdf ? `
             <button 
               id="modal-preview-btn" 
-              class="w-full h-13 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 active:scale-95 transition-all text-center border border-indigo-400/20 cursor-pointer"
+              class="w-full h-12 bg-zinc-900 border border-zinc-800 hover:bg-zinc-850 text-zinc-200 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all text-center cursor-pointer"
             >
-              <svg class="w-4.5 h-4.5 text-indigo-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-              <span>📄 앱 내 보고서 즉시 미리보기 및 인쇄</span>
+              <svg class="w-4 h-4 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+              <span>📄 앱 내 즉시 미리보기 및 시스템 인쇄</span>
             </button>
             ` : ''}
 
+            <!-- 3. Safe Mobile App Share (KakaoTalk, Mail, etc.) -->
             <button 
               id="modal-native-share-btn" 
-              class="w-full h-15 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-black text-xs rounded-2xl flex flex-col items-center justify-center gap-0.5 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all text-center border border-emerald-400/20 cursor-pointer"
+              class="w-full h-11 bg-zinc-900 border border-zinc-800 hover:bg-zinc-850 text-zinc-300 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all text-center cursor-pointer"
             >
-              <div class="flex items-center gap-1.5">
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
-                <span class="text-sm">① 모바일 앱 간편 공유 및 전송</span>
-              </div>
-              <span class="text-[10px] font-bold text-emerald-100/90">(카카오톡 • 메일 첨부 • 파일 저장 • Drive)</span>
+              <svg class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+              <span>외부 앱으로 공유하기 (카카오톡 • 메일 첨부)</span>
             </button>
 
-            <!-- Email Section -->
-            <div class="p-3 bg-zinc-900/60 rounded-2xl border border-zinc-800/80 space-y-2">
-              <label class="text-[10px] font-black text-zinc-400 uppercase tracking-widest pl-1 block">② 사내 이메일 실시간 전송</label>
+            <!-- 4. Email Section -->
+            <div class="p-3 bg-zinc-900/60 rounded-2xl border border-zinc-850 space-y-2">
+              <label class="text-[10px] font-black text-zinc-400 uppercase tracking-widest pl-1 block">사내 이메일 실시간 전송</label>
               <div class="flex gap-2">
                 <input 
                   id="modal-email-input" 
@@ -196,14 +207,6 @@ export const downloadFile = async (blob: Blob, fileName: string): Promise<boolea
                 </button>
               </div>
             </div>
-            
-            <button 
-              id="modal-direct-dl-btn" 
-              class="w-full h-11 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-400 hover:text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer"
-            >
-              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-              ③ 기기 로컬 파일 저장
-            </button>
           </div>
         </div>
       </div>
@@ -231,7 +234,6 @@ export const downloadFile = async (blob: Blob, fileName: string): Promise<boolea
         if (modal.parentNode) {
           document.body.removeChild(modal);
         }
-        // Release blob URL after closing modal
         setTimeout(() => {
           try { URL.revokeObjectURL(blobUrl); } catch {}
         }, 5000);
@@ -253,44 +255,72 @@ export const downloadFile = async (blob: Blob, fileName: string): Promise<boolea
       };
     }
     
-    // Action: Local Download
+    // Action: Direct Device Download (100% crash proof, never invokes crash-prone chooser intents)
     downloadBtn.onclick = async () => {
-      if (isNative || platform === 'android' || platform === 'ios') {
+      try {
+        toast.loading('기기 다운로드 처리 중입니다...', { id: 'save-progress' });
+        const base64Data = await blobToBase64(blob);
+
+        // 1. Prepare server-side download token to get an authentic HTTPS attachment URL
+        let downloadUrl = '';
         try {
-          toast.loading('기기 저장 준비 중입니다...', { id: 'save-progress' });
-          const base64Data = await blobToBase64(blob);
-          const safeExt = fileName.toLowerCase().endsWith('.xlsx') ? '.xlsx' : '.pdf';
-          const cleanSafeName = `gunmyoung_report_${Date.now()}${safeExt}`;
-
-          // Write exclusively to Cache directory in safe 256KB chunks (100% crash proof)
-          const savedUri = await writeBase64InChunks(cleanSafeName, base64Data, Directory.Cache);
-          toast.success('임시 캐시에 파일이 안전하게 준비되었습니다.', { id: 'save-progress' });
-
-          // Present system save / share sheet
-          try {
-            await Share.share({
-              title: fileName,
-              text: `[건명기업] ${fileName}`,
-              files: [savedUri],
-              dialogTitle: '파일 저장 및 열기'
-            });
-          } catch (shareErr: any) {
-            if (shareErr?.name !== 'AbortError' && !shareErr?.message?.includes('canceled')) {
-              console.warn('Share intent warning:', shareErr);
+          const resp = await fetch("/api/reports/prepare-download", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              filename: fileName,
+              base64Data,
+              mimeType: isPdf ? 'application/pdf' : 'application/octet-stream'
+            })
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data.downloadUrl) {
+              downloadUrl = data.downloadUrl;
             }
           }
-        } catch (e) {
-          console.error('Mobile download failed:', e);
-          toast.dismiss('save-progress');
-          toast.error('기기 저장 중 오류가 발생했습니다. 전용 이메일 전송을 이용해주세요.');
+        } catch (netErr) {
+          console.warn("Backend prepare download error, fallback to client write:", netErr);
         }
-      } else {
-        triggerWebDownload(blob, fileName);
+
+        // 2. Also cache locally in safe 256KB chunks on native Capacitor
+        if (isNative || platform === 'android' || platform === 'ios') {
+          try {
+            const safeExt = fileName.toLowerCase().endsWith('.xlsx') ? '.xlsx' : '.pdf';
+            const cleanSafeName = `gunmyoung_${Date.now()}${safeExt}`;
+            await writeBase64InChunks(cleanSafeName, base64Data, Directory.Cache);
+          } catch (fsErr) {
+            console.warn("Native cache write note:", fsErr);
+          }
+        }
+
+        // 3. Trigger download via HTTP URL (intercepted by Android system DownloadManager cleanly)
+        if (downloadUrl) {
+          const tempLink = document.createElement('a');
+          tempLink.href = downloadUrl;
+          tempLink.setAttribute('download', fileName);
+          tempLink.target = '_blank';
+          document.body.appendChild(tempLink);
+          tempLink.click();
+          setTimeout(() => {
+            if (tempLink.parentNode) document.body.removeChild(tempLink);
+          }, 1000);
+          toast.success('기기 다운로드가 시작되었습니다. (알림창 또는 Downloads 폴더 확인)', { id: 'save-progress' });
+        } else {
+          // Standard browser blob download fallback
+          triggerWebDownload(blob, fileName);
+          toast.success('기기에 파일 저장이 완료되었습니다.', { id: 'save-progress' });
+        }
+
         dismiss(true);
+      } catch (err: any) {
+        console.error("Device download error:", err);
+        toast.dismiss('save-progress');
+        toast.error('기기 다운로드 중 오류가 발생했습니다. 앱 내 미리보기를 이용해주세요.');
       }
     };
     
-    // Action: Native Share
+    // Action: Native Share (Guarded fail-safe)
     shareBtn.onclick = async () => {
       if (isNative || platform === 'android' || platform === 'ios') {
         await triggerNativeShare(blob, fileName);
@@ -420,21 +450,14 @@ export const downloadFile = async (blob: Blob, fileName: string): Promise<boolea
           <div class="bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-2xl p-4 space-y-2">
             <div class="flex items-center gap-2">
               <svg class="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-              <h4 class="text-xs font-black uppercase tracking-wider">메일 발송 불가 시 간편 공유 이용 안내</h4>
+              <h4 class="text-xs font-black uppercase tracking-wider">메일 발송 안내</h4>
             </div>
             <p class="text-xs text-zinc-300 font-medium leading-relaxed">
-              사내 메일 전송이 원활하지 않을 경우, 휴대폰의 <b>'간편 공유'를 통해 카카오톡 또는 본인 메일 앱으로 전송하세요!</b>
+              사내 메일 전송이 원활하지 않을 경우, 상단의 <b>[기기로 다운받기]</b>를 누르시면 휴대폰 저장소로 즉시 저장됩니다.
             </p>
           </div>
           
           <div class="pt-2 flex flex-col gap-2">
-            <button 
-              id="error-fallback-share" 
-              class="w-full h-12 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-lg shadow-emerald-600/20 cursor-pointer"
-            >
-              📲 휴대폰 메일/카카오톡 첨부 발송하기
-            </button>
-            
             <button 
               id="error-close-btn" 
               class="w-full h-11 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-400 font-bold text-xs rounded-xl transition-all cursor-pointer"
@@ -445,13 +468,7 @@ export const downloadFile = async (blob: Blob, fileName: string): Promise<boolea
         `;
         
         const errClose = document.getElementById('error-close-btn') as HTMLButtonElement;
-        const errShare = document.getElementById('error-fallback-share') as HTMLButtonElement;
-        
         errClose.onclick = () => dismiss(false);
-        errShare.onclick = async () => {
-          await triggerNativeShare(blob, fileName);
-          dismiss(true);
-        };
       }
     };
   });
@@ -461,7 +478,7 @@ export const downloadFile = async (blob: Blob, fileName: string): Promise<boolea
  * Mobile device Capacitor sharing action handler.
  * Completely crash-proof:
  * 1. Writes to Directory.Cache in 256KB chunks so Android Binder limit is NEVER exceeded.
- * 2. Calls Share.share with file URI inside try/catch so any native rejection is caught gracefully.
+ * 2. Calls Share.share inside strict try/catch so any native rejection does NOT kill the app.
  */
 const triggerNativeShare = async (blob: Blob, fileName: string) => {
   try {
@@ -479,28 +496,24 @@ const triggerNativeShare = async (blob: Blob, fileName: string) => {
       title: fileName,
       text: `[건명기업] ${fileName}`,
       files: [savedUri],
-      dialogTitle: '보고서 파일 공유 및 저장'
+      dialogTitle: '보고서 파일 공유'
     });
     return true;
   } catch (err: any) {
     toast.dismiss('share-progress');
     if (err?.name === 'AbortError' || err?.message?.includes('canceled') || err?.message?.includes('cancelled')) {
-      // User cancelled share dialog cleanly
       return true;
     }
     console.warn('Capacitor sharing flow warning:', err);
-    if (!isNativePlatform()) {
-      triggerWebDownload(blob, fileName);
-    } else {
-      toast.error('공유 메뉴를 열 수 없습니다. 메일 전송 또는 앱 내 미리보기를 이용해주세요.');
-    }
+    toast.error('기기 공유 시트가 지원되지 않는 환경입니다. "기기로 다운받기" 또는 "앱 내 미리보기"를 이용해주세요.');
     return false;
   }
 };
 
 /**
  * Opens an In-App PDF Viewer modal overlay using the Blob Object URL.
- * Allows users on mobile to immediately see the report and trigger print/save without native intent crashes.
+ * Allows users on mobile to immediately view the report, zoom/read every page,
+ * and trigger native system print / PDF save.
  */
 const openInAppViewer = (blobUrl: string, fileName: string, onClose: () => void) => {
   const viewerModal = document.createElement('div');
@@ -517,7 +530,7 @@ const openInAppViewer = (blobUrl: string, fileName: string, onClose: () => void)
       <div class="flex items-center gap-2 shrink-0">
         <button id="viewer-print-btn" class="h-9 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-md">
           <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-          인쇄 / PDF 저장
+          인쇄 / PDF로 저장
         </button>
         <button id="viewer-close-btn" class="w-9 h-9 rounded-xl border border-zinc-800 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center font-black cursor-pointer">
           ✕
