@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
+import { toast } from 'sonner';
 import { downloadFile } from './downloadHelper';
 
 export interface ReportCardItem {
@@ -267,7 +268,10 @@ export const exportPhotoCardPDF = async ({
     chunks.push([]);
   }
   const totalPages = chunks.length;
+  const pageImages: string[] = [];
 
+  toast.dismiss();
+  toast.dismiss('safety-pdf');
   const progress = openReportProgressModal(title, totalPages);
   progress.addLog(`총 ${items.length}건 데이터 로드 완료 (1페이지 4건 표준, 총 ${totalPages}페이지)`);
   progress.setStep(1, '사원 정보 및 안전 점수 분석 중...', 15);
@@ -658,8 +662,9 @@ export const exportPhotoCardPDF = async ({
       ctx.fillText(`© ${new Date().getFullYear()} 건명기업. All Rights Reserved.`, 812, 1166);
       ctx.textAlign = 'left';
 
-      // 7. Add canvas image to jsPDF (0.65 quality produces sharp reports at 1/4th the memory footprint)
-      const imgData = canvas.toDataURL('image/jpeg', 0.65);
+      // 7. Add canvas image to jsPDF and collect for in-app mobile viewer
+      const imgData = canvas.toDataURL('image/jpeg', 0.80);
+      pageImages.push(imgData);
       if (pageIdx > 0) {
         pdf.addPage();
       }
@@ -680,7 +685,7 @@ export const exportPhotoCardPDF = async ({
     await new Promise(r => setTimeout(r, 450));
     progress.close();
 
-    await downloadFile(pdfBlob, `${fileName}_${new Date().getTime()}.pdf`);
+    await downloadFile(pdfBlob, `${fileName}_${new Date().getTime()}.pdf`, pageImages);
   } catch (error) {
     progress.close();
     console.error('Photo card PDF generation failed:', error);
@@ -699,6 +704,9 @@ export const exportToPDF = async (title: string, headers: string[], data: any[][
   const W = 840;
   const rowsPerPage = 18;
   const totalPages = Math.max(1, Math.ceil(data.length / rowsPerPage));
+  const pageImages: string[] = [];
+  toast.dismiss();
+  toast.dismiss('safety-pdf');
   const progress = openReportProgressModal(title, totalPages);
   progress.addLog(`테이블 데이터 ${data.length}건 준비 완료 (총 ${totalPages}쪽)`);
   progress.setStep(1, '테이블 행 및 페이지 구성 중...', 15);
@@ -811,7 +819,8 @@ export const exportToPDF = async (title: string, headers: string[], data: any[][
       ctx.fillText(`© ${new Date().getFullYear()} 건명기업. All Rights Reserved.`, 810, 1160);
       ctx.textAlign = 'left';
 
-      const imgData = canvas.toDataURL('image/jpeg', 0.65);
+      const imgData = canvas.toDataURL('image/jpeg', 0.80);
+      pageImages.push(imgData);
       if (pageIdx > 0) pdf.addPage();
       pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfPageHeight);
 
@@ -829,7 +838,7 @@ export const exportToPDF = async (title: string, headers: string[], data: any[][
     await new Promise(r => setTimeout(r, 400));
     progress.close();
 
-    await downloadFile(pdfBlob, `${fileName}_${new Date().getTime()}.pdf`);
+    await downloadFile(pdfBlob, `${fileName}_${new Date().getTime()}.pdf`, pageImages);
   } catch (error) {
     progress.close();
     console.error('PDF generation failed:', error);

@@ -272,17 +272,15 @@ export const SafetyRanking: React.FC = () => {
         };
       });
 
+      toast.dismiss('safety-pdf');
+
       await exportPhotoCardPDF({
         title: `안전 지수 변동 및 현장점검 리포트 (${selectedMonth})`,
         subtitle: `총 ${items.length}건 등록 (1페이지 4건 표준 양식, 총 ${Math.ceil(items.length / 4) || 1}페이지)`,
         monthStr: selectedMonth,
         items,
-        fileName: `안전점검사진보고서_${selectedMonth}`,
-        onProgress: (cur, tot) => {
-          toast.loading(`${selectedMonth} 사진 리포트 PDF 생성 중... (${cur}/${tot} 쪽)`, { id: 'safety-pdf' });
-        }
+        fileName: `안전점검사진보고서_${selectedMonth}`
       });
-      toast.success(`${selectedMonth} 안전점검 사진 PDF 리포트(1페이지 4건) 생성 완료!`, { id: 'safety-pdf' });
     } catch (error) {
       console.error('Safety photo PDF export failed:', error);
       toast.dismiss('safety-pdf');
@@ -323,22 +321,21 @@ export const SafetyRanking: React.FC = () => {
           };
         });
 
+        toast.dismiss('safety-pdf');
+
         await exportPhotoCardPDF({
           title: `개인별 안전 지수 현황 리포트 (${selectedMonth})`,
           subtitle: `총 ${items.length}명 등록 (1페이지 4건 표준 양식, 총 ${Math.ceil(items.length / 4) || 1}페이지)`,
           monthStr: selectedMonth,
           items,
-          fileName: `개인별_안전지수_${selectedMonth}`,
-          onProgress: (cur, tot) => {
-            toast.loading(`개인별 안전지수 PDF 생성 중... (${cur}/${tot} 쪽)`, { id: 'safety-pdf' });
-          }
+          fileName: `개인별_안전지수_${selectedMonth}`
         });
       } else if (activeView === 'TEAM') {
         if (teamRankings.length === 0) {
           toast.info('조회된 팀별 데이터가 없습니다.');
           return;
         }
-        toast.loading('팀별 안전 지수 PDF 리포트를 준비 중입니다...', { id: 'safety-pdf' });
+        toast.dismiss('safety-pdf');
         const items: ReportCardItem[] = teamRankings.map((t, idx) => {
           const delta = monthlyDeptDelta[t.id] ?? 0;
           return {
@@ -361,18 +358,13 @@ export const SafetyRanking: React.FC = () => {
           subtitle: `총 ${items.length}개 팀 등록 (1페이지 4건 표준 양식, 총 ${Math.ceil(items.length / 4) || 1}페이지)`,
           monthStr: selectedMonth,
           items,
-          fileName: `팀별_안전지수_${selectedMonth}`,
-          onProgress: (cur, tot) => {
-            toast.loading(`팀별 안전지수 PDF 생성 중... (${cur}/${tot} 쪽)`, { id: 'safety-pdf' });
-          }
+          fileName: `팀별_안전지수_${selectedMonth}`
         });
       } else {
         // LOGS
         await handleExportMonthlyPhotoPDF();
         return;
       }
-
-      toast.success('안전지수 PDF 리포트(1페이지 4건)가 성공적으로 준비되었습니다.', { id: 'safety-pdf' });
     } catch (error) {
       console.error('Safety PDF export failed:', error);
       toast.dismiss('safety-pdf');
