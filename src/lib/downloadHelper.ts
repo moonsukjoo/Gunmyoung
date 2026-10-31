@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { Device } from '@capacitor/device';
 import { Share } from '@capacitor/share';
+import { Browser } from '@capacitor/browser';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 
@@ -96,15 +97,20 @@ const downloadViaCloudGateway = async (blob: Blob, fileName: string): Promise<st
 
     if (isNativePlatform()) {
       try {
-        window.open(fullDownloadUrl, '_system');
-      } catch {
-        const a = document.createElement('a');
-        a.href = fullDownloadUrl;
-        a.target = '_blank';
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => { if (a.parentNode) document.body.removeChild(a); }, 1000);
+        await Browser.open({ url: fullDownloadUrl });
+      } catch (bErr) {
+        console.warn('Browser.open failed, falling back:', bErr);
+        try {
+          window.open(fullDownloadUrl, '_system');
+        } catch {
+          const a = document.createElement('a');
+          a.href = fullDownloadUrl;
+          a.target = '_blank';
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => { if (a.parentNode) document.body.removeChild(a); }, 1000);
+        }
       }
     } else {
       triggerWebDownload(blob, fileName);
@@ -599,17 +605,18 @@ const openImageBasedInAppViewer = (
       if (!pageDataUrl) return;
 
       try {
+        toast.dismiss();
+        toast.loading(`제 ${pIdx + 1}쪽 사진 저장 준비 중...`, { id: 'page-save' });
         const pageFileName = `건명기업_보고서_${pIdx + 1}쪽_${Date.now()}.jpg`;
-        const a = document.createElement('a');
-        a.href = pageDataUrl;
-        a.download = pageFileName;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => { if (a.parentNode) document.body.removeChild(a); }, 1000);
-        toast.success(`제 ${pIdx + 1}쪽 이미지가 다운로드/저장되었습니다.`);
+        
+        const fetchRes = await fetch(pageDataUrl);
+        const imageBlob = await fetchRes.blob();
+        await downloadViaCloudGateway(imageBlob, pageFileName);
+        
+        toast.success(`제 ${pIdx + 1}쪽 사진 다운로드가 개시되었습니다. (휴대폰 상단 알림창 확인)`, { id: 'page-save', duration: 4000 });
       } catch (e) {
         console.error('Page image save error:', e);
-        toast.error('페이지 이미지 저장 중 오류가 발생했습니다.');
+        toast.error('페이지 이미지 저장 중 오류가 발생했습니다.', { id: 'page-save' });
       }
     };
   });
