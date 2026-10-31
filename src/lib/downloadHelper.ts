@@ -56,53 +56,89 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
 /**
  * Universal, 100% Crash-Proof Cloud HTTPS Gateway Downloader.
  * Hands off attachment stream to Android system DownloadManager / Chrome.
- * ZERO native Filesystem plugin dependency = ZERO NoClassDefFoundError / SpillingKt crashes!
+ * Includes direct DataURL fallback if network or server is temporarily unreachable.
  */
 const downloadViaCloudGateway = async (blob: Blob, fileName: string): Promise<string> => {
   const backendBase = getBackendBaseUrl();
   const isPdf = fileName.toLowerCase().endsWith('.pdf');
   const base64Data = await blobToBase64(blob);
 
-  const resp = await fetch(`${backendBase}/api/reports/prepare-download`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      filename: fileName,
-      base64Data,
-      mimeType: isPdf ? 'application/pdf' : 'application/octet-stream'
-    })
-  });
-
-  if (!resp.ok) {
-    throw new Error('Cloud gateway prepare download failed');
+  let resp: Response | null = null;
+  try {
+    resp = await fetch(`${backendBase}/api/reports/prepare-download`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filename: fileName,
+        base64Data,
+        mimeType: isPdf ? 'application/pdf' : 'application/octet-stream'
+      })
+    });
+  } catch (netErr: any) {
+    console.warn('Backend download gateway unreachable, using direct fallback:', netErr);
+    return fallbackDirectDownload(blob, fileName);
   }
 
-  const data = await resp.json();
-  if (!data.downloadUrl) {
-    throw new Error('Invalid download token from server');
+  if (!resp || !resp.ok) {
+    console.warn('Backend prepare-download non-OK status, using direct fallback');
+    return fallbackDirectDownload(blob, fileName);
   }
 
-  const fullDownloadUrl = data.downloadUrl.startsWith('http') 
-    ? data.downloadUrl 
-    : `${backendBase}${data.downloadUrl}`;
-
-  if (isNativePlatform()) {
-    try {
-      window.open(fullDownloadUrl, '_system');
-    } catch {
-      const a = document.createElement('a');
-      a.href = fullDownloadUrl;
-      a.target = '_blank';
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => { if (a.parentNode) document.body.removeChild(a); }, 1000);
+  try {
+    const data = await resp.json();
+    if (!data.downloadUrl) {
+      return fallbackDirectDownload(blob, fileName);
     }
-  } else {
-    triggerWebDownload(blob, fileName);
-  }
 
-  return fullDownloadUrl;
+    const fullDownloadUrl = data.downloadUrl.startsWith('http') 
+      ? data.downloadUrl 
+      : `${backendBase}${data.downloadUrl}`;
+
+    if (isNativePlatform()) {
+      try {
+        window.open(fullDownloadUrl, '_system');
+      } catch {
+        const a = document.createElement('a');
+        a.href = fullDownloadUrl;
+        a.target = '_blank';
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { if (a.parentNode) document.body.removeChild(a); }, 1000);
+      }
+    } else {
+      triggerWebDownload(blob, fileName);
+    }
+
+    return fullDownloadUrl;
+  } catch (err) {
+    console.warn('Download url parsing error, using direct fallback:', err);
+    return fallbackDirectDownload(blob, fileName);
+  }
+};
+
+/**
+ * Direct DataURL download fallback for offline or restricted environments
+ */
+const fallbackDirectDownload = async (blob: Blob, fileName: string): Promise<string> => {
+  try {
+    const isPdf = fileName.toLowerCase().endsWith('.pdf');
+    const base64Data = await blobToBase64(blob);
+    const mimeType = isPdf ? 'application/pdf' : 'application/octet-stream';
+    const dataUrl = `data:${mimeType};base64,${base64Data}`;
+
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = fileName;
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { if (a.parentNode) document.body.removeChild(a); }, 1000);
+    return dataUrl;
+  } catch (e) {
+    console.error('Fallback direct download error:', e);
+    throw new Error('파일 저장을 실행할 수 없습니다.');
+  }
 };
 
 /**
