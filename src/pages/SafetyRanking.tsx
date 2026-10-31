@@ -247,7 +247,7 @@ export const SafetyRanking: React.FC = () => {
         toast.info(`${selectedMonth}에 등록된 안전점검 및 사진 내역이 없습니다.`);
         return;
       }
-      toast.loading(`${selectedMonth} 안전점검 사진 리포트(1페이지 4건)를 준비 중입니다...`, { id: 'safety-pdf' });
+      toast.dismiss();
       const exportLogs = filteredLogs.length > 40 ? filteredLogs.slice(0, 40) : filteredLogs;
       if (filteredLogs.length > 40) {
         toast.info(`안전한 모바일 처리를 위해 최신 40건(총 10페이지)을 1페이지 4건 양식으로 생성합니다.`);
@@ -272,8 +272,6 @@ export const SafetyRanking: React.FC = () => {
         };
       });
 
-      toast.dismiss('safety-pdf');
-
       await exportPhotoCardPDF({
         title: `안전 지수 변동 및 현장점검 리포트 (${selectedMonth})`,
         subtitle: `총 ${items.length}건 등록 (1페이지 4건 표준 양식, 총 ${Math.ceil(items.length / 4) || 1}페이지)`,
@@ -283,7 +281,7 @@ export const SafetyRanking: React.FC = () => {
       });
     } catch (error) {
       console.error('Safety photo PDF export failed:', error);
-      toast.dismiss('safety-pdf');
+      toast.dismiss();
       toast.error('PDF 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     }
   };
@@ -295,7 +293,7 @@ export const SafetyRanking: React.FC = () => {
           toast.info('조회된 임직원 데이터가 없습니다.');
           return;
         }
-        toast.loading('개인별 안전 지수 PDF 리포트를 준비 중입니다...', { id: 'safety-pdf' });
+        toast.dismiss();
         const exportUsers = filteredUsers.length > 40 ? filteredUsers.slice(0, 40) : filteredUsers;
         if (filteredUsers.length > 40) {
           toast.info(`안전한 모바일 처리를 위해 상위 40명(총 10페이지)을 1페이지 4건 양식으로 생성합니다.`);

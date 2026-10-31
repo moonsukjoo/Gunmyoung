@@ -3,6 +3,7 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Device } from '@capacitor/device';
 import { Share } from '@capacitor/share';
 import { toast } from 'sonner';
+import jsPDF from 'jspdf';
 
 /**
  * Cloud Run Production Backend URL used for APK clients running on localhost
@@ -482,30 +483,57 @@ const openImageBasedInAppViewer = (
   blob?: Blob,
   onClose?: () => void
 ) => {
+  // Dismiss any lingering toast popups so they never obscure header controls
+  toast.dismiss();
+
+  const existingViewer = document.getElementById('in-app-image-report-viewer');
+  if (existingViewer?.parentNode) {
+    existingViewer.parentNode.removeChild(existingViewer);
+  }
+
   const viewerModal = document.createElement('div');
   viewerModal.id = 'in-app-image-report-viewer';
   viewerModal.className = 'fixed inset-0 z-[100000] flex flex-col bg-zinc-950 text-white font-sans';
   
   viewerModal.innerHTML = `
     <!-- Viewer Header -->
-    <div class="h-14 border-b border-zinc-850 bg-zinc-900/95 backdrop-blur-md px-3 sm:px-4 flex items-center justify-between shrink-0 shadow-md">
-      <div class="flex items-center gap-2 min-w-0 pr-2">
+    <div class="h-16 border-b border-zinc-800 bg-zinc-900/95 backdrop-blur-md px-3 sm:px-4 flex items-center justify-between shrink-0 shadow-lg z-20">
+      <div class="flex items-center gap-2 min-w-0 pr-1">
         <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></span>
-        <h4 class="text-xs font-black truncate">${fileName}</h4>
-        <span class="text-[10px] font-bold text-zinc-400 shrink-0">(${pageImages.length}쪽 완본)</span>
+        <div class="min-w-0">
+          <h4 class="text-xs sm:text-sm font-black truncate text-white">${fileName}</h4>
+          <span class="text-[10px] font-bold text-zinc-400 shrink-0">총 ${pageImages.length}페이지 공식 리포트</span>
+        </div>
       </div>
+      
       <div class="flex items-center gap-1.5 shrink-0">
-        ${blob ? `
-        <button id="viewer-dl-btn" class="h-9 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-md active:scale-95 transition-all">
-          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-          <span class="hidden sm:inline">전체</span>저장
+        <!-- Prominent "📥 파일로 저장" Download Button -->
+        <button 
+          id="viewer-dl-btn" 
+          class="h-10 px-3 sm:px-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-teal-600 hover:from-blue-500 hover:to-teal-500 text-white font-black text-xs rounded-xl flex items-center gap-1.5 shadow-md active:scale-95 transition-all border border-blue-400/30 cursor-pointer"
+        >
+          <svg class="w-4 h-4 text-blue-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          <span class="font-bold">📥 파일 저장</span>
         </button>
-        ` : ''}
-        <button id="viewer-print-btn" class="h-9 px-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-md active:scale-95 transition-all">
-          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-          인쇄
+
+        <!-- Print Button -->
+        <button 
+          id="viewer-print-btn" 
+          class="h-10 px-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs rounded-xl flex items-center gap-1 cursor-pointer active:scale-95 transition-all border border-zinc-700/50"
+        >
+          <svg class="w-3.5 h-3.5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+          </svg>
+          <span class="hidden sm:inline">인쇄</span>
         </button>
-        <button id="viewer-close-btn" class="h-9 px-3 rounded-xl border border-zinc-800 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center font-black cursor-pointer active:scale-95 transition-all text-xs">
+
+        <!-- Close Button -->
+        <button 
+          id="viewer-close-btn" 
+          class="h-10 px-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white font-black text-xs rounded-xl flex items-center justify-center cursor-pointer active:scale-95 transition-all border border-zinc-700/50"
+        >
           ✕ 닫기
         </button>
       </div>
@@ -564,25 +592,93 @@ const openImageBasedInAppViewer = (
     if (onClose) onClose();
   };
 
-  if (dlBtn && blob) {
+  if (dlBtn) {
     dlBtn.onclick = async () => {
       try {
-        toast.loading('전체 파일 저장 중...', { id: 'viewer-dl' });
-        const base64Data = await blobToBase64(blob);
+        toast.dismiss();
+        toast.loading('기기 다운로드 준비 중...', { id: 'viewer-dl' });
+
+        let targetBlob = blob;
+        if (!targetBlob && pageImages.length > 0) {
+          const pdf = new jsPDF('p', 'mm', 'a4');
+          const pdfWidth = pdf.internal.pageSize.getWidth();
+          const pdfPageHeight = pdf.internal.pageSize.getHeight();
+          pageImages.forEach((img, idx) => {
+            if (idx > 0) pdf.addPage();
+            pdf.addImage(img, 'JPEG', 0, 0, pdfWidth, pdfPageHeight);
+          });
+          targetBlob = pdf.output('blob');
+        }
+
+        if (!targetBlob) {
+          toast.error('저장할 데이터가 없습니다.', { id: 'viewer-dl' });
+          return;
+        }
+
+        const base64Data = await blobToBase64(targetBlob);
         const isPdf = fileName.toLowerCase().endsWith('.pdf');
-        if (isNativePlatform()) {
+        const isNative = isNativePlatform();
+        const platform = await getPlatformSafely();
+        const backendBase = getBackendBaseUrl();
+
+        let savedLocally = false;
+        if (isNative || platform === 'android' || platform === 'ios') {
           try {
             await writeBase64InChunks(fileName, base64Data, Directory.Documents);
-            toast.success('휴대폰 [내 파일 > 문서]에 저장되었습니다!', { id: 'viewer-dl' });
-          } catch {
-            await writeBase64InChunks(fileName, base64Data, Directory.Cache);
-            toast.success('기기 캐시에 저장되었습니다!', { id: 'viewer-dl' });
+            savedLocally = true;
+          } catch (docErr) {
+            console.warn('Documents directory write note:', docErr);
+            try {
+              await writeBase64InChunks(fileName, base64Data, Directory.Cache);
+              savedLocally = true;
+            } catch (cacheErr) {
+              console.warn('Cache write note:', cacheErr);
+            }
           }
-        } else {
-          triggerWebDownload(blob, fileName);
-          toast.success('파일 저장이 완료되었습니다.', { id: 'viewer-dl' });
         }
-      } catch (err) {
+
+        let downloadUrl = '';
+        try {
+          const resp = await fetch(`${backendBase}/api/reports/prepare-download`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              filename: fileName,
+              base64Data,
+              mimeType: isPdf ? 'application/pdf' : 'application/octet-stream'
+            })
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data.downloadUrl) {
+              downloadUrl = data.downloadUrl.startsWith('http') 
+                ? data.downloadUrl 
+                : `${backendBase}${data.downloadUrl}`;
+            }
+          }
+        } catch (netErr) {
+          console.warn('Download gateway note:', netErr);
+        }
+
+        if (isNative || platform === 'android' || platform === 'ios') {
+          if (downloadUrl) {
+            try {
+              window.open(downloadUrl, '_system');
+            } catch (e) {
+              console.warn('window.open fallback:', e);
+            }
+          }
+          toast.success(
+            savedLocally 
+              ? '휴대폰 [내 파일 > 문서(Documents)]에 저장되었습니다!' 
+              : '다운로드가 시작되었습니다. (상단 알림창 확인)', 
+            { id: 'viewer-dl', duration: 4000 }
+          );
+        } else {
+          triggerWebDownload(targetBlob, fileName);
+          toast.success('기기에 파일 저장이 완료되었습니다.', { id: 'viewer-dl' });
+        }
+      } catch (err: any) {
         console.error('Viewer download error:', err);
         toast.error('저장 중 오류가 발생했습니다.', { id: 'viewer-dl' });
       }
