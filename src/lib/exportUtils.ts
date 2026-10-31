@@ -272,8 +272,7 @@ export const exportPhotoCardPDF = async ({
 
   toast.dismiss();
   toast.dismiss('safety-pdf');
-  console.log('[PDF DEBUG Step 1] PDF 생성 가동 시작', { title, itemCount: items.length, totalPages });
-  toast.info(`[PDF 디버그 Step 1] 데이터 수집 완료 (${items.length}건) -> 캔버스/html2canvas 렌더링 개시`, { duration: 3000 });
+  console.log('[PDF] PDF 생성 가동 시작', { title, itemCount: items.length, totalPages });
 
   const progress = openReportProgressModal(title, totalPages);
   progress.addLog(`총 ${items.length}건 데이터 로드 완료 (1페이지 4건 표준, 총 ${totalPages}페이지)`);
@@ -292,16 +291,15 @@ export const exportPhotoCardPDF = async ({
   const ctx = canvas.getContext('2d', { alpha: false });
   if (!ctx) {
     progress.close();
-    console.error('[PDF DEBUG ERROR] Canvas 2D context 지원불가');
-    toast.error('[PDF 디버그 에러] Canvas 2D context 생성 실패');
+    console.error('[PDF ERROR] Canvas 2D context 지원불가');
+    toast.error('Canvas 2D 그래픽 렌더러를 초기화할 수 없습니다.');
     throw new Error('Canvas 2D context not supported');
   }
 
   try {
     for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
       const pagePct = Math.round(20 + (pageIdx / totalPages) * 65);
-      console.log(`[PDF DEBUG Step 2] 캔버스/html2canvas 렌더링 진행 중 (${pageIdx + 1} / ${totalPages} 페이지)`);
-      toast.info(`[PDF 디버그 Step 2] html2canvas/2D 렌더링 진행 중 (${pageIdx + 1}/${totalPages} 쪽 완료)`, { duration: 2500 });
+      console.log(`[PDF] 캔버스 렌더링 진행 중 (${pageIdx + 1} / ${totalPages} 페이지)`);
       progress.setStep(3, `제 ${pageIdx + 1}페이지 4건 표준 양식 캔버스 렌더링 중 (${pageIdx + 1} / ${totalPages} 쪽)...`, pagePct);
       if (onProgress) {
         onProgress(pageIdx + 1, totalPages);
@@ -682,15 +680,13 @@ export const exportPhotoCardPDF = async ({
       await new Promise(r => setTimeout(r, 40));
     }
 
-    console.log('[PDF DEBUG Step 3] 캔버스/html2canvas 렌더링 완료. jsPDF 바이너리 압축 중...');
-    toast.info('[PDF 디버그 Step 3] 캔버스 렌더링 완료 -> jsPDF 바이너리 압축 개시', { duration: 3000 });
+    console.log('[PDF] 캔버스 렌더링 완료. jsPDF 바이너리 압축 중...');
     progress.setStep(4, 'PDF 바이너리 압축 및 메모리 정리 중...', 92);
     progress.addLog('PDF 바이너리 스트림 변환 및 캐시 정리 완료');
     await new Promise(r => setTimeout(r, 200));
 
     const pdfBlob = pdf.output('blob');
-    console.log('[PDF DEBUG Step 4] PDF Blob 생성 완료, downloadFile() 호출', { blobSize: pdfBlob.size, fileName });
-    toast.info(`[PDF 디버그 Step 4] PDF 파일 생성 완료 (${Math.round(pdfBlob.size / 1024)} KB) -> 다운로드 처리 모달 열기`, { duration: 3000 });
+    console.log('[PDF] PDF Blob 생성 완료, downloadFile() 호출', { blobSize: pdfBlob.size, fileName });
     progress.setStep(5, '보고서 제작 완료! 저장 화면을 준비합니다.', 100);
     progress.addLog('✅ 보고서 완성! 다운로드 및 저장 창을 오픈합니다.');
     await new Promise(r => setTimeout(r, 450));
@@ -699,8 +695,8 @@ export const exportPhotoCardPDF = async ({
     await downloadFile(pdfBlob, `${fileName}_${new Date().getTime()}.pdf`, pageImages);
   } catch (error) {
     progress.close();
-    console.error('[PDF DEBUG ERROR] PDF 생성 프로세스 중 오류 발생:', error);
-    toast.error(`[PDF 디버그 에러] PDF 생성 중단: ${(error as any)?.message || '알 수 없는 오류'}`);
+    console.error('[PDF ERROR] PDF 생성 프로세스 중 오류 발생:', error);
+    toast.error(`PDF 생성 중 오류가 발생했습니다: ${(error as any)?.message || '잠시 후 다시 시도해주세요'}`);
     throw error;
   } finally {
     // Explicitly release canvas memory

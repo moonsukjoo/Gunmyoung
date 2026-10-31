@@ -58,11 +58,15 @@ jobs:
 
       - name: "중복 클래스, 빌드 에러 및 파일 프로바이더 경로 보강"
         run: |
-          echo "configurations.all { resolutionStrategy { force 'androidx.core:core:1.13.1'; force 'org.jetbrains.kotlin:kotlin-stdlib:2.0.21'; force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.0.21' } }" >> android/app/build.gradle
+          echo "configurations.all { resolutionStrategy { force 'androidx.core:core:1.13.1'; force 'org.jetbrains.kotlin:kotlin-stdlib:2.2.20'; force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.2.20'; force 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2'; force 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2' } }" >> android/app/build.gradle
           echo "android.enableJetifier=true" >> android/gradle.properties
           echo "android.useAndroidX=true" >> android/gradle.properties
+          if [ -f "android/variables.gradle" ]; then
+            sed -i "s/kotlin_version = .*/kotlin_version = '2.2.20'/g" android/variables.gradle || true
+            sed -i "s/kotlinxCoroutinesVersion = .*/kotlinxCoroutinesVersion = '1.10.2'/g" android/variables.gradle || true
+          fi
           if [ -f "android/app/src/main/res/xml/file_paths.xml" ]; then
-            sed -i 's|</paths>|    <external-path name="my_external_path" path="." />\n    <root-path name="root" path="." />\n</paths>|g' android/app/src/main/res/xml/file_paths.xml || true
+            sed -i 's|</paths>|    <cache-path name="cache" path="." />\n    <files-path name="files" path="." />\n    <external-path name="my_external_path" path="." />\n    <root-path name="root" path="." />\n</paths>|g' android/app/src/main/res/xml/file_paths.xml || true
           fi
 
       - name: "Java JDK 21 설정"

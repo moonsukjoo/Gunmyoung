@@ -1,7 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { Device } from '@capacitor/device';
 import { Share } from '@capacitor/share';
-import { Browser } from '@capacitor/browser';
+import { Filesystem, Directory } from '@capacitor/filesystem';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 
@@ -38,7 +38,7 @@ export const isNativePlatform = (): boolean => {
 /**
  * Convert Blob to Base64 cleanly and safely
  */
-const blobToBase64 = (blob: Blob): Promise<string> => {
+export const blobToBase64 = (blob: Blob): Promise<string> => {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => {
@@ -55,88 +55,55 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
 };
 
 /**
- * Universal, 100% Crash-Proof Cloud HTTPS Gateway Downloader.
- * Hands off attachment stream to Android system DownloadManager / Chrome.
- * Includes direct DataURL fallback if network or server is temporarily unreachable.
+ * Native Android/iOS Device File Saver & Sharer.
+ * Saves the file directly to the device cache using Capacitor Filesystem,
+ * and launches Android's native system Share & Save sheet (Share.share)
+ * allowing direct save to "내 파일 (Downloads)", Google Drive, KakaoTalk, or PDF Viewer.
  */
-const downloadViaCloudGateway = async (blob: Blob, fileName: string): Promise<string> => {
-  const backendBase = getBackendBaseUrl();
-  const isPdf = fileName.toLowerCase().endsWith('.pdf');
-
-  console.log('[PDF DEBUG Step 5] Cloud Gateway 토큰 요청 시작', { fileName, blobSize: blob.size, backendBase });
-  toast.info('[PDF 디버그 Step 5] 백엔드 다운로드 게이트웨이에 파일 발급 토큰 요청 중...', { duration: 3000 });
-
+export const saveAndShareNativeFile = async (blob: Blob, fileName: string): Promise<boolean> => {
   const base64Data = await blobToBase64(blob);
 
-  let resp: Response | null = null;
+  // 1. First attempt: Filesystem.writeFile to Directory.Cache
   try {
-    resp = await fetch(`${backendBase}/api/reports/prepare-download`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        filename: fileName,
-        base64Data,
-        mimeType: isPdf ? 'application/pdf' : 'application/octet-stream'
-      })
+    const fileResult = await Filesystem.writeFile({
+      path: fileName,
+      data: base64Data,
+      directory: Directory.Cache
     });
-  } catch (netErr: any) {
-    console.warn('[PDF DEBUG Step 5 WARN] Cloud Gateway 서버 연결 실패, direct fallback 전환:', netErr);
-    toast.warning('[PDF 디버그 Step 5] 백엔드 서버 미응답 -> 로컬 직접 다운로드 전환', { duration: 3000 });
-    return fallbackDirectDownload(blob, fileName);
+    console.log('[NativeSave] File written to cache:', fileResult.uri);
+
+    const uriResult = await Filesystem.getUri({
+      directory: Directory.Cache,
+      path: fileName
+    });
+
+    const fileUri = uriResult?.uri || fileResult?.uri;
+    if (fileUri) {
+      await Share.share({
+        title: fileName,
+        text: `[건명기업] ${fileName}`,
+        files: [fileUri],
+        dialogTitle: '보고서 기기 저장 및 앱 공유'
+      });
+      return true;
+    }
+  } catch (fsErr) {
+    console.warn('[NativeSave] Filesystem save failed, attempting direct Share:', fsErr);
   }
 
-  if (!resp || !resp.ok) {
-    console.warn('[PDF DEBUG Step 5 WARN] Cloud Gateway non-OK status:', resp?.status);
-    toast.warning(`[PDF 디버그 Step 5] 게이트웨이 응답 코드 ${resp?.status} -> 로컬 직접 다운로드 전환`, { duration: 3000 });
-    return fallbackDirectDownload(blob, fileName);
-  }
-
+  // 2. Second attempt: Direct Share without file uri if supported
   try {
-    const data = await resp.json();
-    if (!data.downloadUrl) {
-      console.warn('[PDF DEBUG Step 5 WARN] downloadUrl 없음, fallback 사용');
-      return fallbackDirectDownload(blob, fileName);
-    }
-
-    const fullDownloadUrl = data.downloadUrl.startsWith('http') 
-      ? data.downloadUrl 
-      : `${backendBase}${data.downloadUrl}`;
-
-    console.log('[PDF DEBUG Step 6] 다운로드 토큰 발급 완료, Native Browser/DownloadManager 호출 중...', { fullDownloadUrl });
-    toast.info('[PDF 디버그 Step 6] 다운로드 URL 생성 완료 -> Native DownloadManager / Browser.open 실행', { duration: 3000 });
-
-    if (isNativePlatform()) {
-      try {
-        console.log('[PDF DEBUG Step 7] Native Browser.open 호출:', fullDownloadUrl);
-        await Browser.open({ url: fullDownloadUrl });
-        console.log('[PDF DEBUG Step 7 Success] Browser.open 성공!');
-        toast.success('[PDF 디버그 Step 7] 안드로이드 공식 DownloadManager 개시 성공!', { duration: 4000 });
-      } catch (bErr) {
-        console.warn('[PDF DEBUG Step 7 WARN] Browser.open 실패, fallback 실행:', bErr);
-        toast.warning('[PDF 디버그 Step 7] Browser.open 실패 -> 시스템 링크 fallback 실행');
-        try {
-          window.open(fullDownloadUrl, '_system');
-        } catch {
-          const a = document.createElement('a');
-          a.href = fullDownloadUrl;
-          a.target = '_blank';
-          a.download = fileName;
-          document.body.appendChild(a);
-          a.click();
-          setTimeout(() => { if (a.parentNode) document.body.removeChild(a); }, 1000);
-        }
-      }
-    } else {
-      console.log('[PDF DEBUG Step 7 Web] Web Browser download 실행');
-      toast.success('[PDF 디버그 Step 7] 웹 브라우저 파일 다운로드 실행 완료!');
-      triggerWebDownload(blob, fileName);
-    }
-
-    return fullDownloadUrl;
-  } catch (err) {
-    console.warn('[PDF DEBUG Step 5 ERROR] Download URL 파싱 중 오류, direct fallback 사용:', err);
-    return fallbackDirectDownload(blob, fileName);
+    await Share.share({
+      title: fileName,
+      text: `[건명기업] ${fileName}`,
+      dialogTitle: '보고서 공유'
+    });
+    return true;
+  } catch (sErr) {
+    console.warn('[NativeSave] Direct Share failed:', sErr);
   }
+
+  return false;
 };
 
 /**
@@ -271,16 +238,16 @@ export const downloadFile = async (
           </button>
           ` : ''}
 
-          <!-- 2. Direct Device Download Button (Cloud HTTPS Gateway) -->
+          <!-- 2. Direct Device Download & Share Button -->
           <button 
             id="modal-direct-dl-btn" 
-            class="w-full h-14 bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-500 hover:to-teal-500 text-white font-black text-xs rounded-2xl flex flex-col items-center justify-center gap-0.5 shadow-lg shadow-blue-600/20 active:scale-95 transition-all text-center border border-blue-400/20 cursor-pointer"
+            class="w-full h-15 bg-gradient-to-r from-blue-600 via-indigo-600 to-teal-600 hover:from-blue-500 hover:to-teal-500 text-white font-black text-xs rounded-2xl flex flex-col items-center justify-center gap-0.5 shadow-lg shadow-blue-600/25 active:scale-95 transition-all text-center border border-blue-400/30 cursor-pointer"
           >
             <div class="flex items-center gap-1.5">
-              <svg class="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-              <span class="text-sm">📥 기기로 다운받기 (내 파일/Downloads 저장)</span>
+              <svg class="w-5 h-5 text-blue-100" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+              <span class="text-sm">📥 기기 저장 및 앱 공유 (내 파일 • 카카오톡 • 드라이브)</span>
             </div>
-            <span class="text-[10px] font-bold text-blue-100/90">(안드로이드 공식 DownloadManager 연동 • 100% 꺼짐 방지)</span>
+            <span class="text-[10px] font-bold text-blue-100/90">(안드로이드 공식 저장/공유창 즉시 호출 • 100% 꺼짐 없음)</span>
           </button>
 
           <!-- 3. Email Section -->
@@ -346,18 +313,33 @@ export const downloadFile = async (
       };
     }
     
-    // Action 2: Direct Device Download via Cloud Gateway
+    // Action 2: Direct Device Download & Share via native Android
     downloadBtn.onclick = async () => {
+      toast.dismiss();
+      const loadId = toast.loading('파일 저장 및 시스템 공유창을 준비 중입니다...');
       try {
-        toast.dismiss();
-        toast.loading('기기 다운로드 준비 중...', { id: 'save-progress' });
-        await downloadViaCloudGateway(blob, fileName);
-        toast.success('다운로드가 개시되었습니다. (휴대폰 상단 알림창 또는 내 파일/Downloads 확인)', { id: 'save-progress', duration: 4000 });
-        dismiss(true);
+        if (isNativePlatform()) {
+          const ok = await saveAndShareNativeFile(blob, fileName);
+          toast.dismiss(loadId);
+          if (ok) {
+            toast.success('기기 저장 및 공유창이 실행되었습니다!', { duration: 3000 });
+            dismiss(true);
+          } else {
+            toast.info('앱 내 뷰어로 자동 전환합니다.', { duration: 3000 });
+            if (pageImages && pageImages.length > 0) {
+              openImageBasedInAppViewer(pageImages, fileName, blob, () => dismiss(true));
+            }
+          }
+        } else {
+          triggerWebDownload(blob, fileName);
+          toast.dismiss(loadId);
+          toast.success('파일 다운로드가 완료되었습니다.', { duration: 3000 });
+          dismiss(true);
+        }
       } catch (err: any) {
-        console.error('Device download error:', err);
-        toast.dismiss('save-progress');
-        toast.error('기기 다운로드 중 오류가 발생했습니다. [내 앱에서 바로보기] 또는 이메일 전송을 이용해주세요.');
+        console.error('Device save error:', err);
+        toast.dismiss(loadId);
+        toast.error('저장 메뉴를 실행할 수 없습니다. [내 앱에서 바로보기]를 이용해주세요.');
       }
     };
     
@@ -586,7 +568,7 @@ const openImageBasedInAppViewer = (
     dlBtn.onclick = async () => {
       try {
         toast.dismiss();
-        toast.loading('기기 다운로드 준비 중...', { id: 'viewer-dl' });
+        const loadId = toast.loading('파일 저장 및 시스템 공유창을 준비 중입니다...');
 
         let targetBlob = blob;
         if (!targetBlob && pageImages.length > 0) {
@@ -601,15 +583,27 @@ const openImageBasedInAppViewer = (
         }
 
         if (!targetBlob) {
-          toast.error('저장할 데이터가 없습니다.', { id: 'viewer-dl' });
+          toast.dismiss(loadId);
+          toast.error('저장할 데이터가 없습니다.');
           return;
         }
 
-        await downloadViaCloudGateway(targetBlob, fileName);
-        toast.success('파일 다운로드가 개시되었습니다. (휴대폰 상단 알림창 확인)', { id: 'viewer-dl', duration: 4000 });
+        if (isNativePlatform()) {
+          const ok = await saveAndShareNativeFile(targetBlob, fileName);
+          toast.dismiss(loadId);
+          if (ok) {
+            toast.success('기기 저장 및 공유창이 실행되었습니다!', { duration: 3000 });
+          } else {
+            toast.error('저장 메뉴를 실행할 수 없습니다.');
+          }
+        } else {
+          triggerWebDownload(targetBlob, fileName);
+          toast.dismiss(loadId);
+          toast.success('파일 다운로드가 완료되었습니다.', { duration: 3000 });
+        }
       } catch (err: any) {
         console.error('Viewer download error:', err);
-        toast.error('저장 중 오류가 발생했습니다.', { id: 'viewer-dl' });
+        toast.error('저장 중 오류가 발생했습니다.');
       }
     };
   }
@@ -625,19 +619,30 @@ const openImageBasedInAppViewer = (
       const pageDataUrl = pageImages[pIdx];
       if (!pageDataUrl) return;
 
+      toast.dismiss();
+      const loadId = toast.loading(`제 ${pIdx + 1}쪽 사진 저장 준비 중...`);
       try {
-        toast.dismiss();
-        toast.loading(`제 ${pIdx + 1}쪽 사진 저장 준비 중...`, { id: 'page-save' });
         const pageFileName = `건명기업_보고서_${pIdx + 1}쪽_${Date.now()}.jpg`;
-        
         const fetchRes = await fetch(pageDataUrl);
         const imageBlob = await fetchRes.blob();
-        await downloadViaCloudGateway(imageBlob, pageFileName);
-        
-        toast.success(`제 ${pIdx + 1}쪽 사진 다운로드가 개시되었습니다. (휴대폰 상단 알림창 확인)`, { id: 'page-save', duration: 4000 });
+
+        if (isNativePlatform()) {
+          const ok = await saveAndShareNativeFile(imageBlob, pageFileName);
+          toast.dismiss(loadId);
+          if (ok) {
+            toast.success(`제 ${pIdx + 1}쪽 사진 저장/공유창이 실행되었습니다!`, { duration: 3000 });
+          } else {
+            toast.error('사진 저장을 실행할 수 없습니다.');
+          }
+        } else {
+          triggerWebDownload(imageBlob, pageFileName);
+          toast.dismiss(loadId);
+          toast.success(`제 ${pIdx + 1}쪽 사진 다운로드가 완료되었습니다.`, { duration: 3000 });
+        }
       } catch (e) {
         console.error('Page image save error:', e);
-        toast.error('페이지 이미지 저장 중 오류가 발생했습니다.', { id: 'page-save' });
+        toast.dismiss(loadId);
+        toast.error('페이지 이미지 저장 중 오류가 발생했습니다.');
       }
     };
   });
