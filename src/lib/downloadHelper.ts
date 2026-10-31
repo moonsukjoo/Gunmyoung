@@ -1,5 +1,4 @@
 import { Capacitor } from '@capacitor/core';
-import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Device } from '@capacitor/device';
 import { Share } from '@capacitor/share';
 import { toast } from 'sonner';
@@ -36,23 +35,6 @@ export const isNativePlatform = (): boolean => {
 };
 
 /**
- * Safely check the runtime platform with instant native check
- */
-const getPlatformSafely = async (): Promise<string> => {
-  try {
-    const p = Capacitor.getPlatform();
-    if (p === 'android' || p === 'ios') return p;
-    const info = await Promise.race([
-      Device.getInfo(),
-      new Promise<{ platform: string }>((res) => setTimeout(() => res({ platform: 'web' }), 200))
-    ]);
-    return info?.platform || 'web';
-  } catch {
-    return 'web';
-  }
-};
-
-/**
  * Convert Blob to Base64 cleanly and safely
  */
 const blobToBase64 = (blob: Blob): Promise<string> => {
@@ -72,47 +54,86 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
 };
 
 /**
- * Write large Base64 data in 256KB chunks over the Capacitor Android Bridge.
- * This GUARANTEES that Android's 1MB Binder transaction limit (TransactionTooLargeException)
- * is NEVER exceeded, completely eliminating Android native bridge crashes.
+ * Universal, 100% Crash-Proof Cloud HTTPS Gateway Downloader.
+ * Hands off attachment stream to Android system DownloadManager / Chrome.
+ * ZERO native Filesystem plugin dependency = ZERO NoClassDefFoundError / SpillingKt crashes!
  */
-const writeBase64InChunks = async (path: string, base64Data: string, directory: Directory): Promise<string | null> => {
-  try {
-    const CHUNK_SIZE = 256 * 1024; // 256KB per slice (safely below Android 1MB IPC limit)
-    
-    // Write first chunk (replaces/creates file)
-    const firstChunk = base64Data.slice(0, CHUNK_SIZE);
-    const result = await Filesystem.writeFile({
-      path,
-      data: firstChunk,
-      directory,
-      recursive: true
-    });
-    
-    // Append subsequent chunks if file is larger than 256KB
-    let offset = CHUNK_SIZE;
-    while (offset < base64Data.length) {
-      const nextChunk = base64Data.slice(offset, offset + CHUNK_SIZE);
-      await Filesystem.appendFile({
-        path,
-        data: nextChunk,
-        directory
-      });
-      offset += CHUNK_SIZE;
+const downloadViaCloudGateway = async (blob: Blob, fileName: string): Promise<string> => {
+  const backendBase = getBackendBaseUrl();
+  const isPdf = fileName.toLowerCase().endsWith('.pdf');
+  const base64Data = await blobToBase64(blob);
+
+  const resp = await fetch(`${backendBase}/api/reports/prepare-download`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      filename: fileName,
+      base64Data,
+      mimeType: isPdf ? 'application/pdf' : 'application/octet-stream'
+    })
+  });
+
+  if (!resp.ok) {
+    throw new Error('Cloud gateway prepare download failed');
+  }
+
+  const data = await resp.json();
+  if (!data.downloadUrl) {
+    throw new Error('Invalid download token from server');
+  }
+
+  const fullDownloadUrl = data.downloadUrl.startsWith('http') 
+    ? data.downloadUrl 
+    : `${backendBase}${data.downloadUrl}`;
+
+  if (isNativePlatform()) {
+    try {
+      window.open(fullDownloadUrl, '_system');
+    } catch {
+      const a = document.createElement('a');
+      a.href = fullDownloadUrl;
+      a.target = '_blank';
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { if (a.parentNode) document.body.removeChild(a); }, 1000);
     }
+  } else {
+    triggerWebDownload(blob, fileName);
+  }
+
+  return fullDownloadUrl;
+};
+
+/**
+ * Web download fallback for desktop browser
+ */
+const triggerWebDownload = (blob: Blob, fileName: string) => {
+  try {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', fileName);
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
     
-    return result.uri;
+    setTimeout(() => {
+      if (link.parentNode) {
+        document.body.removeChild(link);
+      }
+      URL.revokeObjectURL(url);
+    }, 1000);
+    return true;
   } catch (err) {
-    console.warn('Filesystem plugin native call caught safely:', err);
-    return null;
+    console.error('Web download failed:', err);
+    return false;
   }
 };
 
 /**
  * Robust file download helper with unified Email, Native Image-Based In-App Preview,
- * Cloud Download Gateway, and safe Cache writes.
- * 
- * NEVER launches unhandled blob: links or chooser intents that crash modern Android WebViews.
+ * and Cloud Download Gateway.
  */
 export const downloadFile = async (
   blob: Blob, 
@@ -128,8 +149,6 @@ export const downloadFile = async (
     existingModal.parentNode.removeChild(existingModal);
   }
 
-  const isNative = isNativePlatform();
-  const platform = await getPlatformSafely();
   const isPdf = fileName.toLowerCase().endsWith('.pdf');
   const savedEmail = localStorage.getItem('last_share_email') || 'tjrwnfjqm1@gmail.com';
   const backendBase = getBackendBaseUrl();
@@ -175,7 +194,7 @@ export const downloadFile = async (
         
         <!-- Action List Buttons -->
         <div class="space-y-2.5 pt-1">
-          <!-- 1. Native Image-Based In-App Preview (100% visible, no black screen) -->
+          <!-- 1. Native Image-Based In-App Preview -->
           ${(pageImages && pageImages.length > 0) ? `
           <button 
             id="modal-preview-btn" 
@@ -189,16 +208,16 @@ export const downloadFile = async (
           </button>
           ` : ''}
 
-          <!-- 2. Direct Device Download Button (Local Storage + Cloud HTTPS Gateway) -->
+          <!-- 2. Direct Device Download Button (Cloud HTTPS Gateway) -->
           <button 
             id="modal-direct-dl-btn" 
             class="w-full h-14 bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-500 hover:to-teal-500 text-white font-black text-xs rounded-2xl flex flex-col items-center justify-center gap-0.5 shadow-lg shadow-blue-600/20 active:scale-95 transition-all text-center border border-blue-400/20 cursor-pointer"
           >
             <div class="flex items-center gap-1.5">
               <svg class="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-              <span class="text-sm">📥 기기로 다운받기 (내 파일/Documents 저장)</span>
+              <span class="text-sm">📥 기기로 다운받기 (내 파일/Downloads 저장)</span>
             </div>
-            <span class="text-[10px] font-bold text-blue-100/90">(기기 저장소 직통 저장 • 안드로이드 14 호환 완료)</span>
+            <span class="text-[10px] font-bold text-blue-100/90">(안드로이드 공식 DownloadManager 연동 • 100% 꺼짐 방지)</span>
           </button>
 
           <!-- 3. Email Section -->
@@ -222,7 +241,7 @@ export const downloadFile = async (
             </div>
           </div>
           
-          <!-- 4. Native App Share Button (Safe Link Share) -->
+          <!-- 4. Native App Share Button -->
           <button 
             id="modal-native-share-btn" 
             class="w-full h-11 bg-zinc-900 border border-zinc-800 hover:bg-zinc-850 text-zinc-400 hover:text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-all text-center cursor-pointer"
@@ -257,81 +276,20 @@ export const downloadFile = async (
       }
     };
 
-    // Action 1: Native Image-Based In-App Preview (100% visible on Android)
+    // Action 1: Native Image-Based In-App Preview
     if (previewBtn && pageImages && pageImages.length > 0) {
       previewBtn.onclick = () => {
         openImageBasedInAppViewer(pageImages, fileName, blob, () => dismiss(true));
       };
     }
     
-    // Action 2: Direct Device Download (Local storage direct write + Cloud Gateway)
+    // Action 2: Direct Device Download via Cloud Gateway
     downloadBtn.onclick = async () => {
       try {
+        toast.dismiss();
         toast.loading('기기 다운로드 준비 중...', { id: 'save-progress' });
-        const base64Data = await blobToBase64(blob);
-        let savedLocally = false;
-
-        // A. If running on native Android/iOS, write directly to phone's Documents or Cache folder
-        if (isNative || platform === 'android' || platform === 'ios') {
-          try {
-            await writeBase64InChunks(fileName, base64Data, Directory.Documents);
-            savedLocally = true;
-          } catch (docErr) {
-            console.warn('Documents directory write fallback to Cache:', docErr);
-            try {
-              await writeBase64InChunks(fileName, base64Data, Directory.Cache);
-              savedLocally = true;
-            } catch (cacheErr) {
-              console.warn('Cache write note:', cacheErr);
-            }
-          }
-        }
-
-        // B. Also prepare Cloud Run HTTPS download URL for system DownloadManager
-        let downloadUrl = '';
-        try {
-          const resp = await fetch(`${backendBase}/api/reports/prepare-download`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              filename: fileName,
-              base64Data,
-              mimeType: isPdf ? 'application/pdf' : 'application/octet-stream'
-            })
-          });
-          if (resp.ok) {
-            const data = await resp.json();
-            if (data.downloadUrl) {
-              downloadUrl = data.downloadUrl.startsWith('http') 
-                ? data.downloadUrl 
-                : `${backendBase}${data.downloadUrl}`;
-            }
-          }
-        } catch (netErr) {
-          console.warn('Backend download gateway unreachable:', netErr);
-        }
-
-        if (isNative || platform === 'android' || platform === 'ios') {
-          if (downloadUrl) {
-            // Hand off to Android system browser (Chrome) using _system to download cleanly to Downloads folder
-            try {
-              window.open(downloadUrl, '_system');
-            } catch (e) {
-              console.warn('window.open _system fallback:', e);
-            }
-          }
-          toast.success(
-            savedLocally 
-              ? '휴대폰 [내 파일 > 문서(Documents)]에 저장되었습니다!' 
-              : '다운로드가 시작되었습니다.', 
-            { id: 'save-progress', duration: 4000 }
-          );
-        } else {
-          // Standard web browser download
-          triggerWebDownload(blob, fileName);
-          toast.success('기기에 파일 저장이 완료되었습니다.', { id: 'save-progress' });
-        }
-
+        await downloadViaCloudGateway(blob, fileName);
+        toast.success('다운로드가 개시되었습니다. (휴대폰 상단 알림창 또는 내 파일/Downloads 확인)', { id: 'save-progress', duration: 4000 });
         dismiss(true);
       } catch (err: any) {
         console.error('Device download error:', err);
@@ -340,9 +298,10 @@ export const downloadFile = async (
       }
     };
     
-    // Action 3: Native Share (Safe Link Share without FLAG_IMMUTABLE Android 14 crash)
+    // Action 3: Native Share
     shareBtn.onclick = async () => {
       try {
+        toast.dismiss();
         toast.loading('공유 링크 생성 중...', { id: 'share-progress' });
         const base64Data = await blobToBase64(blob);
 
@@ -375,7 +334,7 @@ export const downloadFile = async (
           ? `[건명기업] ${fileName}\n다운로드: ${downloadUrl}` 
           : `[건명기업] ${fileName}`;
 
-        if (isNative || platform === 'android' || platform === 'ios') {
+        if (isNativePlatform()) {
           await Share.share({
             title: fileName,
             text: shareText,
@@ -412,6 +371,7 @@ export const downloadFile = async (
       localStorage.setItem('last_share_email', emailVal);
       
       try {
+        toast.dismiss();
         toast.loading('사내 메일 서버로 발송 중입니다...', { id: 'email-progress' });
         const base64Data = await blobToBase64(blob);
         
@@ -442,45 +402,7 @@ export const downloadFile = async (
 };
 
 /**
- * Mobile device Capacitor sharing action handler.
- * Completely crash-proof:
- * 1. Writes to Directory.Cache in 256KB chunks so Android Binder limit is NEVER exceeded.
- * 2. Calls Share.share inside strict try/catch so any native rejection does NOT kill the app.
- */
-const triggerNativeShare = async (blob: Blob, fileName: string) => {
-  try {
-    toast.loading('공유 메뉴를 준비하는 중입니다...', { id: 'share-progress' });
-    const base64Data = await blobToBase64(blob);
-    const safeExt = fileName.toLowerCase().endsWith('.xlsx') ? '.xlsx' : '.pdf';
-    const tempFileName = `gunmyoung_share_${Date.now()}${safeExt}`;
-
-    // Write in safe 256KB slices to avoid Android Binder TransactionTooLargeException
-    const savedUri = await writeBase64InChunks(tempFileName, base64Data, Directory.Cache);
-    toast.dismiss('share-progress');
-
-    // Trigger system shares using `files` array if available
-    await Share.share({
-      title: fileName,
-      text: `[건명기업] ${fileName}`,
-      files: savedUri ? [savedUri] : undefined,
-      dialogTitle: '보고서 파일 공유'
-    });
-    return true;
-  } catch (err: any) {
-    toast.dismiss('share-progress');
-    if (err?.name === 'AbortError' || err?.message?.includes('canceled') || err?.message?.includes('cancelled')) {
-      return true;
-    }
-    console.warn('Capacitor sharing flow warning:', err);
-    toast.error('기기 공유 시트가 지원되지 않는 환경입니다. [기기로 다운받기] 또는 [내 앱에서 바로보기]를 이용해주세요.');
-    return false;
-  }
-};
-
-/**
  * Opens an In-App Native Image-Based Report Viewer modal.
- * Completely eliminates the black screen caused by Android WebView's lack of iframe PDF support.
- * Renders all pages as crisp, responsive, hardware-accelerated image cards with zoom and individual page saves.
  */
 const openImageBasedInAppViewer = (
   pageImages: string[], 
@@ -620,69 +542,8 @@ const openImageBasedInAppViewer = (
           return;
         }
 
-        const base64Data = await blobToBase64(targetBlob);
-        const isPdf = fileName.toLowerCase().endsWith('.pdf');
-        const isNative = isNativePlatform();
-        const platform = await getPlatformSafely();
-        const backendBase = getBackendBaseUrl();
-
-        let savedLocally = false;
-        if (isNative || platform === 'android' || platform === 'ios') {
-          try {
-            await writeBase64InChunks(fileName, base64Data, Directory.Documents);
-            savedLocally = true;
-          } catch (docErr) {
-            console.warn('Documents directory write note:', docErr);
-            try {
-              await writeBase64InChunks(fileName, base64Data, Directory.Cache);
-              savedLocally = true;
-            } catch (cacheErr) {
-              console.warn('Cache write note:', cacheErr);
-            }
-          }
-        }
-
-        let downloadUrl = '';
-        try {
-          const resp = await fetch(`${backendBase}/api/reports/prepare-download`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              filename: fileName,
-              base64Data,
-              mimeType: isPdf ? 'application/pdf' : 'application/octet-stream'
-            })
-          });
-          if (resp.ok) {
-            const data = await resp.json();
-            if (data.downloadUrl) {
-              downloadUrl = data.downloadUrl.startsWith('http') 
-                ? data.downloadUrl 
-                : `${backendBase}${data.downloadUrl}`;
-            }
-          }
-        } catch (netErr) {
-          console.warn('Download gateway note:', netErr);
-        }
-
-        if (isNative || platform === 'android' || platform === 'ios') {
-          if (downloadUrl) {
-            try {
-              window.open(downloadUrl, '_system');
-            } catch (e) {
-              console.warn('window.open fallback:', e);
-            }
-          }
-          toast.success(
-            savedLocally 
-              ? '휴대폰 [내 파일 > 문서(Documents)]에 저장되었습니다!' 
-              : '다운로드가 시작되었습니다. (상단 알림창 확인)', 
-            { id: 'viewer-dl', duration: 4000 }
-          );
-        } else {
-          triggerWebDownload(targetBlob, fileName);
-          toast.success('기기에 파일 저장이 완료되었습니다.', { id: 'viewer-dl' });
-        }
+        await downloadViaCloudGateway(targetBlob, fileName);
+        toast.success('파일 다운로드가 개시되었습니다. (휴대폰 상단 알림창 확인)', { id: 'viewer-dl', duration: 4000 });
       } catch (err: any) {
         console.error('Viewer download error:', err);
         toast.error('저장 중 오류가 발생했습니다.', { id: 'viewer-dl' });
@@ -690,12 +551,11 @@ const openImageBasedInAppViewer = (
     };
   }
 
-
   printBtn.onclick = () => {
     window.print();
   };
 
-  // Allow users on Android to save any single page directly as a JPEG to their photo gallery!
+  // Allow users to save any single page directly as a JPEG photo
   pageSaveButtons.forEach((btn) => {
     (btn as HTMLButtonElement).onclick = async () => {
       const pIdx = parseInt((btn as HTMLButtonElement).dataset.pageIndex || '0', 10);
@@ -703,57 +563,18 @@ const openImageBasedInAppViewer = (
       if (!pageDataUrl) return;
 
       try {
-        const cleanBase64 = pageDataUrl.split(',')[1] || '';
         const pageFileName = `건명기업_보고서_${pIdx + 1}쪽_${Date.now()}.jpg`;
-
-        if (isNativePlatform()) {
-          await writeBase64InChunks(pageFileName, cleanBase64, Directory.Cache);
-          toast.success(`제 ${pIdx + 1}쪽이 기기에 저장되었습니다!`);
-        } else {
-          const a = document.createElement('a');
-          a.href = pageDataUrl;
-          a.download = pageFileName;
-          document.body.appendChild(a);
-          a.click();
-          setTimeout(() => document.body.removeChild(a), 1000);
-          toast.success(`제 ${pIdx + 1}쪽 이미지가 다운로드되었습니다.`);
-        }
+        const a = document.createElement('a');
+        a.href = pageDataUrl;
+        a.download = pageFileName;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { if (a.parentNode) document.body.removeChild(a); }, 1000);
+        toast.success(`제 ${pIdx + 1}쪽 이미지가 다운로드/저장되었습니다.`);
       } catch (e) {
         console.error('Page image save error:', e);
         toast.error('페이지 이미지 저장 중 오류가 발생했습니다.');
       }
     };
   });
-};
-
-/**
- * Normal web file delivery downloader (ONLY called on Web / Desktop browser).
- * Guarded against execution on native mobile WebView to prevent ActivityNotFoundException crashes.
- */
-const triggerWebDownload = (blob: Blob, fileName: string) => {
-  if (isNativePlatform()) {
-    console.warn('triggerWebDownload aborted on native platform to prevent Android WebView crash.');
-    return false;
-  }
-  try {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', fileName);
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    
-    setTimeout(() => {
-      if (link.parentNode) {
-        document.body.removeChild(link);
-      }
-      URL.revokeObjectURL(url);
-    }, 1000);
-    return true;
-  } catch (err) {
-    console.error('Web download failed:', err);
-    toast.error('기기 다운로드 중 오류가 발생했습니다.');
-    return false;
-  }
 };
