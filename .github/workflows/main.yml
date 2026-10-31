@@ -58,7 +58,7 @@ jobs:
 
       - name: "중복 클래스, 빌드 에러 및 파일 프로바이더 경로 보강"
         run: |
-          echo "configurations.all { resolutionStrategy { force 'androidx.core:core:1.13.1'; force 'org.jetbrains.kotlin:kotlin-stdlib:1.9.22' } }" >> android/app/build.gradle
+          echo "configurations.all { resolutionStrategy { force 'androidx.core:core:1.13.1'; force 'org.jetbrains.kotlin:kotlin-stdlib:2.0.21'; force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.0.21' } }" >> android/app/build.gradle
           echo "android.enableJetifier=true" >> android/gradle.properties
           echo "android.useAndroidX=true" >> android/gradle.properties
           if [ -f "android/app/src/main/res/xml/file_paths.xml" ]; then

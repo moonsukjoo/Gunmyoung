@@ -76,31 +76,36 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
  * This GUARANTEES that Android's 1MB Binder transaction limit (TransactionTooLargeException)
  * is NEVER exceeded, completely eliminating Android native bridge crashes.
  */
-const writeBase64InChunks = async (path: string, base64Data: string, directory: Directory): Promise<string> => {
-  const CHUNK_SIZE = 256 * 1024; // 256KB per slice (safely below Android 1MB IPC limit)
-  
-  // Write first chunk (replaces/creates file)
-  const firstChunk = base64Data.slice(0, CHUNK_SIZE);
-  const result = await Filesystem.writeFile({
-    path,
-    data: firstChunk,
-    directory,
-    recursive: true
-  });
-  
-  // Append subsequent chunks if file is larger than 256KB
-  let offset = CHUNK_SIZE;
-  while (offset < base64Data.length) {
-    const nextChunk = base64Data.slice(offset, offset + CHUNK_SIZE);
-    await Filesystem.appendFile({
+const writeBase64InChunks = async (path: string, base64Data: string, directory: Directory): Promise<string | null> => {
+  try {
+    const CHUNK_SIZE = 256 * 1024; // 256KB per slice (safely below Android 1MB IPC limit)
+    
+    // Write first chunk (replaces/creates file)
+    const firstChunk = base64Data.slice(0, CHUNK_SIZE);
+    const result = await Filesystem.writeFile({
       path,
-      data: nextChunk,
-      directory
+      data: firstChunk,
+      directory,
+      recursive: true
     });
-    offset += CHUNK_SIZE;
+    
+    // Append subsequent chunks if file is larger than 256KB
+    let offset = CHUNK_SIZE;
+    while (offset < base64Data.length) {
+      const nextChunk = base64Data.slice(offset, offset + CHUNK_SIZE);
+      await Filesystem.appendFile({
+        path,
+        data: nextChunk,
+        directory
+      });
+      offset += CHUNK_SIZE;
+    }
+    
+    return result.uri;
+  } catch (err) {
+    console.warn('Filesystem plugin native call caught safely:', err);
+    return null;
   }
-  
-  return result.uri;
 };
 
 /**
@@ -453,11 +458,11 @@ const triggerNativeShare = async (blob: Blob, fileName: string) => {
     const savedUri = await writeBase64InChunks(tempFileName, base64Data, Directory.Cache);
     toast.dismiss('share-progress');
 
-    // Trigger system shares using `files` array
+    // Trigger system shares using `files` array if available
     await Share.share({
       title: fileName,
       text: `[건명기업] ${fileName}`,
-      files: [savedUri],
+      files: savedUri ? [savedUri] : undefined,
       dialogTitle: '보고서 파일 공유'
     });
     return true;
