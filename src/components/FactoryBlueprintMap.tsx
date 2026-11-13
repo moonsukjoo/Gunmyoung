@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { 
   FactoryJig, 
   FactoryGpsRecord, 
@@ -9,7 +9,13 @@ import {
 import { 
   FACTORY_BOUNDS, 
   FACTORY_FACILITIES, 
-  formatMinutesToKorean 
+  formatMinutesToKorean,
+  HeatmapAggregationMode,
+  TWO_HOUR_WINDOWS,
+  getWindowForSlot,
+  computeZoneDwellHeatmap,
+  getHeatmapColors,
+  ZoneDwellMetric
 } from '../services/factoryTrackingService';
 import { 
   Compass, 
@@ -26,7 +32,10 @@ import {
   ArrowRight,
   Smartphone,
   Map as MapIcon,
-  ShieldAlert
+  ShieldAlert,
+  Flame,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -35,6 +44,7 @@ interface FactoryBlueprintMapProps {
   records: FactoryGpsRecord[];
   delayLogs?: BlockDelayLog[];
   selectedSlot: TrackingSlotTime;
+  onSelectSlot?: (slot: TrackingSlotTime) => void;
   selectedWorkerUid?: string | null;
   onSelectWorker?: (workerUid: string | null) => void;
   onSelectJig?: (jig: FactoryJig) => void;
@@ -47,6 +57,7 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
   records,
   delayLogs = [],
   selectedSlot,
+  onSelectSlot,
   selectedWorkerUid,
   onSelectWorker,
   onSelectJig,
@@ -56,12 +67,27 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
   const [hoveredWorker, setHoveredWorker] = useState<FactoryGpsRecord | null>(null);
   const [hoveredJig, setHoveredJig] = useState<FactoryJig | null>(null);
   const [showPath, setShowPath] = useState(true);
+  const [showHeatmap, setShowHeatmap] = useState(true);
+  const [showPins, setShowPins] = useState(true);
+  const [heatmapMode, setHeatmapMode] = useState<HeatmapAggregationMode>('2H_WINDOW');
+  const [activeWindowId, setActiveWindowId] = useState<string>(() => getWindowForSlot(selectedSlot).id);
   const [viewMode, setViewMode] = useState<'MOBILE_GRID' | 'BLUEPRINT_A3'>(() => {
     if (typeof window !== 'undefined' && window.innerWidth < 768 && !isPrintMode) {
       return 'MOBILE_GRID';
     }
     return 'BLUEPRINT_A3';
   });
+
+  // Sync active 2-hour window when selectedSlot changes from parent slot bar
+  useEffect(() => {
+    setActiveWindowId(getWindowForSlot(selectedSlot).id);
+  }, [selectedSlot]);
+
+  // Compute heatmap concentration metrics
+  const heatmap = useMemo(
+    () => computeZoneDwellHeatmap(jigs, records, heatmapMode, selectedSlot, activeWindowId),
+    [jigs, records, heatmapMode, selectedSlot, activeWindowId]
+  );
 
   // Filter records for the currently active slot
   const currentSlotRecords = records.filter(r => r.slot === selectedSlot);
@@ -163,25 +189,232 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
         </div>
       </div>
 
+      {/* Heatmap Overlay Control Bar & Top Concentrated Zones Strip */}
+      {!isPrintMode && (
+        <div className="bg-slate-900/75 border-b border-slate-800 px-4 sm:px-6 py-3 space-y-3">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+            {/* Left controls: Heatmap toggle + 2H Window aggregation */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowHeatmap(prev => !prev)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 border transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                  showHeatmap
+                    ? 'bg-orange-500/20 text-orange-300 border-orange-500/50'
+                    : 'bg-slate-800/80 text-slate-400 border-slate-700 hover:text-slate-200'
+                }`}
+              >
+                <Flame className="w-3.5 h-3.5" />
+                <span>체류 히트맵 {showHeatmap ? 'ON' : 'OFF'}</span>
+              </button>
+
+              {showHeatmap && (
+                <>
+                  {/* Aggregation Mode Switcher */}
+                  <div className="flex items-center bg-slate-950/90 p-1 rounded-lg border border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setHeatmapMode('2H_WINDOW')}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                        heatmapMode === '2H_WINDOW' ? 'bg-orange-500 text-slate-950' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      2시간 구간
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHeatmapMode('SINGLE_SLOT')}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                        heatmapMode === 'SINGLE_SLOT' ? 'bg-orange-500 text-slate-950' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      선택 시점 ({selectedSlot})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHeatmapMode('FULL_DAY')}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                        heatmapMode === 'FULL_DAY' ? 'bg-orange-500 text-slate-950' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      당일 전체 누적
+                    </button>
+                  </div>
+
+                  {/* 2-Hour Block Selector */}
+                  {heatmapMode === '2H_WINDOW' && (
+                    <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+                      {TWO_HOUR_WINDOWS.map(w => {
+                        const active = activeWindowId === w.id;
+                        return (
+                          <button
+                            key={w.id}
+                            type="button"
+                            onClick={() => {
+                              setActiveWindowId(w.id);
+                              if (onSelectSlot && !w.slots.includes(selectedSlot)) {
+                                onSelectSlot(w.slots[0]);
+                              }
+                            }}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-mono tabular-nums font-bold border whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                              active
+                                ? 'bg-amber-400 text-slate-950 border-amber-300'
+                                : 'bg-slate-800/60 text-slate-300 border-slate-700 hover:bg-slate-800'
+                            }`}
+                          >
+                            {w.shortLabel}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setShowPins(prev => !prev)}
+                className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1 border border-slate-700 bg-slate-800/60 text-slate-300 hover:text-white cursor-pointer whitespace-nowrap shrink-0"
+              >
+                {showPins ? <Eye className="w-3.5 h-3.5 text-cyan-400" /> : <EyeOff className="w-3.5 h-3.5 text-slate-500" />}
+                <span>작업자 핀 {showPins ? '표시' : '숨김'}</span>
+              </button>
+            </div>
+
+            {/* Right: Color Density Legend (Color + Text Label, Zero-Pill) */}
+            {showHeatmap && (
+              <div className="flex items-center gap-3 text-[11px] text-slate-300 overflow-x-auto no-scrollbar">
+                <span className="text-slate-400 font-bold shrink-0">밀집도 기준:</span>
+                <span className="flex items-center gap-1.5 shrink-0">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-slate-700 border border-slate-600 inline-block" />
+                  미투입
+                </span>
+                <span className="flex items-center gap-1.5 shrink-0">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-cyan-500 inline-block" />
+                  저밀도
+                </span>
+                <span className="flex items-center gap-1.5 shrink-0">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-amber-500 inline-block" />
+                  보통 체류
+                </span>
+                <span className="flex items-center gap-1.5 shrink-0">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-orange-500 inline-block" />
+                  고밀도 집중
+                </span>
+                <span className="flex items-center gap-1.5 shrink-0">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-rose-500 inline-block" />
+                  최고 집중
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Concentrated Zones Summary Strip */}
+          {showHeatmap && (
+            <div className="pt-2.5 border-t border-slate-800/80 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="flex flex-wrap items-center gap-2 text-slate-300">
+                  <span className="font-bold text-orange-400">{heatmap.windowLabel}</span>
+                  <span aria-hidden="true" className="text-slate-600">·</span>
+                  <span>
+                    감지 <strong className="font-mono tabular-nums text-white">{heatmap.totalUniqueWorkers}명</strong>
+                  </span>
+                  <span aria-hidden="true" className="text-slate-600">·</span>
+                  <span>
+                    총 체류 <strong className="font-mono tabular-nums text-white">{formatMinutesToKorean(heatmap.totalDwellMinutes)}</strong>
+                  </span>
+                  {heatmap.topZone && (
+                    <>
+                      <span aria-hidden="true" className="text-slate-600">·</span>
+                      <span>
+                        최다 집중: <strong className="text-rose-400">{heatmap.topZone.zoneName} ({heatmap.topZone.subLabel})</strong>{' '}
+                        <span className="font-mono tabular-nums text-slate-200">
+                          {formatMinutesToKorean(heatmap.topZone.totalMinutes)} / {heatmap.topZone.workerCount}명
+                        </span>
+                      </span>
+                    </>
+                  )}
+                </div>
+                {heatmap.nonWorkDwellMinutes > 0 && (
+                  <span className="text-[11px] font-bold text-amber-300 font-mono tabular-nums">
+                    비작업(휴게·통로·타구역) 체류: {formatMinutesToKorean(heatmap.nonWorkDwellMinutes)}
+                  </span>
+                )}
+              </div>
+
+              {/* Ranked Zone Concentration Bars */}
+              {heatmap.zones.some(z => z.totalMinutes > 0) ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+                  {heatmap.zones
+                    .filter(z => z.totalMinutes > 0)
+                    .slice(0, 5)
+                    .map((zone: ZoneDwellMetric, idx: number) => {
+                      const colors = getHeatmapColors(zone.level);
+                      const matchingJig = jigs.find(j => j.id === zone.zoneId);
+                      return (
+                        <button
+                          key={zone.zoneId}
+                          type="button"
+                          onClick={() => matchingJig && onSelectJig && onSelectJig(matchingJig)}
+                          className="text-left bg-slate-950/75 hover:bg-slate-800/80 border border-slate-800 rounded-xl p-2.5 space-y-1.5 transition-colors cursor-pointer"
+                        >
+                          <div className="flex items-center justify-between gap-2 text-[11px]">
+                            <span className="font-black text-white truncate">
+                              {idx + 1}. {zone.zoneName} · {zone.zoneType === 'JIG' ? zone.subLabel : zone.levelLabel}
+                            </span>
+                            <span className={`font-mono tabular-nums font-black shrink-0 ${colors.textClass}`}>
+                              {zone.sharePercent}%
+                            </span>
+                          </div>
+                          <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${colors.barClass}`}
+                              style={{ width: `${Math.max(8, Math.round(zone.intensity * 100))}%` }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono tabular-nums">
+                            <span>{zone.workerCount}명 체류</span>
+                            <span className="text-slate-200 font-bold">{formatMinutesToKorean(zone.totalMinutes)}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                </div>
+              ) : (
+                <p className="text-[11px] text-slate-500 font-medium">
+                  선택한 시간 구간에 기록된 위치 데이터가 없습니다. 상단에서 다른 시간대를 선택하거나 모의 데이터를 생성하세요.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ================= MODE 1: MOBILE-FIRST VERTICAL CARD INTERIOR LAYOUT ================= */}
       {effectiveViewMode === 'MOBILE_GRID' ? (
         <div className="p-3 sm:p-5 bg-[#080d1a] space-y-3.5">
           {/* South Perimeter & Top Facilities */}
           <div className="flex flex-col gap-2">
-            <div className="text-center py-1 px-3 rounded-full bg-slate-900 border border-cyan-500/40 text-[10px] font-black text-cyan-300 tracking-wider">
+            <div className="text-center py-1 px-3 rounded-lg bg-slate-900 border border-cyan-500/40 text-[10px] font-black text-cyan-300 tracking-wider">
               ▲ 위쪽: 남쪽 (SOUTH) • BAY A 라인 / 안벽 방면 ▲
             </div>
             <div className="grid grid-cols-2 gap-2 text-[10px]">
               <div className="bg-sky-950/40 border border-sky-500/30 rounded-xl p-2 flex items-center justify-between">
-                <span className="font-black text-sky-400">☕ 물량팀 휴게실</span>
-                <span className="text-slate-400 font-bold">
+                <span className="font-black text-sky-400">물량팀 휴게실</span>
+                <span className="text-slate-300 font-mono tabular-nums font-bold">
                   {awayOrFacilityWorkers.filter(w => w.locationType === 'REST_AREA').length}명
+                  {showHeatmap && heatmap.zoneMap['rest_area']?.totalMinutes
+                    ? ` · ${formatMinutesToKorean(heatmap.zoneMap['rest_area'].totalMinutes)}`
+                    : ''}
                 </span>
               </div>
               <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-xl p-2 flex items-center justify-between">
-                <span className="font-black text-emerald-400">🛡️ 안전실/화장실</span>
-                <span className="text-slate-400 font-bold">
+                <span className="font-black text-emerald-400">안전실/화장실</span>
+                <span className="text-slate-300 font-mono tabular-nums font-bold">
                   {awayOrFacilityWorkers.filter(w => w.locationType === 'RESTROOM').length}명
+                  {showHeatmap && heatmap.zoneMap['safety_office']?.totalMinutes
+                    ? ` · ${formatMinutesToKorean(heatmap.zoneMap['safety_office'].totalMinutes)}`
+                    : ''}
                 </span>
               </div>
             </div>
@@ -204,14 +437,27 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
                 const unresolvedDelays = jigDelays.filter(d => !d.resolved);
                 const delayCount = unresolvedDelays.length || jig.delayLogCount || 0;
                 const progress = jig.currentProgress ?? jig.progressPercent ?? 0;
+                const heatMetric = heatmap.zoneMap[jig.id];
+                const heatColors = heatMetric ? getHeatmapColors(heatMetric.level) : null;
+                const hasHeat = showHeatmap && heatMetric && heatMetric.totalMinutes > 0;
 
                 return (
                   <div
                     key={jig.id}
                     onClick={() => onSelectJig && onSelectJig(jig)}
+                    style={
+                      hasHeat && heatColors && !isSelected
+                        ? {
+                            backgroundColor: heatColors.tintBg,
+                            borderColor: heatColors.border
+                          }
+                        : undefined
+                    }
                     className={`rounded-2xl border p-2.5 space-y-2 transition-all cursor-pointer active:scale-[0.98] ${
                       isSelected
                         ? 'bg-slate-800/90 border-cyan-400 ring-2 ring-cyan-400/30'
+                        : hasHeat
+                        ? 'hover:brightness-110'
                         : delayCount > 0 || jig.latestDelayReason
                         ? 'bg-[#170f18] border-rose-500/40 hover:border-rose-400'
                         : 'bg-[#0e1729] border-slate-800 hover:border-blue-500/50'
@@ -221,7 +467,7 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
                       <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-slate-800 text-white border border-slate-700">
                         {jig.jigName}
                       </span>
-                      <span className={`text-[10px] font-black ${jigWorkers.length > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
+                      <span className={`text-[10px] font-black font-mono tabular-nums ${jigWorkers.length > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
                         {jigWorkers.length > 0 ? `● ${jigWorkers.length}명` : '○ 대기'}
                       </span>
                     </div>
@@ -230,6 +476,19 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
                       <p className="text-sm font-black text-cyan-300 tracking-tight truncate">{jig.blockName}</p>
                       <p className="text-[9px] font-bold text-slate-400 truncate mt-0.5">{jig.assignedTeam}</p>
                     </div>
+
+                    {showHeatmap && heatMetric && (
+                      <div className="flex items-center justify-between text-[10px] px-1 pt-0.5">
+                        <span className={`font-black ${heatColors?.textClass || 'text-slate-400'}`}>
+                          {heatMetric.levelLabel}
+                        </span>
+                        <span className="font-mono tabular-nums font-bold text-slate-200">
+                          {heatMetric.totalMinutes > 0
+                            ? `${formatMinutesToKorean(heatMetric.totalMinutes)} (${heatMetric.workerCount}명)`
+                            : '0분'}
+                        </span>
+                      </div>
+                    )}
 
                     {/* Critical Delay Alert Pill */}
                     {(delayCount > 0 || jig.latestDelayReason) && (
@@ -247,7 +506,7 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
                         <span className="text-amber-400 font-mono">
                           {jig.startDate ? jig.startDate.slice(5) : '11-03'}~{jig.endDate ? jig.endDate.slice(5) : '11-12'}
                         </span>
-                        <span className="text-cyan-400 font-black">{progress}%</span>
+                        <span className="text-cyan-400 font-black font-mono tabular-nums">{progress}%</span>
                       </div>
                       <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
                         <div
@@ -255,10 +514,16 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
                           style={{ width: `${progress}%` }}
                         />
                       </div>
+                      {jig.centerLat && jig.centerLng && (
+                        <div className="flex items-center justify-between text-[9px] font-mono tabular-nums text-slate-400 pt-0.5">
+                          <span className="truncate">{jig.centerLat.toFixed(5)}, {jig.centerLng.toFixed(5)}</span>
+                          <span className="text-emerald-400 font-bold shrink-0">±{jig.gpsRadiusMeters || 12}m</span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Live Workers Inside This Block */}
-                    {jigWorkers.length > 0 && (
+                    {showPins && jigWorkers.length > 0 && (
                       <div className="pt-1 border-t border-slate-800/80 flex flex-wrap gap-1">
                         {jigWorkers.map(w => {
                           const isWSelected = selectedWorkerUid === w.workerUid;
@@ -292,41 +557,58 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
           </div>
 
           {/* Central Crane Transporter Walkway */}
-          <div className="bg-amber-500/10 border border-dashed border-amber-500/40 rounded-2xl p-2.5 space-y-1.5">
-            <div className="flex items-center justify-between text-[10px] font-black text-amber-300">
-              <span>◀ 동측 반입문</span>
-              <span>══ 중앙 크레인 통로 ══</span>
-              <span>서측 반출문 ▶</span>
-            </div>
-            {awayOrFacilityWorkers.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {awayOrFacilityWorkers.map(w => {
-                  const isWSelected = selectedWorkerUid === w.workerUid;
-                  return (
-                    <button
-                      key={w.id}
-                      type="button"
-                      onClick={() => onSelectWorker && onSelectWorker(isWSelected ? null : w.workerUid)}
-                      className={`px-2 py-1 rounded-lg text-[10px] font-black border flex items-center gap-1 cursor-pointer ${
-                        isWSelected
-                          ? 'bg-cyan-500 text-slate-950 border-white'
-                          : w.status === 'RESTING'
-                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                          : 'bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse'
-                      }`}
-                    >
-                      <span>{w.workerName}</span>
-                      <span className="text-[8.5px] opacity-80">({w.status === 'RESTING' ? '휴게' : '이탈'})</span>
-                    </button>
-                  );
-                })}
+          {(() => {
+            const aisleHeat = heatmap.zoneMap['central_aisle'];
+            const hasAisleHeat = showHeatmap && aisleHeat && aisleHeat.totalMinutes > 0;
+            const aisleColors = hasAisleHeat ? getHeatmapColors(aisleHeat.level) : null;
+            return (
+              <div
+                style={
+                  hasAisleHeat && aisleColors
+                    ? { backgroundColor: aisleColors.tintBg, borderColor: aisleColors.border }
+                    : undefined
+                }
+                className="bg-amber-500/10 border border-dashed border-amber-500/40 rounded-2xl p-2.5 space-y-1.5"
+              >
+                <div className="flex items-center justify-between text-[10px] font-black text-amber-300">
+                  <span>◀ 동측 반입문</span>
+                  <span>
+                    ══ 중앙 크레인 통로
+                    {hasAisleHeat ? ` · ${formatMinutesToKorean(aisleHeat.totalMinutes)} (${aisleHeat.workerCount}명)` : ' ══'}
+                  </span>
+                  <span>서측 반출문 ▶</span>
+                </div>
+                {awayOrFacilityWorkers.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {awayOrFacilityWorkers.map(w => {
+                      const isWSelected = selectedWorkerUid === w.workerUid;
+                      return (
+                        <button
+                          key={w.id}
+                          type="button"
+                          onClick={() => onSelectWorker && onSelectWorker(isWSelected ? null : w.workerUid)}
+                          className={`px-2 py-1 rounded-lg text-[10px] font-black border flex items-center gap-1 cursor-pointer ${
+                            isWSelected
+                              ? 'bg-cyan-500 text-slate-950 border-white'
+                              : w.status === 'RESTING'
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                              : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                          }`}
+                        >
+                          <span>{w.workerName}</span>
+                          <span className="text-[8.5px] opacity-80">({w.status === 'RESTING' ? '휴게' : '이탈'})</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-center text-slate-400 font-bold">
+                    현재 슬롯({selectedSlot}) 통로 이동 및 구역 이탈 인원 없음
+                  </p>
+                )}
               </div>
-            ) : (
-              <p className="text-[10px] text-center text-slate-400 font-bold">
-                현재 슬롯({selectedSlot}) 통로 이동 및 구역 이탈 인원 없음
-              </p>
-            )}
-          </div>
+            );
+          })()}
 
           {/* BAY B (북측 지그 6~10) */}
           <div className="space-y-2">
@@ -345,14 +627,27 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
                 const unresolvedDelays = jigDelays.filter(d => !d.resolved);
                 const delayCount = unresolvedDelays.length || jig.delayLogCount || 0;
                 const progress = jig.currentProgress ?? jig.progressPercent ?? 0;
+                const heatMetric = heatmap.zoneMap[jig.id];
+                const heatColors = heatMetric ? getHeatmapColors(heatMetric.level) : null;
+                const hasHeat = showHeatmap && heatMetric && heatMetric.totalMinutes > 0;
 
                 return (
                   <div
                     key={jig.id}
                     onClick={() => onSelectJig && onSelectJig(jig)}
+                    style={
+                      hasHeat && heatColors && !isSelected
+                        ? {
+                            backgroundColor: heatColors.tintBg,
+                            borderColor: heatColors.border
+                          }
+                        : undefined
+                    }
                     className={`rounded-2xl border p-2.5 space-y-2 transition-all cursor-pointer active:scale-[0.98] ${
                       isSelected
                         ? 'bg-slate-800/90 border-cyan-400 ring-2 ring-cyan-400/30'
+                        : hasHeat
+                        ? 'hover:brightness-110'
                         : delayCount > 0 || jig.latestDelayReason
                         ? 'bg-[#170f18] border-rose-500/40 hover:border-rose-400'
                         : 'bg-[#0e1729] border-slate-800 hover:border-blue-500/50'
@@ -362,7 +657,7 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
                       <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-slate-800 text-white border border-slate-700">
                         {jig.jigName}
                       </span>
-                      <span className={`text-[10px] font-black ${jigWorkers.length > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
+                      <span className={`text-[10px] font-black font-mono tabular-nums ${jigWorkers.length > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
                         {jigWorkers.length > 0 ? `● ${jigWorkers.length}명` : '○ 대기'}
                       </span>
                     </div>
@@ -371,6 +666,19 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
                       <p className="text-sm font-black text-blue-300 tracking-tight truncate">{jig.blockName}</p>
                       <p className="text-[9px] font-bold text-slate-400 truncate mt-0.5">{jig.assignedTeam}</p>
                     </div>
+
+                    {showHeatmap && heatMetric && (
+                      <div className="flex items-center justify-between text-[10px] px-1 pt-0.5">
+                        <span className={`font-black ${heatColors?.textClass || 'text-slate-400'}`}>
+                          {heatMetric.levelLabel}
+                        </span>
+                        <span className="font-mono tabular-nums font-bold text-slate-200">
+                          {heatMetric.totalMinutes > 0
+                            ? `${formatMinutesToKorean(heatMetric.totalMinutes)} (${heatMetric.workerCount}명)`
+                            : '0분'}
+                        </span>
+                      </div>
+                    )}
 
                     {(delayCount > 0 || jig.latestDelayReason) && (
                       <div className="bg-rose-500/15 border border-rose-500/30 rounded-lg px-2 py-1 text-[9.5px] text-rose-300 font-bold flex items-center gap-1">
@@ -386,7 +694,7 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
                         <span className="text-amber-400 font-mono">
                           {jig.startDate ? jig.startDate.slice(5) : '11-03'}~{jig.endDate ? jig.endDate.slice(5) : '11-12'}
                         </span>
-                        <span className="text-blue-400 font-black">{progress}%</span>
+                        <span className="text-blue-400 font-black font-mono tabular-nums">{progress}%</span>
                       </div>
                       <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
                         <div
@@ -394,9 +702,15 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
                           style={{ width: `${progress}%` }}
                         />
                       </div>
+                      {jig.centerLat && jig.centerLng && (
+                        <div className="flex items-center justify-between text-[9px] font-mono tabular-nums text-slate-400 pt-0.5">
+                          <span className="truncate">{jig.centerLat.toFixed(5)}, {jig.centerLng.toFixed(5)}</span>
+                          <span className="text-emerald-400 font-bold shrink-0">±{jig.gpsRadiusMeters || 12}m</span>
+                        </div>
+                      )}
                     </div>
 
-                    {jigWorkers.length > 0 && (
+                    {showPins && jigWorkers.length > 0 && (
                       <div className="pt-1 border-t border-slate-800/80 flex flex-wrap gap-1">
                         {jigWorkers.map(w => {
                           const isWSelected = selectedWorkerUid === w.workerUid;
@@ -475,6 +789,31 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
               <feGaussianBlur stdDeviation="5" result="blur" />
               <feComposite in="SourceGraphic" in2="blur" operator="over" />
             </filter>
+            {/* Thermal Heatmap Radial Gradients */}
+            <radialGradient id="heatPeak" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#ef4444" stopOpacity="0.82" />
+              <stop offset="45%" stopColor="#f97316" stopOpacity="0.45" />
+              <stop offset="80%" stopColor="#f59e0b" stopOpacity="0.16" />
+              <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
+            </radialGradient>
+            <radialGradient id="heatHigh" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#f97316" stopOpacity="0.72" />
+              <stop offset="50%" stopColor="#f59e0b" stopOpacity="0.35" />
+              <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
+            </radialGradient>
+            <radialGradient id="heatMedium" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.6" />
+              <stop offset="55%" stopColor="#06b6d4" stopOpacity="0.22" />
+              <stop offset="100%" stopColor="#06b6d4" stopOpacity="0" />
+            </radialGradient>
+            <radialGradient id="heatLow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.52" />
+              <stop offset="65%" stopColor="#0ea5e9" stopOpacity="0.16" />
+              <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0" />
+            </radialGradient>
+            <filter id="heatBlur" x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur stdDeviation="14" />
+            </filter>
           </defs>
 
           {/* Background Grid */}
@@ -538,17 +877,38 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
           </g>
 
           {/* Central Transporter Highway (중앙 주통로 / 대차 레일, Y: 430 ~ 570) */}
-          <rect x="50" y="430" width="1314" height="140" fill="url(#craneStripes)" stroke="#334155" strokeWidth="1.5" strokeDasharray="6 4" rx="8" />
-          
-          {/* Double Crane Rails spanning East to West */}
-          <line x1="50" y1="450" x2="1364" y2="450" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="12 6" opacity="0.6" />
-          <line x1="50" y1="550" x2="1364" y2="550" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="12 6" opacity="0.6" />
-          
-          <g transform="translate(707, 505)">
-            <text x="0" y="0" textAnchor="middle" fill="#94a3b8" fontSize="12" fontWeight="900" letterSpacing="3">
-              ═══ 중앙 트랜스포터 주통로 (50T / 30T 오버헤드 천장 크레인 주행로) ═══
-            </text>
-          </g>
+          {(() => {
+            const aisleHeat = heatmap.zoneMap['central_aisle'];
+            const hasAisleHeat = showHeatmap && aisleHeat && aisleHeat.totalMinutes > 0;
+            const aisleColors = hasAisleHeat ? getHeatmapColors(aisleHeat.level) : null;
+            return (
+              <>
+                <rect
+                  x="50"
+                  y="430"
+                  width="1314"
+                  height="140"
+                  fill={hasAisleHeat && aisleColors ? aisleColors.tintBg : 'url(#craneStripes)'}
+                  stroke={hasAisleHeat && aisleColors ? aisleColors.border : '#334155'}
+                  strokeWidth={hasAisleHeat ? '2' : '1.5'}
+                  strokeDasharray="6 4"
+                  rx="8"
+                />
+
+                {/* Double Crane Rails spanning East to West */}
+                <line x1="50" y1="450" x2="1364" y2="450" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="12 6" opacity="0.6" />
+                <line x1="50" y1="550" x2="1364" y2="550" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="12 6" opacity="0.6" />
+
+                <g transform="translate(707, 505)">
+                  <text x="0" y="0" textAnchor="middle" fill={hasAisleHeat && aisleColors ? aisleColors.border : '#94a3b8'} fontSize="12" fontWeight="900" letterSpacing="2">
+                    {hasAisleHeat
+                      ? `중앙 트랜스포터 주통로 · 비작업 통로 체류 ${formatMinutesToKorean(aisleHeat.totalMinutes)} (${aisleHeat.workerCount}명)`
+                      : '═══ 중앙 트랜스포터 주통로 (50T / 30T 오버헤드 천장 크레인 주행로) ═══'}
+                  </text>
+                </g>
+              </>
+            );
+          })()}
 
           {/* East Main Door */}
           <g transform="translate(20, 460)">
@@ -563,57 +923,65 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
           </g>
 
           {/* Facilities (휴게실, 공구실, 안전관리실, 검사장) */}
-          {FACTORY_FACILITIES.map(fac => (
-            <g key={fac.id} transform={`translate(${fac.x}, ${fac.y})`}>
-              <rect
-                width={fac.width}
-                height={fac.height}
-                fill="#0f172a"
-                stroke={fac.color}
-                strokeWidth="2"
-                strokeDasharray="4 2"
-                rx="12"
-              />
-              <rect
-                x="4"
-                y="4"
-                width={fac.width - 8}
-                height="22"
-                fill={`${fac.color}25`}
-                rx="8"
-              />
-              <text
-                x={fac.width / 2}
-                y="18"
-                textAnchor="middle"
-                fill={fac.color}
-                fontSize="9"
-                fontWeight="900"
-              >
-                {fac.type === 'REST_AREA' ? '☕ 휴게구역' : fac.type === 'RESTROOM' ? '🛡️ 관리/화장실' : '📦 자재/검사'}
-              </text>
-              <text
-                x={fac.width / 2}
-                y={fac.height / 2 + 8}
-                textAnchor="middle"
-                fill="#f8fafc"
-                fontSize="10"
-                fontWeight="800"
-              >
-                {fac.name.split(' ')[0]}
-              </text>
-              <text
-                x={fac.width / 2}
-                y={fac.height / 2 + 22}
-                textAnchor="middle"
-                fill="#94a3b8"
-                fontSize="8"
-                fontWeight="700"
-              >
-                {fac.name.split(' ').slice(1).join(' ')}
-              </text>
-            </g>
-          ))}
+          {FACTORY_FACILITIES.map(fac => {
+            const facHeat = heatmap.zoneMap[fac.id];
+            const facColors = facHeat ? getHeatmapColors(facHeat.level) : null;
+            const hasFacHeat = showHeatmap && facHeat && facHeat.totalMinutes > 0;
+
+            return (
+              <g key={fac.id} transform={`translate(${fac.x}, ${fac.y})`}>
+                <rect
+                  width={fac.width}
+                  height={fac.height}
+                  fill={hasFacHeat && facColors ? facColors.tintBg : '#0f172a'}
+                  stroke={hasFacHeat && facColors ? facColors.border : fac.color}
+                  strokeWidth={hasFacHeat ? '2.5' : '2'}
+                  strokeDasharray="4 2"
+                  rx="12"
+                />
+                <rect
+                  x="4"
+                  y="4"
+                  width={fac.width - 8}
+                  height="22"
+                  fill={`${fac.color}25`}
+                  rx="8"
+                />
+                <text
+                  x={fac.width / 2}
+                  y="18"
+                  textAnchor="middle"
+                  fill={fac.color}
+                  fontSize="9"
+                  fontWeight="900"
+                >
+                  {fac.type === 'REST_AREA' ? '휴게구역' : fac.type === 'RESTROOM' ? '관리/화장실' : '자재/검사'}
+                </text>
+                <text
+                  x={fac.width / 2}
+                  y={fac.height / 2 + 4}
+                  textAnchor="middle"
+                  fill="#f8fafc"
+                  fontSize="10"
+                  fontWeight="800"
+                >
+                  {fac.name.split(' ')[0]}
+                </text>
+                <text
+                  x={fac.width / 2}
+                  y={fac.height / 2 + 18}
+                  textAnchor="middle"
+                  fill={hasFacHeat && facColors ? facColors.hex : '#94a3b8'}
+                  fontSize="8.5"
+                  fontWeight="800"
+                >
+                  {hasFacHeat
+                    ? `${formatMinutesToKorean(facHeat.totalMinutes)} (${facHeat.workerCount}명)`
+                    : fac.name.split(' ').slice(1).join(' ')}
+                </text>
+              </g>
+            );
+          })}
 
           {/* Bay Headers */}
           <g transform="translate(180, 140)">
@@ -627,12 +995,16 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
             </text>
           </g>
 
-          {/* JIGS (지그 및 블럭) */}
+          {/* JIGS (지그 및 블럭 + 히트맵 존 틴트) */}
           {jigs.map(jig => {
             const isSelected = selectedJigId === jig.id;
             const isHovered = hoveredJig?.id === jig.id;
             const workerCount = workerCountByJig[jig.id] || 0;
             const jigDelayCount = (delayLogsByJig[jig.id] || []).length || jig.delayLogCount || 0;
+            const heatMetric = heatmap.zoneMap[jig.id];
+            const heatColors = heatMetric ? getHeatmapColors(heatMetric.level) : null;
+            const hasHeat = showHeatmap && heatMetric && heatMetric.totalMinutes > 0;
+            const isTopHotspot = heatmap.topZone?.zoneId === jig.id && hasHeat;
 
             return (
               <g
@@ -647,9 +1019,9 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
                 <rect
                   width={jig.width}
                   height={jig.height}
-                  fill={isSelected ? '#1e293b' : jigDelayCount > 0 ? '#180d16' : '#0c1322'}
-                  stroke={isSelected ? '#38bdf8' : jigDelayCount > 0 ? '#f43f5e' : isHovered ? '#60a5fa' : '#1e3a5f'}
-                  strokeWidth={isSelected ? '3.5' : isHovered ? '2.5' : '1.5'}
+                  fill={isSelected ? '#1e293b' : hasHeat && heatColors ? heatColors.tintBg : jigDelayCount > 0 ? '#180d16' : '#0c1322'}
+                  stroke={isSelected ? '#38bdf8' : hasHeat && heatColors ? heatColors.border : jigDelayCount > 0 ? '#f43f5e' : isHovered ? '#60a5fa' : '#1e3a5f'}
+                  strokeWidth={isSelected ? '3.5' : isTopHotspot ? '3' : isHovered ? '2.5' : '1.5'}
                   rx="12"
                 />
 
@@ -669,12 +1041,12 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
                   y="46"
                   width={jig.width - 36}
                   height={jig.height - 84}
-                  fill="#172554"
-                  stroke="#2563eb"
+                  fill={hasHeat && heatColors ? heatColors.tintBg : '#172554'}
+                  stroke={hasHeat && heatColors ? heatColors.border : '#2563eb'}
                   strokeWidth="1.5"
                   strokeDasharray="4 3"
                   rx="6"
-                  opacity="0.75"
+                  opacity="0.82"
                 />
 
                 {/* JIG Header Badge */}
@@ -694,20 +1066,30 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
                   fontWeight="900"
                   letterSpacing="0.5"
                 >
-                  {jig.jigName}{jigDelayCount > 0 ? ` · 🚨${jigDelayCount}` : ''}
+                  {jig.jigName}{jigDelayCount > 0 ? ` · 지연${jigDelayCount}` : ''}
                 </text>
                 <text
                   x={jig.width - 20}
                   y="27"
                   textAnchor="end"
-                  fill={workerCount > 0 ? '#4ade80' : '#94a3b8'}
+                  fill={
+                    hasHeat && heatColors
+                      ? '#ffffff'
+                      : workerCount > 0
+                      ? '#4ade80'
+                      : '#94a3b8'
+                  }
                   fontSize="10"
                   fontWeight="900"
                 >
-                  {workerCount > 0 ? `● ${workerCount}명 작업 중` : '○ 미작업'}
+                  {hasHeat
+                    ? `${formatMinutesToKorean(heatMetric.totalMinutes)} (${heatMetric.workerCount}명)`
+                    : workerCount > 0
+                    ? `● ${workerCount}명 작업 중`
+                    : '○ 미작업'}
                 </text>
 
-                {/* PROMINENT SHIP BLOCK CODE (사용자 요청: "지그위에 블럭명 추가해서") */}
+                {/* PROMINENT SHIP BLOCK CODE */}
                 <g transform={`translate(${jig.width / 2}, ${jig.height / 2 - 4})`}>
                   <rect
                     x="-65"
@@ -715,7 +1097,7 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
                     width="130"
                     height="40"
                     fill="#0f172a"
-                    stroke="#38bdf8"
+                    stroke={hasHeat && heatColors ? heatColors.border : '#38bdf8'}
                     strokeWidth="2"
                     rx="8"
                   />
@@ -732,16 +1114,18 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
                   </text>
                 </g>
 
-                {/* Block Type / Subtitle */}
+                {/* Block Type / Heatmap Dwell Status Subtitle */}
                 <text
                   x={jig.width / 2}
                   y={jig.height / 2 + 28}
                   textAnchor="middle"
-                  fill="#cbd5e1"
+                  fill={hasHeat && heatColors ? heatColors.border : '#cbd5e1'}
                   fontSize="9.5"
-                  fontWeight="700"
+                  fontWeight="800"
                 >
-                  {jig.blockType}
+                  {hasHeat
+                    ? `${heatMetric.levelLabel} · 점유 ${heatMetric.sharePercent}%`
+                    : jig.blockType}
                 </text>
 
                 {/* Schedule Dates & Target Days */}
@@ -753,8 +1137,22 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
                   fontSize="8.5"
                   fontWeight="900"
                 >
-                  📅 {jig.startDate ? jig.startDate.slice(5) : '11.03'}~{jig.endDate ? jig.endDate.slice(5) : '11.12'} ({jig.targetDays || 10}일 공정)
+                  {jig.startDate ? jig.startDate.slice(5) : '11.03'}~{jig.endDate ? jig.endDate.slice(5) : '11.12'} ({jig.targetDays || 10}일 공정)
                 </text>
+
+                {/* Auto-Calibrated GPS Center Coordinates (when registered) */}
+                {jig.centerLat && jig.centerLng && (
+                  <text
+                    x={jig.width / 2}
+                    y={jig.height / 2 + 54}
+                    textAnchor="middle"
+                    fill="#34d399"
+                    fontSize="8"
+                    fontWeight="800"
+                  >
+                    {jig.centerLat.toFixed(5)}, {jig.centerLng.toFixed(5)} (±{jig.gpsRadiusMeters || 12}m)
+                  </text>
+                )}
 
                 {/* Assigned Team & Progress Bar */}
                 <text
@@ -788,6 +1186,64 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
             );
           })}
 
+          {/* Spatial Thermal Gaussian Heatmap Overlay Layer */}
+          {showHeatmap && heatmap.filteredRecords.length > 0 && (
+            <g pointerEvents="none">
+              {/* Zone cluster glow cores */}
+              {heatmap.zones
+                .filter(z => z.totalMinutes > 0 && z.zoneType !== 'AISLE')
+                .map(zone => {
+                  const gradId =
+                    zone.level === 'PEAK'
+                      ? 'url(#heatPeak)'
+                      : zone.level === 'HIGH'
+                      ? 'url(#heatHigh)'
+                      : zone.level === 'MEDIUM'
+                      ? 'url(#heatMedium)'
+                      : 'url(#heatLow)';
+                  const cx = zone.x + zone.width / 2;
+                  const cy = zone.y + zone.height / 2;
+                  const radius = Math.max(zone.width, zone.height) * (0.48 + zone.intensity * 0.28);
+                  return (
+                    <circle
+                      key={`zone-heat-${zone.zoneId}`}
+                      cx={cx}
+                      cy={cy}
+                      r={radius}
+                      fill={gradId}
+                      filter="url(#heatBlur)"
+                      opacity={0.45 + zone.intensity * 0.35}
+                    />
+                  );
+                })}
+
+              {/* Individual worker GPS coordinate thermal blobs */}
+              {heatmap.filteredRecords.map((rec, i) => {
+                const zoneMetric = rec.jigId ? heatmap.zoneMap[rec.jigId] : undefined;
+                const blobGrad =
+                  zoneMetric?.level === 'PEAK'
+                    ? 'url(#heatPeak)'
+                    : zoneMetric?.level === 'HIGH' || rec.status === 'AWAY'
+                    ? 'url(#heatHigh)'
+                    : zoneMetric?.level === 'MEDIUM'
+                    ? 'url(#heatMedium)'
+                    : 'url(#heatLow)';
+                const mins = rec.stayMinutesInSlot || 60;
+                const radius = 42 + Math.min(36, (mins / 75) * 30);
+                return (
+                  <circle
+                    key={`pt-heat-${rec.id}-${i}`}
+                    cx={rec.mapX}
+                    cy={rec.mapY}
+                    r={radius}
+                    fill={blobGrad}
+                    opacity={0.62}
+                  />
+                );
+              })}
+            </g>
+          )}
+
           {/* Historical Path Trail for Selected Worker */}
           {showPath && selectedWorkerHistory.length > 1 && (
             <g>
@@ -816,7 +1272,7 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
           )}
 
           {/* Worker Location Pins for the Active Slot (08:20, 09:45, ...) */}
-          {currentSlotRecords.map(worker => {
+          {showPins && currentSlotRecords.map(worker => {
             const isSelected = selectedWorkerUid === worker.workerUid;
             const isHovered = hoveredWorker?.id === worker.id;
             const isNormal = worker.status === 'NORMAL';
@@ -935,8 +1391,8 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
             <span className="w-3 h-3 rounded-full bg-amber-500 inline-block shadow-sm shadow-amber-500/50" />
             휴게실/화장실 ({currentSlotRecords.filter(r => r.status === 'RESTING').length}명)
           </span>
-          <span className="text-slate-400 font-bold flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-full bg-rose-500 inline-block shadow-sm shadow-rose-500/50 animate-pulse" />
+          <span className="text-slate-400 font-bold flex items-center gap-1.5 font-mono tabular-nums">
+            <span className="w-3 h-3 rounded-full bg-rose-500 inline-block shadow-sm shadow-rose-500/50" />
             지정 블럭 이탈/미체류 ({currentSlotRecords.filter(r => r.status === 'AWAY').length}명)
           </span>
         </div>

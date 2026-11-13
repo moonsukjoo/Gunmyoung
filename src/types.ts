@@ -659,6 +659,13 @@ export interface FactoryJig {
   latestDelayAt?: string;
   latestDelaySeverity?: 'CRITICAL' | 'WARNING' | 'INFO';
   delayLogCount?: number;
+  // Auto-calibrated GPS center & physical dimensions from East/West/South/North boundary setup
+  centerLat?: number;
+  centerLng?: number;
+  gpsRadiusMeters?: number;
+  gpsWidthMeters?: number;
+  gpsHeightMeters?: number;
+  gpsCalibratedAt?: string;
   // Coordinates on the A3 landscape blueprint (0 ~ 1000 coordinate system)
   x: number;
   y: number;
@@ -666,6 +673,32 @@ export interface FactoryJig {
   height: number;
   bay: 'BAY_SOUTH' | 'BAY_NORTH'; // 위쪽(남쪽) Bay A, 아래쪽(북쪽) Bay B
   status: 'ACTIVE' | 'HOLD' | 'COMPLETED';
+}
+
+export interface CardinalGpsPoint {
+  lat: number;
+  lng: number;
+  accuracy?: number;
+  capturedAt?: string;
+  label?: string;
+}
+
+export interface FactoryBoundaryCalibration {
+  id: string; // 'factory-07'
+  eastWestLengthMeters: number; // 동 ↔ 서 실측 길이 (m)
+  northSouthLengthMeters: number; // 남 ↔ 북 실측 폭 (m)
+  east?: CardinalGpsPoint | null;  // 동쪽 (도면 좌측 / 제6공장 반입문)
+  west?: CardinalGpsPoint | null;  // 서쪽 (도면 우측 / 반출문)
+  south?: CardinalGpsPoint | null; // 남쪽 (도면 상단 / BAY A 외벽)
+  north?: CardinalGpsPoint | null; // 북쪽 (도면 하단 / BAY B 외벽)
+  centerLat?: number;
+  centerLng?: number;
+  rotationDeg?: number;
+  gpsMeasuredEW?: number;
+  gpsMeasuredNS?: number;
+  updatedAt: string;
+  updatedByUid?: string;
+  updatedByName?: string;
 }
 
 export interface BlockDeploymentStats {

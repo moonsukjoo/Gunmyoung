@@ -9,7 +9,8 @@ import {
   TrackingSlotTime,
   BlockDelayLog,
   DelayReasonCategory,
-  DELAY_REASON_CATEGORIES
+  DELAY_REASON_CATEGORIES,
+  FactoryBoundaryCalibration
 } from '../types';
 import { 
   fetchFactoryJigs, 
@@ -23,9 +24,16 @@ import {
   computeAllBlockStats,
   fetchDelayLogs,
   addDelayLog,
-  resolveDelayLog
+  resolveDelayLog,
+  computeZoneDwellHeatmap,
+  TWO_HOUR_WINDOWS,
+  getWindowForSlot,
+  fetchFactoryCalibration,
+  computeCalibrationBasis,
+  gpsToBlueprint
 } from '../services/factoryTrackingService';
 import { FactoryBlueprintMap } from '../components/FactoryBlueprintMap';
+import { FactoryGpsCalibrationPanel } from '../components/FactoryGpsCalibrationPanel';
 import { 
   Layers, 
   Calendar as CalendarIcon, 
@@ -68,11 +76,12 @@ export const FactoryDwellMonitoring: React.FC = () => {
   const [records, setRecords] = useState<FactoryGpsRecord[]>([]);
   const [dwellSummaries, setDwellSummaries] = useState<WorkerDwellSummary[]>([]);
   const [delayLogs, setDelayLogs] = useState<BlockDelayLog[]>([]);
+  const [calibration, setCalibration] = useState<FactoryBoundaryCalibration | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSeeding, setIsSeeding] = useState(false);
   const [selectedWorkerUid, setSelectedWorkerUid] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'MAP' | 'LIST' | 'DELAYS' | 'JIGS'>('MAP');
+  const [activeTab, setActiveTab] = useState<'MAP' | 'LIST' | 'DELAYS' | 'JIGS' | 'GPS'>('MAP');
 
   // Edit JIG block state
   const [editingJig, setEditingJig] = useState<FactoryJig | null>(null);
@@ -103,6 +112,12 @@ export const FactoryDwellMonitoring: React.FC = () => {
     return computeAllBlockStats(jigs, records);
   }, [jigs, records]);
 
+  const activeTwoHourWindow = useMemo(() => getWindowForSlot(selectedSlot), [selectedSlot]);
+  const twoHourHeatmap = useMemo(
+    () => computeZoneDwellHeatmap(jigs, records, '2H_WINDOW', selectedSlot, activeTwoHourWindow.id),
+    [jigs, records, selectedSlot, activeTwoHourWindow.id]
+  );
+
   useEffect(() => {
     if (isCEO) {
       loadData();
@@ -115,17 +130,19 @@ export const FactoryDwellMonitoring: React.FC = () => {
     if (!isCEO) return;
     setLoading(true);
     try {
-      const [fetchedJigs, fetchedRecords, fetchedSummaries, fetchedDelayLogs] = await Promise.all([
+      const [fetchedJigs, fetchedRecords, fetchedSummaries, fetchedDelayLogs, fetchedCalibration] = await Promise.all([
         fetchFactoryJigs(),
         fetchGpsRecordsByDate(selectedDate),
         fetchDwellSummariesByDate(selectedDate),
-        fetchDelayLogs()
+        fetchDelayLogs(),
+        fetchFactoryCalibration()
       ]);
 
       setJigs(fetchedJigs.length > 0 ? fetchedJigs : DEFAULT_FACTORY_JIGS);
       setRecords(fetchedRecords);
       setDwellSummaries(fetchedSummaries);
       setDelayLogs(fetchedDelayLogs);
+      setCalibration(fetchedCalibration);
     } catch (err) {
       console.error(err);
       toast.error('데이터를 불러오지 못했습니다.');
@@ -167,8 +184,13 @@ export const FactoryDwellMonitoring: React.FC = () => {
       async (pos) => {
         try {
           const assignedJig = jigs[0];
-          const mapX = assignedJig.x + 30 + Math.random() * 80;
-          const mapY = assignedJig.y + 30 + Math.random() * 80;
+          const basis = calibration ? computeCalibrationBasis(calibration) : null;
+          const projected = basis
+            ? gpsToBlueprint(pos.coords.latitude, pos.coords.longitude, basis)
+            : null;
+
+          const mapX = projected ? projected.mapX : assignedJig.x + 30 + Math.random() * 80;
+          const mapY = projected ? projected.mapY : assignedJig.y + 30 + Math.random() * 80;
           const locInfo = identifyLocationFromCoords(mapX, mapY, assignedJig.id, jigs);
 
           const slotIndex = TRACKING_TIME_SLOTS.indexOf(selectedSlot);
@@ -194,8 +216,8 @@ export const FactoryDwellMonitoring: React.FC = () => {
             jigName: locInfo.jigName,
             blockName: locInfo.blockName,
             locationLabel: locInfo.locationLabel,
-            isAtAssignedJig: true,
-            status: 'NORMAL',
+            isAtAssignedJig: locInfo.isAtAssignedJig,
+            status: locInfo.status,
             stayMinutesInSlot: 60,
             recordedAt: new Date().toISOString()
           };
@@ -357,10 +379,10 @@ export const FactoryDwellMonitoring: React.FC = () => {
           {/* PC Admin Switcher Button */}
           <button
             onClick={() => navigate('/admin/pc/factory-dwell')}
-            className="px-3 py-2 rounded-xl bg-card border border-border text-foreground hover:bg-muted text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+            className="px-3 py-2 rounded-xl bg-card border border-border text-foreground hover:bg-muted text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm whitespace-nowrap shrink-0"
           >
             <Monitor className="w-3.5 h-3.5 text-blue-500" />
-            🖥️ PC 전용 관제 열기
+            PC 전용 관제 열기
           </button>
 
           {/* Seed Simulation Button */}
@@ -369,7 +391,7 @@ export const FactoryDwellMonitoring: React.FC = () => {
             disabled={isSeeding}
             size="sm"
             variant="outline"
-            className="text-xs font-bold gap-1 rounded-xl border-border"
+            className="text-xs font-bold gap-1 rounded-xl border-border whitespace-nowrap shrink-0"
           >
             <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
             모의 데이터 생성
@@ -379,7 +401,7 @@ export const FactoryDwellMonitoring: React.FC = () => {
           <Button
             onClick={handleCheckInNow}
             size="sm"
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl gap-1 shadow-sm"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl gap-1 shadow-sm whitespace-nowrap shrink-0"
           >
             <Send className="w-3.5 h-3.5" />
             현 위치 체크인
@@ -399,47 +421,96 @@ export const FactoryDwellMonitoring: React.FC = () => {
           />
         </div>
 
-        {/* View Tabs (4-tab mobile responsive bar) */}
-        <div className="grid grid-cols-4 gap-1 bg-muted/40 p-1 rounded-2xl border border-border">
+        {/* View Tabs (5-tab mobile responsive bar) */}
+        <div className="grid grid-cols-5 gap-1 bg-muted/40 p-1 rounded-2xl border border-border">
           <button
             onClick={() => setActiveTab('MAP')}
-            className={`px-2 py-2 rounded-xl text-[11px] sm:text-xs font-black transition-all cursor-pointer truncate ${
+            className={`px-1.5 py-2 rounded-xl text-[11px] sm:text-xs font-black transition-all cursor-pointer truncate ${
               activeTab === 'MAP' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            🗺️ 내부도
+            내부도
           </button>
           <button
             onClick={() => setActiveTab('LIST')}
-            className={`px-2 py-2 rounded-xl text-[11px] sm:text-xs font-black transition-all cursor-pointer truncate ${
+            className={`px-1.5 py-2 rounded-xl text-[11px] sm:text-xs font-black transition-all cursor-pointer truncate font-mono tabular-nums ${
               activeTab === 'LIST' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            ⏱️ 체류({dwellSummaries.length})
+            체류({dwellSummaries.length})
           </button>
           <button
             onClick={() => setActiveTab('DELAYS')}
-            className={`px-2 py-2 rounded-xl text-[11px] sm:text-xs font-black transition-all cursor-pointer truncate ${
+            className={`px-1.5 py-2 rounded-xl text-[11px] sm:text-xs font-black transition-all cursor-pointer truncate font-mono tabular-nums ${
               activeTab === 'DELAYS' ? 'bg-rose-600 text-white shadow-sm' : 'text-rose-400 hover:text-rose-300'
             }`}
           >
-            🚨 지연({delayLogs.length})
+            지연({delayLogs.length})
           </button>
           <button
             onClick={() => setActiveTab('JIGS')}
-            className={`px-2 py-2 rounded-xl text-[11px] sm:text-xs font-black transition-all cursor-pointer truncate ${
+            className={`px-1.5 py-2 rounded-xl text-[11px] sm:text-xs font-black transition-all cursor-pointer truncate font-mono tabular-nums ${
               activeTab === 'JIGS' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            ⚙️ 지그({jigs.length})
+            지그({jigs.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('GPS')}
+            className={`px-1.5 py-2 rounded-xl text-[11px] sm:text-xs font-black transition-all cursor-pointer truncate ${
+              activeTab === 'GPS' ? 'bg-cyan-500 text-slate-950 shadow-sm' : 'text-cyan-400 hover:text-cyan-300'
+            }`}
+          >
+            GPS기준
           </button>
         </div>
       </div>
 
-      {/* 8-Slot Navigator */}
-      <div className="space-y-1.5">
+      {/* 2-Hour Window Quick Summary & 8-Slot Navigator */}
+      <div className="space-y-2">
+        <div className="bg-card border border-border rounded-2xl p-3 space-y-2">
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <span className="font-black text-orange-400 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5" />
+              {activeTwoHourWindow.label} 집중 현황
+            </span>
+            <span className="font-mono tabular-nums text-[11px] font-bold text-muted-foreground">
+              {twoHourHeatmap.totalUniqueWorkers}명 · {formatMinutesToKorean(twoHourHeatmap.totalDwellMinutes)}
+            </span>
+          </div>
+          <div className="grid grid-cols-4 gap-1.5">
+            {TWO_HOUR_WINDOWS.map(w => {
+              const isAct = w.id === activeTwoHourWindow.id;
+              return (
+                <button
+                  key={w.id}
+                  type="button"
+                  onClick={() => setSelectedSlot(w.slots[0])}
+                  className={`py-1.5 px-2 rounded-lg text-[11px] font-mono tabular-nums font-black border transition-colors cursor-pointer whitespace-nowrap ${
+                    isAct
+                      ? 'bg-orange-500 text-slate-950 border-orange-400'
+                      : 'bg-muted/40 text-muted-foreground border-border hover:text-foreground'
+                  }`}
+                >
+                  {w.shortLabel}
+                </button>
+              );
+            })}
+          </div>
+          {twoHourHeatmap.topZone && (
+            <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11px] pt-1 border-t border-border/60">
+              <span className="text-muted-foreground font-bold">
+                최다 집중: <strong className="text-foreground">{twoHourHeatmap.topZone.zoneName} ({twoHourHeatmap.topZone.subLabel})</strong>
+              </span>
+              <span className="font-mono tabular-nums font-black text-rose-400">
+                {formatMinutesToKorean(twoHourHeatmap.topZone.totalMinutes)} ({twoHourHeatmap.topZone.workerCount}명 · {twoHourHeatmap.topZone.sharePercent}%)
+              </span>
+            </div>
+          )}
+        </div>
+
         <p className="text-[11px] font-black text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-          <Clock className="w-3.5 h-3.5 text-blue-500" /> 2시간 주기 타임슬롯 선택
+          <Clock className="w-3.5 h-3.5 text-blue-500" /> 세부 8회 체크포인트 선택
         </p>
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
           {TRACKING_TIME_SLOTS.map(slot => {
@@ -450,7 +521,7 @@ export const FactoryDwellMonitoring: React.FC = () => {
               <button
                 key={slot}
                 onClick={() => setSelectedSlot(slot)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-black shrink-0 transition-all cursor-pointer border flex items-center gap-1.5 ${
+                className={`px-3.5 py-2 rounded-xl text-xs font-black font-mono tabular-nums shrink-0 transition-all cursor-pointer border flex items-center gap-1.5 ${
                   selectedSlot === slot
                     ? 'bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-600/30'
                     : 'bg-card text-foreground border-border hover:bg-muted'
@@ -461,7 +532,7 @@ export const FactoryDwellMonitoring: React.FC = () => {
                   {count}명
                 </span>
                 {away > 0 && (
-                  <span className="text-[9px] px-1 py-0.2 rounded bg-rose-500 text-white font-extrabold animate-pulse">
+                  <span className="text-[9px] px-1 py-0.2 rounded bg-rose-500 text-white font-extrabold">
                     {away}탈
                   </span>
                 )}
@@ -479,13 +550,14 @@ export const FactoryDwellMonitoring: React.FC = () => {
             records={records}
             delayLogs={delayLogs}
             selectedSlot={selectedSlot}
+            onSelectSlot={setSelectedSlot}
             selectedWorkerUid={selectedWorkerUid}
             onSelectWorker={setSelectedWorkerUid}
             onSelectJig={(jig) => openJigEditModal(jig)}
             selectedJigId={editingJig?.id}
           />
           <p className="text-[11px] text-muted-foreground text-center font-bold px-2">
-            💡 블럭 카드를 누르면 캘린더 일정 수정 및 🚨 크리티컬 지연 사유를 연속 기록할 수 있습니다. (대표이사 전용 비공개)
+            블럭 카드를 누르면 캘린더 일정 수정 및 크리티컬 지연 사유를 연속 기록할 수 있습니다. (대표이사 전용 비공개)
           </p>
         </div>
       )}
@@ -529,10 +601,10 @@ export const FactoryDwellMonitoring: React.FC = () => {
                       <p className="text-xs text-muted-foreground mt-0.5">{s.teamName} • {s.jobRole}</p>
                     </div>
 
-                    <span className={`text-xs px-2.5 py-1 rounded-full font-black ${
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-black font-mono tabular-nums ${
                       s.complianceRate >= 80 
                         ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                        : 'bg-rose-500/10 text-rose-400 border border-rose-500/20 animate-pulse'
+                        : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
                     }`}>
                       {s.complianceRate}% 준수
                     </span>
@@ -545,11 +617,11 @@ export const FactoryDwellMonitoring: React.FC = () => {
                     </div>
                     <div className="bg-muted/40 p-2 rounded-xl">
                       <span className="text-muted-foreground block text-[10px]">블럭 체류 시간</span>
-                      <strong className="text-emerald-400">{formatMinutesToKorean(s.workBlockDwellMinutes)}</strong>
+                      <strong className="text-emerald-400 font-mono tabular-nums">{formatMinutesToKorean(s.workBlockDwellMinutes)}</strong>
                     </div>
                     <div className="bg-muted/40 p-2 rounded-xl">
                       <span className="text-muted-foreground block text-[10px]">자리비움</span>
-                      <strong className={s.awayMinutes > 0 ? 'text-rose-400' : 'text-muted-foreground'}>
+                      <strong className={`font-mono tabular-nums ${s.awayMinutes > 0 ? 'text-rose-400' : 'text-muted-foreground'}`}>
                         {formatMinutesToKorean(s.awayMinutes)}
                       </strong>
                     </div>
@@ -563,12 +635,12 @@ export const FactoryDwellMonitoring: React.FC = () => {
                         <span
                           key={r.slot}
                           title={`${r.slot}: ${r.locationLabel}`}
-                          className={`w-5 h-5 rounded flex items-center justify-center font-black text-[9px] ${
+                          className={`w-5 h-5 rounded flex items-center justify-center font-black font-mono tabular-nums text-[9px] ${
                             r.status === 'NORMAL'
                               ? 'bg-emerald-500/20 text-emerald-400'
                               : r.status === 'RESTING'
                               ? 'bg-amber-500/20 text-amber-400'
-                              : 'bg-rose-500/20 text-rose-400 animate-pulse'
+                              : 'bg-rose-500/20 text-rose-400'
                           }`}
                         >
                           {i + 1}
@@ -852,6 +924,21 @@ export const FactoryDwellMonitoring: React.FC = () => {
             })}
           </div>
         </div>
+      )}
+
+      {/* TAB 5: Cardinal (E/W/S/N) Field GPS Calibration & Auto Block GPS */}
+      {activeTab === 'GPS' && (
+        <FactoryGpsCalibrationPanel
+          jigs={jigs}
+          calibration={calibration}
+          userUid={profile?.uid}
+          userName={profile?.displayName}
+          onCalibrationSaved={(savedCal, updatedJigs) => {
+            setCalibration(savedCal);
+            setJigs(updatedJigs);
+          }}
+          onSelectJig={(jig) => openJigEditModal(jig)}
+        />
       )}
 
       {/* JIG Edit Modal with Calendar Date Picker & Cumulative Critical Delay Log */}

@@ -506,6 +506,10 @@ service cloud.firestore {
       allow read, write: if isCEO();
     }
 
+    match /factoryCalibration/{factoryId} {
+      allow read, write: if isCEO();
+    }
+
     // Default deny at the end
     match /{document=**} {
       allow read, write: if false;

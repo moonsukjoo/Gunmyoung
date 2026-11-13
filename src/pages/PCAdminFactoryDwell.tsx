@@ -9,7 +9,8 @@ import {
   TrackingSlotTime,
   BlockDelayLog,
   DelayReasonCategory,
-  DELAY_REASON_CATEGORIES
+  DELAY_REASON_CATEGORIES,
+  FactoryBoundaryCalibration
 } from '../types';
 import { 
   fetchFactoryJigs, 
@@ -23,10 +24,16 @@ import {
   computeAllBlockStats,
   fetchDelayLogs,
   addDelayLog,
-  resolveDelayLog
+  resolveDelayLog,
+  computeZoneDwellHeatmap,
+  TWO_HOUR_WINDOWS,
+  getWindowForSlot,
+  getHeatmapColors,
+  fetchFactoryCalibration
 } from '../services/factoryTrackingService';
 import PCAdminLayout from '../components/PCAdminLayout';
 import { FactoryBlueprintMap } from '../components/FactoryBlueprintMap';
+import { FactoryGpsCalibrationPanel } from '../components/FactoryGpsCalibrationPanel';
 import { 
   Layers, 
   Calendar as CalendarIcon, 
@@ -75,6 +82,7 @@ export const PCAdminFactoryDwell: React.FC = () => {
   const [records, setRecords] = useState<FactoryGpsRecord[]>([]);
   const [dwellSummaries, setDwellSummaries] = useState<WorkerDwellSummary[]>([]);
   const [delayLogs, setDelayLogs] = useState<BlockDelayLog[]>([]);
+  const [calibration, setCalibration] = useState<FactoryBoundaryCalibration | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSeeding, setIsSeeding] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -114,6 +122,20 @@ export const PCAdminFactoryDwell: React.FC = () => {
     return computeAllBlockStats(jigs, records);
   }, [jigs, records]);
 
+  // 2-hour interval concentration summaries across all 4 windows
+  const activeTwoHourWindow = useMemo(() => getWindowForSlot(selectedSlot), [selectedSlot]);
+
+  const twoHourWindowMetrics = useMemo(() => {
+    return TWO_HOUR_WINDOWS.map(w => ({
+      window: w,
+      heatmap: computeZoneDwellHeatmap(jigs, records, '2H_WINDOW', w.slots[0], w.id)
+    }));
+  }, [jigs, records]);
+
+  const activeWindowHeatmap = useMemo(() => {
+    return computeZoneDwellHeatmap(jigs, records, '2H_WINDOW', selectedSlot, activeTwoHourWindow.id);
+  }, [jigs, records, selectedSlot, activeTwoHourWindow.id]);
+
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -128,17 +150,19 @@ export const PCAdminFactoryDwell: React.FC = () => {
     if (!isCEO) return;
     setLoading(true);
     try {
-      const [fetchedJigs, fetchedRecords, fetchedSummaries, fetchedDelayLogs] = await Promise.all([
+      const [fetchedJigs, fetchedRecords, fetchedSummaries, fetchedDelayLogs, fetchedCalibration] = await Promise.all([
         fetchFactoryJigs(),
         fetchGpsRecordsByDate(selectedDate),
         fetchDwellSummariesByDate(selectedDate),
-        fetchDelayLogs()
+        fetchDelayLogs(),
+        fetchFactoryCalibration()
       ]);
 
       setJigs(fetchedJigs.length > 0 ? fetchedJigs : DEFAULT_FACTORY_JIGS);
       setRecords(fetchedRecords);
       setDwellSummaries(fetchedSummaries);
       setDelayLogs(fetchedDelayLogs);
+      setCalibration(fetchedCalibration);
 
       // If no records for selected date, suggest auto-seeding
       if (fetchedRecords.length === 0) {
@@ -394,17 +418,17 @@ export const PCAdminFactoryDwell: React.FC = () => {
             <Button
               variant="outline"
               onClick={() => navigate('/factory-dwell')}
-              className="font-black text-xs h-11 px-4 rounded-2xl gap-2 border-border hover:bg-muted cursor-pointer"
+              className="font-black text-xs h-11 px-4 rounded-2xl gap-2 border-border hover:bg-muted cursor-pointer whitespace-nowrap shrink-0"
             >
               <Smartphone className="w-4 h-4 text-cyan-400" />
-              📱 모바일 현장 관제 모드
+              모바일 현장 관제
             </Button>
 
             {/* Test Simulation Seed Button */}
             <Button
               onClick={handleSeedData}
               disabled={isSeeding}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs h-11 px-4 rounded-2xl gap-2 shadow-lg shadow-indigo-600/20 cursor-pointer"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs h-11 px-4 rounded-2xl gap-2 shadow-lg shadow-indigo-600/20 cursor-pointer whitespace-nowrap shrink-0"
             >
               <Sparkles className="w-4 h-4" />
               모의 데이터 생성 (12명 8회)
@@ -414,7 +438,7 @@ export const PCAdminFactoryDwell: React.FC = () => {
             <Button
               variant="outline"
               onClick={handleExportA3PDF}
-              className="font-black text-xs h-11 px-4 rounded-2xl gap-2 border-border hover:bg-muted cursor-pointer"
+              className="font-black text-xs h-11 px-4 rounded-2xl gap-2 border-border hover:bg-muted cursor-pointer whitespace-nowrap shrink-0"
             >
               <Download className="w-4 h-4 text-emerald-500" />
               A3 가로 보고서 PDF
@@ -424,7 +448,7 @@ export const PCAdminFactoryDwell: React.FC = () => {
             <Button
               variant="outline"
               onClick={() => window.print()}
-              className="font-black text-xs h-11 px-4 rounded-2xl gap-2 border-border hover:bg-muted cursor-pointer"
+              className="font-black text-xs h-11 px-4 rounded-2xl gap-2 border-border hover:bg-muted cursor-pointer whitespace-nowrap shrink-0"
             >
               <Printer className="w-4 h-4" />
               인쇄
@@ -434,44 +458,118 @@ export const PCAdminFactoryDwell: React.FC = () => {
 
         {/* KPI Summary Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          <div className="bg-card border border-border p-6 rounded-[2rem] shadow-sm flex items-center gap-5">
-            <div className="w-14 h-14 rounded-2xl bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
-              <Users className="w-7 h-7" />
+          <div className="bg-card border border-border p-5 sm:p-6 rounded-2xl flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
+              <Users className="w-6 h-6" />
             </div>
-            <div>
-              <p className="text-[11px] font-black text-muted-foreground uppercase tracking-widest">모니터링 총원</p>
-              <p className="text-2xl sm:text-3xl font-black text-foreground mt-0.5">{kpis.totalWorkers}<span className="text-sm font-bold text-muted-foreground ml-1">명</span></p>
-            </div>
-          </div>
-
-          <div className="bg-card border border-border p-6 rounded-[2rem] shadow-sm flex items-center gap-5">
-            <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
-              <CheckCircle2 className="w-7 h-7" />
-            </div>
-            <div>
-              <p className="text-[11px] font-black text-muted-foreground uppercase tracking-widest">블럭 체류 준수율</p>
-              <p className="text-2xl sm:text-3xl font-black text-emerald-400 mt-0.5">{kpis.avgCompliance}%</p>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">모니터링 총원</p>
+              <p className="text-2xl sm:text-3xl font-black font-mono tabular-nums text-foreground mt-0.5">{kpis.totalWorkers}<span className="text-sm font-bold text-muted-foreground ml-1">명</span></p>
             </div>
           </div>
 
-          <div className="bg-card border border-border p-6 rounded-[2rem] shadow-sm flex items-center gap-5">
-            <div className="w-14 h-14 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center shrink-0">
-              <ShieldAlert className="w-7 h-7 animate-pulse" />
+          <div className="bg-card border border-border p-5 sm:p-6 rounded-2xl flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-6 h-6" />
             </div>
-            <div>
-              <p className="text-[11px] font-black text-muted-foreground uppercase tracking-widest">자리비움 / 주의자</p>
-              <p className="text-2xl sm:text-3xl font-black text-rose-500 mt-0.5">{kpis.awayCount}<span className="text-sm font-bold text-muted-foreground ml-1">명</span></p>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">블럭 체류 준수율</p>
+              <p className="text-2xl sm:text-3xl font-black font-mono tabular-nums text-emerald-400 mt-0.5">{kpis.avgCompliance}%</p>
             </div>
           </div>
 
-          <div className="bg-card border border-border p-6 rounded-[2rem] shadow-sm flex items-center gap-5">
-            <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center shrink-0">
-              <Layers className="w-7 h-7" />
+          <div className="bg-card border border-border p-5 sm:p-6 rounded-2xl flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center shrink-0">
+              <ShieldAlert className="w-6 h-6" />
             </div>
-            <div>
-              <p className="text-[11px] font-black text-muted-foreground uppercase tracking-widest">가동 조립 블럭</p>
-              <p className="text-2xl sm:text-3xl font-black text-foreground mt-0.5">{kpis.activeBlocks}<span className="text-sm font-bold text-muted-foreground ml-1">개</span></p>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">자리비움 / 주의자</p>
+              <p className="text-2xl sm:text-3xl font-black font-mono tabular-nums text-rose-500 mt-0.5">{kpis.awayCount}<span className="text-sm font-bold text-muted-foreground ml-1">명</span></p>
             </div>
+          </div>
+
+          <div className="bg-card border border-border p-5 sm:p-6 rounded-2xl flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-orange-500/10 text-orange-400 flex items-center justify-center shrink-0">
+              <Layers className="w-6 h-6" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider truncate">
+                {activeTwoHourWindow.shortLabel} 최다 집중 구역
+              </p>
+              {activeWindowHeatmap.topZone ? (
+                <p className="text-base sm:text-lg font-black text-foreground mt-0.5 truncate">
+                  {activeWindowHeatmap.topZone.zoneName} · {activeWindowHeatmap.topZone.subLabel}
+                  <span className="block text-xs font-mono tabular-nums text-orange-400">
+                    {formatMinutesToKorean(activeWindowHeatmap.topZone.totalMinutes)} ({activeWindowHeatmap.topZone.workerCount}명)
+                  </span>
+                </p>
+              ) : (
+                <p className="text-2xl sm:text-3xl font-black font-mono tabular-nums text-foreground mt-0.5">
+                  {kpis.activeBlocks}<span className="text-sm font-bold text-muted-foreground ml-1">개 가동</span>
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* 2-Hour Interval Workforce Concentration Matrix */}
+        <div className="bg-card border border-border p-4 sm:p-5 rounded-2xl space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/60 pb-3">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-orange-400" />
+              <span className="text-xs font-black tracking-wider text-foreground">
+                2시간 단위 시간대별 인력 집중도 &amp; 히트맵 연동
+              </span>
+            </div>
+            <span className="text-[11px] font-bold text-muted-foreground">
+              시간대 블록 또는 세부 체크포인트를 선택하면 하단 A3 공장도면 히트맵이 즉시 전환됩니다.
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {twoHourWindowMetrics.map(({ window: w, heatmap: wh }) => {
+              const isWindowActive = activeTwoHourWindow.id === w.id;
+              const topColors = wh.topZone ? getHeatmapColors(wh.topZone.level) : null;
+              return (
+                <button
+                  key={w.id}
+                  type="button"
+                  onClick={() => setSelectedSlot(w.slots[0])}
+                  className={`text-left p-3.5 rounded-xl border transition-all cursor-pointer space-y-2 ${
+                    isWindowActive
+                      ? 'bg-orange-500/10 border-orange-500/60 ring-1 ring-orange-500/30'
+                      : 'bg-muted/30 border-border hover:bg-muted/60'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`text-xs font-black font-mono tabular-nums ${isWindowActive ? 'text-orange-400' : 'text-foreground'}`}>
+                      {w.label}
+                    </span>
+                    <span className="text-[11px] font-mono tabular-nums font-bold text-muted-foreground">
+                      {wh.totalUniqueWorkers}명 · {formatMinutesToKorean(wh.totalDwellMinutes)}
+                    </span>
+                  </div>
+                  {wh.topZone ? (
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="font-bold text-muted-foreground truncate">
+                        최다: <strong className="text-foreground">{wh.topZone.zoneName} ({wh.topZone.subLabel})</strong>
+                      </span>
+                      <span className={`font-mono tabular-nums font-black shrink-0 ${topColors?.textClass || 'text-orange-400'}`}>
+                        {wh.topZone.sharePercent}%
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">기록 대기 중</p>
+                  )}
+                  <div className="flex items-center justify-between text-[10px] font-mono tabular-nums text-muted-foreground pt-1 border-t border-border/50">
+                    <span>체크포인트: {w.slots.join(' / ')}</span>
+                    {wh.nonWorkDwellMinutes > 0 && (
+                      <span className="text-amber-400 font-bold">비작업 {formatMinutesToKorean(wh.nonWorkDwellMinutes)}</span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -524,34 +622,35 @@ export const PCAdminFactoryDwell: React.FC = () => {
                     <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${isSelected ? 'bg-white/20 text-white' : 'bg-card text-muted-foreground'}`}>
                       {slotWorkers.length}명 감지
                     </span>
-                    {awayCount > 0 && (
-                      <span className="text-[9px] font-black px-1 py-0.2 rounded bg-rose-500 text-white animate-pulse">
-                        {awayCount}탈
-                      </span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
+                      {awayCount > 0 && (
+                        <span className="text-[9px] font-black px-1 py-0.2 rounded bg-rose-500 text-white">
+                          {awayCount}탈
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
 
-        {/* Printable / Viewable A3 Factory Blueprint Map Area */}
-        <div ref={printRef} className="space-y-4">
-          <FactoryBlueprintMap
-            jigs={jigs}
-            records={records}
-            delayLogs={delayLogs}
-            selectedSlot={selectedSlot}
-            selectedWorkerUid={selectedWorkerUid}
-            onSelectWorker={setSelectedWorkerUid}
-            onSelectJig={(jig) => {
-              setSelectedJig(jig);
-              handleOpenEditJig(jig);
-            }}
-            selectedJigId={selectedJig?.id}
-          />
-        </div>
+          {/* Printable / Viewable A3 Factory Blueprint Map Area */}
+          <div ref={printRef} className="space-y-4">
+            <FactoryBlueprintMap
+              jigs={jigs}
+              records={records}
+              delayLogs={delayLogs}
+              selectedSlot={selectedSlot}
+              onSelectSlot={setSelectedSlot}
+              selectedWorkerUid={selectedWorkerUid}
+              onSelectWorker={setSelectedWorkerUid}
+              onSelectJig={(jig) => {
+                setSelectedJig(jig);
+                handleOpenEditJig(jig);
+              }}
+              selectedJigId={selectedJig?.id}
+            />
+          </div>
 
         {/* Selected Worker History Ribbon (if worker is clicked) */}
         {selectedWorkerUid && (
@@ -680,7 +779,7 @@ export const PCAdminFactoryDwell: React.FC = () => {
                     stat.statusVerdict === 'COMPLETED'
                       ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                       : stat.statusVerdict === 'CRITICAL_DELAY'
-                      ? 'bg-rose-500/10 text-rose-500 border border-rose-500/30 animate-pulse'
+                      ? 'bg-rose-500/10 text-rose-500 border border-rose-500/30'
                       : stat.statusVerdict === 'BEHIND_SCHEDULE'
                       ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                       : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
@@ -751,6 +850,19 @@ export const PCAdminFactoryDwell: React.FC = () => {
             })}
           </div>
         </div>
+
+        {/* 🧭 7공장 동·서·남·북 GPS 기준점 등록 및 정반 블럭 좌표 자동 산출 */}
+        <FactoryGpsCalibrationPanel
+          jigs={jigs}
+          calibration={calibration}
+          userUid={profile?.uid}
+          userName={profile?.displayName}
+          onCalibrationSaved={(savedCal, updatedJigs) => {
+            setCalibration(savedCal);
+            setJigs(updatedJigs);
+          }}
+          onSelectJig={(jig) => handleOpenEditJig(jig)}
+        />
 
         {/* 🚨 공정 지연 크리티컬 사유 연속 누적 기록지 (대표이사 전용 비공개) */}
         <div className="bg-card border border-rose-500/30 rounded-[2.5rem] shadow-sm p-6 sm:p-8 space-y-6">
@@ -1090,35 +1202,35 @@ export const PCAdminFactoryDwell: React.FC = () => {
                                     ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                                     : r.status === 'RESTING'
                                     ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                                    : 'bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse'
-                                }`}
-                              >
-                                {i + 1}
-                              </span>
-                            ))}
-                          </div>
-                        </td>
+                                    : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                              }`}
+                            >
+                              {i + 1}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
 
-                        {/* Verdict */}
-                        <td className="py-4 px-4 text-center">
-                          {s.verdict === 'EXCELLENT' ? (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                              최우수
-                            </span>
-                          ) : s.verdict === 'NORMAL' ? (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                              양호
-                            </span>
-                          ) : s.verdict === 'WARNING' ? (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                              주의 요망
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500/15 text-rose-500 border border-rose-500/30 font-extrabold animate-pulse">
-                              공정 이탈
-                            </span>
-                          )}
-                        </td>
+                      {/* Verdict */}
+                      <td className="py-4 px-4 text-center">
+                        {s.verdict === 'EXCELLENT' ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            최우수
+                          </span>
+                        ) : s.verdict === 'NORMAL' ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                            양호
+                          </span>
+                        ) : s.verdict === 'WARNING' ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                            주의 요망
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500/15 text-rose-500 border border-rose-500/30 font-extrabold">
+                            공정 이탈
+                          </span>
+                        )}
+                      </td>
                       </tr>
                     );
                   })

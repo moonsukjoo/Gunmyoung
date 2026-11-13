@@ -704,10 +704,33 @@
         "latestDelayAt": { "type": "string" },
         "latestDelaySeverity": { "type": "string", "enum": ["CRITICAL", "WARNING", "INFO"] },
         "delayLogCount": { "type": "number" },
+        "centerLat": { "type": "number" },
+        "centerLng": { "type": "number" },
+        "gpsRadiusMeters": { "type": "number" },
+        "gpsWidthMeters": { "type": "number" },
+        "gpsHeightMeters": { "type": "number" },
+        "gpsCalibratedAt": { "type": "string", "format": "date-time" },
         "bay": { "type": "string", "enum": ["BAY_SOUTH", "BAY_NORTH"] },
         "status": { "type": "string", "enum": ["ACTIVE", "HOLD", "COMPLETED"] }
       },
       "required": ["id", "jigNumber", "jigName", "blockName"]
+    },
+    "FactoryCalibration": {
+      "title": "Factory 7 Boundary GPS Calibration",
+      "description": "Cardinal (East/West/South/North) GPS boundary anchors and measured dimensions in meters for auto-calculating block GPS centers (CEO-only)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "eastWestLengthMeters": { "type": "number" },
+        "northSouthLengthMeters": { "type": "number" },
+        "centerLat": { "type": "number" },
+        "centerLng": { "type": "number" },
+        "rotationDeg": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedByUid": { "type": "string" },
+        "updatedByName": { "type": "string" }
+      },
+      "required": ["id", "eastWestLengthMeters", "northSouthLengthMeters", "updatedAt"]
     },
     "FactoryDelayLog": {
       "title": "Factory Block Critical Delay Log",
@@ -893,6 +916,10 @@
     "/factoryDelayLogs/{logId}": {
       "schema": "FactoryDelayLog",
       "description": "Cumulative critical delay reason logs for Factory 7 blocks (CEO-only)"
+    },
+    "/factoryCalibration/{factoryId}": {
+      "schema": "FactoryCalibration",
+      "description": "Factory 7 East/West/South/North GPS boundary calibration and measured dimensions (CEO-only)"
     }
   }
 }

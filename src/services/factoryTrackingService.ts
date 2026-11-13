@@ -7,7 +7,9 @@ import {
   TRACKING_TIME_SLOTS, 
   TrackingSlotTime,
   BlockDeploymentStats,
-  BlockDelayLog
+  BlockDelayLog,
+  CardinalGpsPoint,
+  FactoryBoundaryCalibration
 } from '../types';
 
 // ========================================================
@@ -788,3 +790,661 @@ export const resolveDelayLog = async (logId: string, resolvedNote: string): Prom
     throw err;
   }
 };
+
+// ========================================================
+// 2시간 단위 작업 구역별 체류 시간 히트맵 집계 유틸리티
+// ========================================================
+
+export type HeatmapAggregationMode = '2H_WINDOW' | 'SINGLE_SLOT' | 'FULL_DAY';
+
+export interface TwoHourWindowDef {
+  id: string;
+  label: string;
+  shortLabel: string;
+  slots: TrackingSlotTime[];
+}
+
+export const TWO_HOUR_WINDOWS: TwoHourWindowDef[] = [
+  { id: 'W1', label: '오전 1부 (08:00~10:00)', shortLabel: '08~10시', slots: ['08:20', '09:45'] },
+  { id: 'W2', label: '오전 2부 (10:00~12:00)', shortLabel: '10~12시', slots: ['10:15', '11:45'] },
+  { id: 'W3', label: '오후 1부 (13:00~15:00)', shortLabel: '13~15시', slots: ['13:10', '14:45'] },
+  { id: 'W4', label: '오후 2부 (15:00~18:00)', shortLabel: '15~18시', slots: ['15:15', '17:45'] }
+];
+
+export const getWindowForSlot = (slot: TrackingSlotTime): TwoHourWindowDef => {
+  return TWO_HOUR_WINDOWS.find(w => w.slots.includes(slot)) || TWO_HOUR_WINDOWS[0];
+};
+
+export type HeatmapLevel = 'IDLE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'PEAK';
+
+export interface ZoneDwellMetric {
+  zoneId: string;
+  zoneName: string;
+  subLabel: string;
+  zoneType: 'JIG' | 'REST_AREA' | 'FACILITY' | 'AISLE';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  totalMinutes: number;
+  normalMinutes: number;
+  awayOrRestMinutes: number;
+  workerCount: number;
+  workerNames: string[];
+  intensity: number; // 0.0 ~ 1.0 relative to highest zone
+  sharePercent: number; // % of total dwell across all zones in this window
+  level: HeatmapLevel;
+  levelLabel: string;
+}
+
+export interface HeatmapComputationResult {
+  windowLabel: string;
+  filteredRecords: FactoryGpsRecord[];
+  zones: ZoneDwellMetric[];
+  zoneMap: Record<string, ZoneDwellMetric>;
+  totalDwellMinutes: number;
+  totalUniqueWorkers: number;
+  nonWorkDwellMinutes: number;
+  topZone: ZoneDwellMetric | null;
+}
+
+export const getHeatmapColors = (level: HeatmapLevel): {
+  hex: string;
+  glowRgba: string;
+  tintBg: string;
+  border: string;
+  textClass: string;
+  barClass: string;
+} => {
+  switch (level) {
+    case 'PEAK':
+      return {
+        hex: '#ef4444',
+        glowRgba: 'rgba(239, 68, 68, 0.55)',
+        tintBg: 'rgba(239, 68, 68, 0.24)',
+        border: '#f87171',
+        textClass: 'text-rose-400',
+        barClass: 'bg-rose-500'
+      };
+    case 'HIGH':
+      return {
+        hex: '#f97316',
+        glowRgba: 'rgba(249, 115, 22, 0.48)',
+        tintBg: 'rgba(249, 115, 22, 0.20)',
+        border: '#fb923c',
+        textClass: 'text-orange-400',
+        barClass: 'bg-orange-500'
+      };
+    case 'MEDIUM':
+      return {
+        hex: '#f59e0b',
+        glowRgba: 'rgba(245, 158, 11, 0.40)',
+        tintBg: 'rgba(245, 158, 11, 0.16)',
+        border: '#fbbf24',
+        textClass: 'text-amber-400',
+        barClass: 'bg-amber-500'
+      };
+    case 'LOW':
+      return {
+        hex: '#06b6d4',
+        glowRgba: 'rgba(6, 182, 212, 0.34)',
+        tintBg: 'rgba(6, 182, 212, 0.12)',
+        border: '#22d3ee',
+        textClass: 'text-cyan-400',
+        barClass: 'bg-cyan-500'
+      };
+    default:
+      return {
+        hex: '#334155',
+        glowRgba: 'rgba(51, 65, 85, 0.0)',
+        tintBg: 'rgba(15, 23, 42, 0.0)',
+        border: '#334155',
+        textClass: 'text-slate-500',
+        barClass: 'bg-slate-600'
+      };
+  }
+};
+
+export const computeZoneDwellHeatmap = (
+  jigs: FactoryJig[],
+  records: FactoryGpsRecord[],
+  mode: HeatmapAggregationMode,
+  selectedSlot: TrackingSlotTime,
+  activeWindowId?: string
+): HeatmapComputationResult => {
+  const activeWindow =
+    (activeWindowId ? TWO_HOUR_WINDOWS.find(w => w.id === activeWindowId) : undefined) ||
+    getWindowForSlot(selectedSlot);
+
+  let filteredRecords: FactoryGpsRecord[] = [];
+  let windowLabel = '';
+
+  if (mode === 'SINGLE_SLOT') {
+    filteredRecords = records.filter(r => r.slot === selectedSlot);
+    windowLabel = `선택 시점 (${selectedSlot})`;
+  } else if (mode === '2H_WINDOW') {
+    filteredRecords = records.filter(r => activeWindow.slots.includes(r.slot));
+    windowLabel = activeWindow.label;
+  } else {
+    filteredRecords = records;
+    windowLabel = '당일 전체 누적 (08:20~17:45)';
+  }
+
+  // Build base zone buckets for all JIGs + non-work facilities + central crane aisle
+  interface ZoneAccumulator {
+    zoneId: string;
+    zoneName: string;
+    subLabel: string;
+    zoneType: ZoneDwellMetric['zoneType'];
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    totalMinutes: number;
+    normalMinutes: number;
+    awayOrRestMinutes: number;
+    workerUids: Set<string>;
+    workerNames: Set<string>;
+  }
+
+  const buckets: Record<string, ZoneAccumulator> = {};
+
+  jigs.forEach(j => {
+    buckets[j.id] = {
+      zoneId: j.id,
+      zoneName: j.jigName,
+      subLabel: j.blockName,
+      zoneType: 'JIG',
+      x: j.x,
+      y: j.y,
+      width: j.width,
+      height: j.height,
+      totalMinutes: 0,
+      normalMinutes: 0,
+      awayOrRestMinutes: 0,
+      workerUids: new Set(),
+      workerNames: new Set()
+    };
+  });
+
+  FACTORY_FACILITIES.forEach(fac => {
+    buckets[fac.id] = {
+      zoneId: fac.id,
+      zoneName: fac.name.split(' ')[0],
+      subLabel: fac.name,
+      zoneType: fac.type === 'REST_AREA' ? 'REST_AREA' : 'FACILITY',
+      x: fac.x,
+      y: fac.y,
+      width: fac.width,
+      height: fac.height,
+      totalMinutes: 0,
+      normalMinutes: 0,
+      awayOrRestMinutes: 0,
+      workerUids: new Set(),
+      workerNames: new Set()
+    };
+  });
+
+  buckets['central_aisle'] = {
+    zoneId: 'central_aisle',
+    zoneName: '중앙 크레인 통로',
+    subLabel: '통로 배회/이탈 구역',
+    zoneType: 'AISLE',
+    x: 50,
+    y: 430,
+    width: 1314,
+    height: 140,
+    totalMinutes: 0,
+    normalMinutes: 0,
+    awayOrRestMinutes: 0,
+    workerUids: new Set(),
+    workerNames: new Set()
+  };
+
+  let totalDwellMinutes = 0;
+  let nonWorkDwellMinutes = 0;
+  const globalWorkerSet = new Set<string>();
+
+  filteredRecords.forEach(r => {
+    const mins = r.stayMinutesInSlot || SLOT_MINUTES_MAP[r.slot] || 60;
+    totalDwellMinutes += mins;
+    if (r.workerUid) globalWorkerSet.add(r.workerUid);
+
+    let targetKey: string | null = null;
+    if (r.jigId && buckets[r.jigId]) {
+      targetKey = r.jigId;
+    } else {
+      const matchedFac = getFacilityAtCoordinate(r.mapX, r.mapY);
+      if (matchedFac && buckets[matchedFac.id]) {
+        targetKey = matchedFac.id;
+      } else if (r.locationType === 'REST_AREA') {
+        targetKey = 'rest_area';
+      } else if (r.locationType === 'RESTROOM') {
+        targetKey = 'safety_office';
+      } else {
+        targetKey = 'central_aisle';
+      }
+    }
+
+    const bucket = targetKey ? buckets[targetKey] : null;
+    if (bucket) {
+      bucket.totalMinutes += mins;
+      if (r.status === 'NORMAL' && bucket.zoneType === 'JIG') {
+        bucket.normalMinutes += mins;
+      } else {
+        bucket.awayOrRestMinutes += mins;
+        nonWorkDwellMinutes += mins;
+      }
+      if (r.workerUid) bucket.workerUids.add(r.workerUid);
+      if (r.workerName) bucket.workerNames.add(r.workerName);
+    }
+  });
+
+  const maxMinutes = Math.max(
+    60,
+    ...Object.values(buckets).map(b => b.totalMinutes)
+  );
+
+  const zones: ZoneDwellMetric[] = Object.values(buckets)
+    .map(b => {
+      const intensity = b.totalMinutes > 0 ? Math.min(1, b.totalMinutes / maxMinutes) : 0;
+      const sharePercent = totalDwellMinutes > 0 ? Math.round((b.totalMinutes / totalDwellMinutes) * 100) : 0;
+
+      let level: HeatmapLevel = 'IDLE';
+      let levelLabel = '미투입';
+      if (b.totalMinutes > 0) {
+        if (intensity >= 0.8) {
+          level = 'PEAK';
+          levelLabel = '최고 집중';
+        } else if (intensity >= 0.55) {
+          level = 'HIGH';
+          levelLabel = '고밀도 집중';
+        } else if (intensity >= 0.3) {
+          level = 'MEDIUM';
+          levelLabel = '보통 체류';
+        } else {
+          level = 'LOW';
+          levelLabel = '저밀도';
+        }
+      }
+
+      return {
+        zoneId: b.zoneId,
+        zoneName: b.zoneName,
+        subLabel: b.subLabel,
+        zoneType: b.zoneType,
+        x: b.x,
+        y: b.y,
+        width: b.width,
+        height: b.height,
+        totalMinutes: b.totalMinutes,
+        normalMinutes: b.normalMinutes,
+        awayOrRestMinutes: b.awayOrRestMinutes,
+        workerCount: b.workerUids.size,
+        workerNames: Array.from(b.workerNames),
+        intensity,
+        sharePercent,
+        level,
+        levelLabel
+      };
+    })
+    .sort((a, b) => b.totalMinutes - a.totalMinutes);
+
+  const zoneMap: Record<string, ZoneDwellMetric> = {};
+  zones.forEach(z => {
+    zoneMap[z.zoneId] = z;
+  });
+
+  const activeZones = zones.filter(z => z.totalMinutes > 0);
+  const topZone = activeZones.length > 0 ? activeZones[0] : null;
+
+  return {
+    windowLabel,
+    filteredRecords,
+    zones,
+    zoneMap,
+    totalDwellMinutes,
+    totalUniqueWorkers: globalWorkerSet.size,
+    nonWorkDwellMinutes,
+    topZone
+  };
+};
+
+// ========================================================
+// 7공장 동·서·남·북 실측 길이 및 GPS 기준점 캘리브레이션 엔진
+// A3 도면 좌표계 (1414 x 1000):
+//   ← 동쪽(EAST): x = 20, y = 500  (u = -1, v = 0)
+//   → 서쪽(WEST): x = 1394, y = 500 (u = +1, v = 0)
+//   ↑ 남쪽(SOUTH): x = 707, y = 20  (u = 0, v = -1)
+//   ↓ 북쪽(NORTH): x = 707, y = 980 (u = 0, v = +1)
+// ========================================================
+
+export const FACTORY_CALIBRATION_DOC_ID = 'factory-07';
+
+export const DEFAULT_FACTORY_CALIBRATION: FactoryBoundaryCalibration = {
+  id: FACTORY_CALIBRATION_DOC_ID,
+  eastWestLengthMeters: 230,
+  northSouthLengthMeters: 180,
+  east: null,
+  west: null,
+  south: null,
+  north: null,
+  updatedAt: ''
+};
+
+const BP_X_MIN = 20;
+const BP_X_MAX = 1394;
+const BP_Y_MIN = 20;
+const BP_Y_MAX = 980;
+const BP_CENTER_X = (BP_X_MIN + BP_X_MAX) / 2; // 707
+const BP_CENTER_Y = (BP_Y_MIN + BP_Y_MAX) / 2; // 500
+const BP_HALF_W = (BP_X_MAX - BP_X_MIN) / 2;   // 687
+const BP_HALF_H = (BP_Y_MAX - BP_Y_MIN) / 2;   // 480
+
+const METERS_PER_DEG_LAT = 110946.0;
+
+export interface CalibrationBasis {
+  refLat: number;
+  refLng: number;
+  metersPerDegLat: number;
+  metersPerDegLng: number;
+  centerX: number;
+  centerY: number;
+  centerLat: number;
+  centerLng: number;
+  hu: { x: number; y: number }; // East->West half-axis vector in local meters
+  hv: { x: number; y: number }; // South->North half-axis vector in local meters
+  eastWestLengthMeters: number;
+  northSouthLengthMeters: number;
+  rotationDeg: number;
+  gpsMeasuredEW?: number;
+  gpsMeasuredNS?: number;
+  capturedCount: number;
+}
+
+const isValidGpsPoint = (pt?: CardinalGpsPoint | null): pt is CardinalGpsPoint => {
+  return Boolean(
+    pt &&
+    typeof pt.lat === 'number' &&
+    typeof pt.lng === 'number' &&
+    Number.isFinite(pt.lat) &&
+    Number.isFinite(pt.lng) &&
+    Math.abs(pt.lat) > 1 &&
+    Math.abs(pt.lng) > 1
+  );
+};
+
+export const computeHaversineMeters = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+  const R = 6371000;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c * 10) / 10;
+};
+
+export const computeCalibrationBasis = (cal: FactoryBoundaryCalibration): CalibrationBasis | null => {
+  const anchors: Array<{
+    key: 'east' | 'west' | 'south' | 'north';
+    pt: CardinalGpsPoint;
+    u: number;
+    v: number;
+  }> = [];
+
+  if (isValidGpsPoint(cal.east)) anchors.push({ key: 'east', pt: cal.east, u: -1, v: 0 });
+  if (isValidGpsPoint(cal.west)) anchors.push({ key: 'west', pt: cal.west, u: 1, v: 0 });
+  if (isValidGpsPoint(cal.south)) anchors.push({ key: 'south', pt: cal.south, u: 0, v: -1 });
+  if (isValidGpsPoint(cal.north)) anchors.push({ key: 'north', pt: cal.north, u: 0, v: 1 });
+
+  if (anchors.length === 0) return null;
+
+  const refLat = anchors.reduce((acc, a) => acc + a.pt.lat, 0) / anchors.length;
+  const refLng = anchors.reduce((acc, a) => acc + a.pt.lng, 0) / anchors.length;
+  const metersPerDegLng = 111320.0 * Math.cos((refLat * Math.PI) / 180);
+
+  const toMeters = (pt: CardinalGpsPoint) => ({
+    x: (pt.lng - refLng) * metersPerDegLng,
+    y: (pt.lat - refLat) * METERS_PER_DEG_LAT
+  });
+
+  const eastWestLengthMeters = Math.max(10, Number(cal.eastWestLengthMeters) || 230);
+  const northSouthLengthMeters = Math.max(10, Number(cal.northSouthLengthMeters) || 180);
+  const halfEW = eastWestLengthMeters / 2;
+  const halfNS = northSouthLengthMeters / 2;
+
+  const normalizeVec = (vx: number, vy: number): { x: number; y: number } | null => {
+    const len = Math.hypot(vx, vy);
+    if (len < 1.0) return null;
+    return { x: vx / len, y: vy / len };
+  };
+
+  let eu: { x: number; y: number } | null = null;
+  let ev: { x: number; y: number } | null = null;
+  let gpsMeasuredEW: number | undefined;
+  let gpsMeasuredNS: number | undefined;
+
+  if (isValidGpsPoint(cal.east) && isValidGpsPoint(cal.west)) {
+    const em = toMeters(cal.east);
+    const wm = toMeters(cal.west);
+    const dx = wm.x - em.x;
+    const dy = wm.y - em.y;
+    gpsMeasuredEW = Math.round(Math.hypot(dx, dy) * 10) / 10;
+    eu = normalizeVec(dx, dy);
+  }
+
+  if (isValidGpsPoint(cal.south) && isValidGpsPoint(cal.north)) {
+    const sm = toMeters(cal.south);
+    const nm = toMeters(cal.north);
+    const dx = nm.x - sm.x;
+    const dy = nm.y - sm.y;
+    gpsMeasuredNS = Math.round(Math.hypot(dx, dy) * 10) / 10;
+    ev = normalizeVec(dx, dy);
+  }
+
+  // Fill missing orthogonal axis by 90-degree rotation consistent with South-up layout:
+  // Unrotated South-up blueprint has eu = (-1, 0) [West], ev = (0, +1) [North] -> clockwise rotation: ev = (eu.y, -eu.x)
+  if (eu && !ev) {
+    ev = { x: eu.y, y: -eu.x };
+  } else if (ev && !eu) {
+    eu = { x: -ev.y, y: ev.x };
+  } else if (!eu && !ev) {
+    if (anchors.length >= 2) {
+      // Two adjacent walls (e.g. East + South): estimate building rotation from their vector
+      const a0 = anchors[0];
+      const a1 = anchors[1];
+      const p0 = toMeters(a0.pt);
+      const p1 = toMeters(a1.pt);
+      const measDx = p1.x - p0.x;
+      const measDy = p1.y - p0.y;
+      const unrotDx = (a1.u - a0.u) * halfEW * -1; // unrotated eu.x = -1
+      const unrotDy = (a1.v - a0.v) * halfNS * 1;  // unrotated ev.y = +1
+      if (Math.hypot(measDx, measDy) >= 1 && Math.hypot(unrotDx, unrotDy) >= 1) {
+        const theta = Math.atan2(measDy, measDx) - Math.atan2(unrotDy, unrotDx);
+        eu = { x: -Math.cos(theta), y: -Math.sin(theta) };
+        ev = { x: -Math.sin(theta), y: Math.cos(theta) };
+      }
+    }
+    if (!eu || !ev) {
+      eu = { x: -1, y: 0 };
+      ev = { x: 0, y: 1 };
+    }
+  }
+
+  const hu = { x: eu.x * halfEW, y: eu.y * halfEW };
+  const hv = { x: ev.x * halfNS, y: ev.y * halfNS };
+
+  // Compute implied center across all captured cardinal points
+  let sumCx = 0;
+  let sumCy = 0;
+  anchors.forEach(a => {
+    const pm = toMeters(a.pt);
+    sumCx += pm.x - a.u * hu.x - a.v * hv.x;
+    sumCy += pm.y - a.u * hu.y - a.v * hv.y;
+  });
+  const centerX = sumCx / anchors.length;
+  const centerY = sumCy / anchors.length;
+
+  const centerLat = Number((refLat + centerY / METERS_PER_DEG_LAT).toFixed(7));
+  const centerLng = Number((refLng + centerX / metersPerDegLng).toFixed(7));
+  const rotationDeg = Math.round(((Math.atan2(-eu.y, -eu.x) * 180) / Math.PI) * 10) / 10;
+
+  return {
+    refLat,
+    refLng,
+    metersPerDegLat: METERS_PER_DEG_LAT,
+    metersPerDegLng,
+    centerX,
+    centerY,
+    centerLat,
+    centerLng,
+    hu,
+    hv,
+    eastWestLengthMeters,
+    northSouthLengthMeters,
+    rotationDeg,
+    gpsMeasuredEW,
+    gpsMeasuredNS,
+    capturedCount: anchors.length
+  };
+};
+
+export const blueprintToGps = (
+  mapX: number,
+  mapY: number,
+  basis: CalibrationBasis
+): { lat: number; lng: number } => {
+  const u = (mapX - BP_CENTER_X) / BP_HALF_W;
+  const v = (mapY - BP_CENTER_Y) / BP_HALF_H;
+  const mx = basis.centerX + u * basis.hu.x + v * basis.hv.x;
+  const my = basis.centerY + u * basis.hu.y + v * basis.hv.y;
+  return {
+    lat: Number((basis.refLat + my / basis.metersPerDegLat).toFixed(7)),
+    lng: Number((basis.refLng + mx / basis.metersPerDegLng).toFixed(7))
+  };
+};
+
+export const gpsToBlueprint = (
+  lat: number,
+  lng: number,
+  basis: CalibrationBasis
+): { mapX: number; mapY: number; isInsideFactory: boolean; u: number; v: number } => {
+  const px = (lng - basis.refLng) * basis.metersPerDegLng - basis.centerX;
+  const py = (lat - basis.refLat) * basis.metersPerDegLat - basis.centerY;
+  const det = basis.hu.x * basis.hv.y - basis.hu.y * basis.hv.x;
+
+  if (Math.abs(det) < 1e-6) {
+    return { mapX: BP_CENTER_X, mapY: BP_CENTER_Y, isInsideFactory: false, u: 0, v: 0 };
+  }
+
+  const u = (px * basis.hv.y - py * basis.hv.x) / det;
+  const v = (basis.hu.x * py - basis.hu.y * px) / det;
+  const isInsideFactory = Math.abs(u) <= 1.08 && Math.abs(v) <= 1.08;
+
+  const mapX = Math.max(BP_X_MIN, Math.min(BP_X_MAX, Math.round(BP_CENTER_X + u * BP_HALF_W)));
+  const mapY = Math.max(BP_Y_MIN, Math.min(BP_Y_MAX, Math.round(BP_CENTER_Y + v * BP_HALF_H)));
+
+  return { mapX, mapY, isInsideFactory, u, v };
+};
+
+export const generateCalibratedJigGps = (
+  jigs: FactoryJig[],
+  cal: FactoryBoundaryCalibration
+): { basis: CalibrationBasis | null; calibratedJigs: FactoryJig[] } => {
+  const basis = computeCalibrationBasis(cal);
+  if (!basis) {
+    return { basis: null, calibratedJigs: jigs };
+  }
+
+  const nowIso = new Date().toISOString();
+  const calibratedJigs = jigs.map(jig => {
+    const cx = jig.x + jig.width / 2;
+    const cy = jig.y + jig.height / 2;
+    const center = blueprintToGps(cx, cy, basis);
+
+    const widthMeters = Math.round(((jig.width / (BP_X_MAX - BP_X_MIN)) * basis.eastWestLengthMeters) * 10) / 10;
+    const heightMeters = Math.round(((jig.height / (BP_Y_MAX - BP_Y_MIN)) * basis.northSouthLengthMeters) * 10) / 10;
+    const gpsRadiusMeters = Math.max(5, Math.round(Math.max(widthMeters, heightMeters) / 2));
+
+    return {
+      ...jig,
+      centerLat: center.lat,
+      centerLng: center.lng,
+      gpsWidthMeters: widthMeters,
+      gpsHeightMeters: heightMeters,
+      gpsRadiusMeters,
+      gpsCalibratedAt: nowIso
+    };
+  });
+
+  return { basis, calibratedJigs };
+};
+
+export const fetchFactoryCalibration = async (): Promise<FactoryBoundaryCalibration | null> => {
+  try {
+    const snap = await getDoc(doc(db, 'factoryCalibration', FACTORY_CALIBRATION_DOC_ID));
+    if (!snap.exists()) return null;
+    return { ...DEFAULT_FACTORY_CALIBRATION, ...snap.data() } as FactoryBoundaryCalibration;
+  } catch (err) {
+    console.error('Error fetching factory calibration:', err);
+    return null;
+  }
+};
+
+export const saveFactoryCalibration = async (calibration: FactoryBoundaryCalibration): Promise<void> => {
+  try {
+    await setDoc(
+      doc(db, 'factoryCalibration', FACTORY_CALIBRATION_DOC_ID),
+      calibration,
+      { merge: true }
+    );
+  } catch (err) {
+    console.error('Error saving factory calibration:', err);
+    handleFirestoreError(err, OperationType.WRITE, `factoryCalibration/${FACTORY_CALIBRATION_DOC_ID}`);
+    throw err;
+  }
+};
+
+export const applyCalibrationToAllJigs = async (
+  jigs: FactoryJig[],
+  cal: FactoryBoundaryCalibration
+): Promise<{ basis: CalibrationBasis; calibratedJigs: FactoryJig[] }> => {
+  const { basis, calibratedJigs } = generateCalibratedJigGps(jigs, cal);
+  if (!basis) {
+    throw new Error('동·서·남·북 중 최소 1개 이상의 GPS 기준점이 등록되어야 블럭 좌표를 산출할 수 있습니다.');
+  }
+
+  const enrichedCal: FactoryBoundaryCalibration = {
+    ...cal,
+    id: FACTORY_CALIBRATION_DOC_ID,
+    centerLat: basis.centerLat,
+    centerLng: basis.centerLng,
+    rotationDeg: basis.rotationDeg,
+    ...(basis.gpsMeasuredEW !== undefined ? { gpsMeasuredEW: basis.gpsMeasuredEW } : {}),
+    ...(basis.gpsMeasuredNS !== undefined ? { gpsMeasuredNS: basis.gpsMeasuredNS } : {}),
+    updatedAt: new Date().toISOString()
+  };
+
+  await saveFactoryCalibration(enrichedCal);
+
+  for (const jig of calibratedJigs) {
+    await setDoc(
+      doc(db, 'factoryJigs', jig.id),
+      {
+        centerLat: jig.centerLat,
+        centerLng: jig.centerLng,
+        gpsWidthMeters: jig.gpsWidthMeters,
+        gpsHeightMeters: jig.gpsHeightMeters,
+        gpsRadiusMeters: jig.gpsRadiusMeters,
+        gpsCalibratedAt: jig.gpsCalibratedAt
+      },
+      { merge: true }
+    );
+  }
+
+  return { basis, calibratedJigs };
+};
+
+
