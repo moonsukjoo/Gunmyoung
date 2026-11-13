@@ -4,7 +4,8 @@ import {
   FactoryGpsRecord, 
   TrackingSlotTime, 
   TRACKING_TIME_SLOTS,
-  BlockDelayLog
+  BlockDelayLog,
+  FactoryBoundaryCalibration
 } from '../types';
 import { 
   FACTORY_BOUNDS, 
@@ -15,7 +16,8 @@ import {
   getWindowForSlot,
   computeZoneDwellHeatmap,
   getHeatmapColors,
-  ZoneDwellMetric
+  ZoneDwellMetric,
+  computeCalibrationBasis
 } from '../services/factoryTrackingService';
 import { 
   Compass, 
@@ -43,6 +45,7 @@ interface FactoryBlueprintMapProps {
   jigs: FactoryJig[];
   records: FactoryGpsRecord[];
   delayLogs?: BlockDelayLog[];
+  calibration?: FactoryBoundaryCalibration | null;
   selectedSlot: TrackingSlotTime;
   onSelectSlot?: (slot: TrackingSlotTime) => void;
   selectedWorkerUid?: string | null;
@@ -56,6 +59,7 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
   jigs,
   records,
   delayLogs = [],
+  calibration = null,
   selectedSlot,
   onSelectSlot,
   selectedWorkerUid,
@@ -64,6 +68,10 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
   selectedJigId,
   isPrintMode = false
 }) => {
+  const calibratedBasis = useMemo(
+    () => (calibration ? computeCalibrationBasis(calibration) : null),
+    [calibration]
+  );
   const [hoveredWorker, setHoveredWorker] = useState<FactoryGpsRecord | null>(null);
   const [hoveredJig, setHoveredJig] = useState<FactoryJig | null>(null);
   const [showPath, setShowPath] = useState(true);
@@ -138,6 +146,11 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                   2시간 GPS 관제
                 </span>
+                {calibratedBasis && (
+                  <span className="text-[10px] font-mono tabular-nums font-bold text-cyan-300">
+                    실측 {calibratedBasis.eastWestLengthMeters}m × {calibratedBasis.northSouthLengthMeters}m · 방위 {calibratedBasis.rotationDeg}°
+                  </span>
+                )}
               </div>
               <h3 className="text-xs sm:text-base font-black text-white truncate">중형선 7공장 지그 및 블럭 체류 현황</h3>
             </div>
@@ -846,33 +859,41 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
           {/* Factory Boundary Directional Labels */}
           {/* Top: South */}
           <g transform="translate(707, 34)">
-            <rect x="-180" y="-12" width="360" height="24" fill="#0f172a" rx="12" stroke="#38bdf8" strokeWidth="1.5" />
-            <text x="0" y="4" textAnchor="middle" fill="#38bdf8" fontSize="11" fontWeight="900" letterSpacing="2">
-              ▲ 위쪽: 남쪽 (SOUTH) • 조업 BAY A 라인 / 안벽 방면 ▲
+            <rect x="-250" y="-12" width="500" height="24" fill="#0f172a" rx="12" stroke="#38bdf8" strokeWidth="1.5" />
+            <text x="0" y="4" textAnchor="middle" fill="#38bdf8" fontSize="11" fontWeight="900" letterSpacing="1.5">
+              {calibration?.south?.lat
+                ? `▲ 남쪽(S): ${calibration.south.lat.toFixed(5)}, ${calibration.south.lng.toFixed(5)} ▲`
+                : '▲ 위쪽: 남쪽 (SOUTH) • 조업 BAY A 라인 / 안벽 방면 ▲'}
             </text>
           </g>
 
           {/* Bottom: North */}
           <g transform="translate(707, 970)">
-            <rect x="-180" y="-12" width="360" height="24" fill="#0f172a" rx="12" stroke="#64748b" strokeWidth="1.5" />
-            <text x="0" y="4" textAnchor="middle" fill="#cbd5e1" fontSize="11" fontWeight="900" letterSpacing="2">
-              ▼ 아래쪽: 북쪽 (NORTH) • 조업 BAY B 라인 / 원자재 반입 방면 ▼
+            <rect x="-250" y="-12" width="500" height="24" fill="#0f172a" rx="12" stroke="#64748b" strokeWidth="1.5" />
+            <text x="0" y="4" textAnchor="middle" fill="#cbd5e1" fontSize="11" fontWeight="900" letterSpacing="1.5">
+              {calibration?.north?.lat
+                ? `▼ 북쪽(N): ${calibration.north.lat.toFixed(5)}, ${calibration.north.lng.toFixed(5)} ▼`
+                : '▼ 아래쪽: 북쪽 (NORTH) • 조업 BAY B 라인 / 원자재 반입 방면 ▼'}
             </text>
           </g>
 
           {/* Left: East */}
           <g transform="translate(30, 500) rotate(-90)">
-            <rect x="-150" y="-12" width="300" height="24" fill="#0f172a" rx="12" stroke="#f59e0b" strokeWidth="1.5" />
-            <text x="0" y="4" textAnchor="middle" fill="#f59e0b" fontSize="11" fontWeight="900" letterSpacing="2">
-              ◀ 왼쪽: 동쪽 (EAST) • 제6공장 연결 & 자재 반입문
+            <rect x="-200" y="-12" width="400" height="24" fill="#0f172a" rx="12" stroke="#f59e0b" strokeWidth="1.5" />
+            <text x="0" y="4" textAnchor="middle" fill="#f59e0b" fontSize="11" fontWeight="900" letterSpacing="1.5">
+              {calibration?.east?.lat
+                ? `◀ 동쪽(E): ${calibration.east.lat.toFixed(5)}, ${calibration.east.lng.toFixed(5)}`
+                : '◀ 왼쪽: 동쪽 (EAST) • 제6공장 연결 & 자재 반입문'}
             </text>
           </g>
 
           {/* Right: West */}
           <g transform="translate(1384, 500) rotate(90)">
-            <rect x="-150" y="-12" width="300" height="24" fill="#0f172a" rx="12" stroke="#f59e0b" strokeWidth="1.5" />
-            <text x="0" y="4" textAnchor="middle" fill="#f59e0b" fontSize="11" fontWeight="900" letterSpacing="2">
-              오른쪽: 서쪽 (WEST) • 완성 블럭 반출문 & 도크 방면 ▶
+            <rect x="-200" y="-12" width="400" height="24" fill="#0f172a" rx="12" stroke="#f59e0b" strokeWidth="1.5" />
+            <text x="0" y="4" textAnchor="middle" fill="#f59e0b" fontSize="11" fontWeight="900" letterSpacing="1.5">
+              {calibration?.west?.lat
+                ? `서쪽(W): ${calibration.west.lat.toFixed(5)}, ${calibration.west.lng.toFixed(5)} ▶`
+                : '오른쪽: 서쪽 (WEST) • 완성 블럭 반출문 & 도크 방면 ▶'}
             </text>
           </g>
 

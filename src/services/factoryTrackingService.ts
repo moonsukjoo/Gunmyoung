@@ -532,7 +532,15 @@ export const fetchDwellSummariesByDate = async (date: string): Promise<WorkerDwe
 
 // Seed realistic simulation data for demonstration & testing
 export const seedRealisticTrackingData = async (targetDate: string): Promise<{ recordsCount: number; workersCount: number }> => {
-  const jigs = DEFAULT_FACTORY_JIGS;
+  const [fetchedJigs, fetchedCalibration] = await Promise.all([
+    fetchFactoryJigs(),
+    fetchFactoryCalibration()
+  ]);
+  const jigs = reconcileJigsWithCalibration(
+    fetchedJigs.length > 0 ? fetchedJigs : DEFAULT_FACTORY_JIGS,
+    fetchedCalibration
+  );
+  const basis = fetchedCalibration ? computeCalibrationBasis(fetchedCalibration) : null;
   
   // Sample piecework (물량팀) and regular workers
   const sampleWorkers = [
@@ -562,7 +570,6 @@ export const seedRealisticTrackingData = async (targetDate: string): Promise<{ r
       let mapX: number;
       let mapY: number;
 
-      const isBreakSlot = slot === '09:45' || slot === '14:45';
       const isRandomAway = Math.random() > worker.compliance;
 
       if (isRandomAway) {
@@ -586,6 +593,12 @@ export const seedRealisticTrackingData = async (targetDate: string): Promise<{ r
 
       const locInfo = identifyLocationFromCoords(mapX, mapY, worker.assignedJig, jigs);
       const recordId = `${worker.uid}_${targetDate}_${sIdx}`;
+      const gpsCoord = basis
+        ? blueprintToGps(mapX, mapY, basis)
+        : {
+            lat: Number((FACTORY_BOUNDS.centerLat + ((mapY - 500) / 1000) * FACTORY_BOUNDS.latSpan).toFixed(7)),
+            lng: Number((FACTORY_BOUNDS.centerLng - ((mapX - 707) / 1414) * FACTORY_BOUNDS.lngSpan).toFixed(7))
+          };
 
       const record: FactoryGpsRecord = {
         id: recordId,
@@ -597,8 +610,8 @@ export const seedRealisticTrackingData = async (targetDate: string): Promise<{ r
         employeeId: worker.empId,
         teamName: worker.team,
         jobRole: worker.role,
-        latitude: FACTORY_BOUNDS.centerLat + (Math.random() - 0.5) * 0.0005,
-        longitude: FACTORY_BOUNDS.centerLng + (Math.random() - 0.5) * 0.0005,
+        latitude: gpsCoord.lat,
+        longitude: gpsCoord.lng,
         accuracy: 3.5,
         mapX: Math.round(mapX),
         mapY: Math.round(mapY),
@@ -1330,23 +1343,52 @@ export const gpsToBlueprint = (
   lat: number,
   lng: number,
   basis: CalibrationBasis
-): { mapX: number; mapY: number; isInsideFactory: boolean; u: number; v: number } => {
+): {
+  mapX: number;
+  mapY: number;
+  rawMapX: number;
+  rawMapY: number;
+  isInsideFactory: boolean;
+  boundaryDistanceMeters: number;
+  u: number;
+  v: number;
+} => {
   const px = (lng - basis.refLng) * basis.metersPerDegLng - basis.centerX;
   const py = (lat - basis.refLat) * basis.metersPerDegLat - basis.centerY;
   const det = basis.hu.x * basis.hv.y - basis.hu.y * basis.hv.x;
 
   if (Math.abs(det) < 1e-6) {
-    return { mapX: BP_CENTER_X, mapY: BP_CENTER_Y, isInsideFactory: false, u: 0, v: 0 };
+    return {
+      mapX: BP_CENTER_X,
+      mapY: BP_CENTER_Y,
+      rawMapX: BP_CENTER_X,
+      rawMapY: BP_CENTER_Y,
+      isInsideFactory: false,
+      boundaryDistanceMeters: 9999,
+      u: 0,
+      v: 0
+    };
   }
 
   const u = (px * basis.hv.y - py * basis.hv.x) / det;
   const v = (basis.hu.x * py - basis.hu.y * px) / det;
-  const isInsideFactory = Math.abs(u) <= 1.08 && Math.abs(v) <= 1.08;
 
-  const mapX = Math.max(BP_X_MIN, Math.min(BP_X_MAX, Math.round(BP_CENTER_X + u * BP_HALF_W)));
-  const mapY = Math.max(BP_Y_MIN, Math.min(BP_Y_MAX, Math.round(BP_CENTER_Y + v * BP_HALF_H)));
+  // Compute physical meters outside factory wall box ([-halfEW, halfEW] x [-halfNS, halfNS])
+  const halfEW = basis.eastWestLengthMeters / 2;
+  const halfNS = basis.northSouthLengthMeters / 2;
+  const overEW = Math.max(0, (Math.abs(u) - 1) * halfEW);
+  const overNS = Math.max(0, (Math.abs(v) - 1) * halfNS);
+  const boundaryDistanceMeters = Math.round(Math.hypot(overEW, overNS) * 10) / 10;
 
-  return { mapX, mapY, isInsideFactory, u, v };
+  // Allow up to 18m indoor GPS drift beyond exact exterior walls to still count inside perimeter
+  const isInsideFactory = boundaryDistanceMeters <= 18;
+
+  const rawMapX = Math.round(BP_CENTER_X + u * BP_HALF_W);
+  const rawMapY = Math.round(BP_CENTER_Y + v * BP_HALF_H);
+  const mapX = Math.max(BP_X_MIN, Math.min(BP_X_MAX, rawMapX));
+  const mapY = Math.max(BP_Y_MIN, Math.min(BP_Y_MAX, rawMapY));
+
+  return { mapX, mapY, rawMapX, rawMapY, isInsideFactory, boundaryDistanceMeters, u, v };
 };
 
 export const generateCalibratedJigGps = (
@@ -1358,7 +1400,7 @@ export const generateCalibratedJigGps = (
     return { basis: null, calibratedJigs: jigs };
   }
 
-  const nowIso = new Date().toISOString();
+  const nowIso = cal.updatedAt || new Date().toISOString();
   const calibratedJigs = jigs.map(jig => {
     const cx = jig.x + jig.width / 2;
     const cy = jig.y + jig.height / 2;
@@ -1380,6 +1422,149 @@ export const generateCalibratedJigGps = (
   });
 
   return { basis, calibratedJigs };
+};
+
+/**
+ * Reconciles fetched JIGs against the saved FactoryBoundaryCalibration so every JIG
+ * immediately reflects the latest calibrated coordinates and radius.
+ */
+export const reconcileJigsWithCalibration = (
+  jigs: FactoryJig[],
+  cal: FactoryBoundaryCalibration | null
+): FactoryJig[] => {
+  if (!cal) return jigs;
+  const { basis, calibratedJigs } = generateCalibratedJigGps(jigs, cal);
+  if (!basis) return jigs;
+
+  return calibratedJigs.map((cj, idx) => {
+    const orig = jigs[idx];
+    const hasRecentPersisted =
+      orig.centerLat !== undefined &&
+      orig.centerLng !== undefined &&
+      orig.gpsCalibratedAt &&
+      cal.updatedAt &&
+      orig.gpsCalibratedAt >= cal.updatedAt;
+    return hasRecentPersisted ? orig : cj;
+  });
+};
+
+/**
+ * High-precision GPS-to-JIG identification combining affine projection with
+ * nearest-JIG Haversine radius matching to handle indoor steel roof GPS drift.
+ */
+export const identifyLocationFromGps = (
+  lat: number,
+  lng: number,
+  assignedJigId: string,
+  jigs: FactoryJig[],
+  cal: FactoryBoundaryCalibration | null
+): {
+  mapX: number;
+  mapY: number;
+  isInsideFactory: boolean;
+  boundaryDistanceMeters: number;
+  nearestJigId?: string;
+  nearestJigDistanceMeters?: number;
+  locationType: FactoryGpsRecord['locationType'];
+  locationLabel: string;
+  jigId?: string;
+  jigName?: string;
+  blockName?: string;
+  isAtAssignedJig: boolean;
+  status: FactoryGpsRecord['status'];
+} => {
+  const basis = cal ? computeCalibrationBasis(cal) : null;
+  if (!basis) {
+    const fallbackJig = jigs.find(j => j.id === assignedJigId) || jigs[0];
+    const mapX = fallbackJig ? Math.round(fallbackJig.x + fallbackJig.width / 2) : BP_CENTER_X;
+    const mapY = fallbackJig ? Math.round(fallbackJig.y + fallbackJig.height / 2) : BP_CENTER_Y;
+    const loc = identifyLocationFromCoords(mapX, mapY, assignedJigId, jigs);
+    return {
+      ...loc,
+      mapX,
+      mapY,
+      isInsideFactory: false,
+      boundaryDistanceMeters: 0
+    };
+  }
+
+  const effectiveJigs = reconcileJigsWithCalibration(jigs, cal);
+  const mapped = gpsToBlueprint(lat, lng, basis);
+
+  // Find closest JIG center in real meters
+  let nearestJig: FactoryJig | undefined;
+  let nearestDist = Infinity;
+  effectiveJigs.forEach(j => {
+    if (j.centerLat !== undefined && j.centerLng !== undefined) {
+      const d = computeHaversineMeters(lat, lng, j.centerLat, j.centerLng);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearestJig = j;
+      }
+    }
+  });
+  const roundedNearestDist = Number.isFinite(nearestDist) ? Math.round(nearestDist * 10) / 10 : undefined;
+
+  if (!mapped.isInsideFactory) {
+    return {
+      mapX: mapped.mapX,
+      mapY: mapped.mapY,
+      isInsideFactory: false,
+      boundaryDistanceMeters: mapped.boundaryDistanceMeters,
+      nearestJigId: nearestJig?.id,
+      nearestJigDistanceMeters: roundedNearestDist,
+      locationType: 'OUT_OF_BOUNDS',
+      locationLabel: `7공장 외곽 이탈 (경계 밖 약 ${Math.round(mapped.boundaryDistanceMeters)}m)`,
+      isAtAssignedJig: false,
+      status: 'AWAY'
+    };
+  }
+
+  const coordLoc = identifyLocationFromCoords(mapped.mapX, mapped.mapY, assignedJigId, effectiveJigs);
+  if (coordLoc.locationType === 'JIG' || coordLoc.locationType === 'REST_AREA' || coordLoc.locationType === 'RESTROOM') {
+    return {
+      ...coordLoc,
+      mapX: mapped.mapX,
+      mapY: mapped.mapY,
+      isInsideFactory: true,
+      boundaryDistanceMeters: mapped.boundaryDistanceMeters,
+      nearestJigId: nearestJig?.id,
+      nearestJigDistanceMeters: roundedNearestDist
+    };
+  }
+
+  // If on corridor gap between JIGs, snap to nearest JIG if within geofence radius + 8m indoor drift buffer
+  if (nearestJig && roundedNearestDist !== undefined) {
+    const captureRadius = (nearestJig.gpsRadiusMeters || 12) + 8;
+    if (roundedNearestDist <= captureRadius) {
+      const isAssigned = nearestJig.id === assignedJigId;
+      return {
+        mapX: mapped.mapX,
+        mapY: mapped.mapY,
+        isInsideFactory: true,
+        boundaryDistanceMeters: mapped.boundaryDistanceMeters,
+        nearestJigId: nearestJig.id,
+        nearestJigDistanceMeters: roundedNearestDist,
+        locationType: 'JIG',
+        locationLabel: `${nearestJig.jigName} (${nearestJig.blockName})`,
+        jigId: nearestJig.id,
+        jigName: nearestJig.jigName,
+        blockName: nearestJig.blockName,
+        isAtAssignedJig: isAssigned,
+        status: isAssigned ? 'NORMAL' : 'AWAY'
+      };
+    }
+  }
+
+  return {
+    ...coordLoc,
+    mapX: mapped.mapX,
+    mapY: mapped.mapY,
+    isInsideFactory: true,
+    boundaryDistanceMeters: mapped.boundaryDistanceMeters,
+    nearestJigId: nearestJig?.id,
+    nearestJigDistanceMeters: roundedNearestDist
+  };
 };
 
 export const fetchFactoryCalibration = async (): Promise<FactoryBoundaryCalibration | null> => {

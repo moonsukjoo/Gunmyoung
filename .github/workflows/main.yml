@@ -56,6 +56,16 @@ jobs:
       - name: "Capacitor 싱크 및 리소스 동기화"
         run: npx cap sync android
 
+      - name: "AndroidManifest 위치(GPS) 권한 자동 주입"
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST" ]; then
+            if ! grep -q "android.permission.ACCESS_FINE_LOCATION" "$MANIFEST"; then
+              sed -i 's|<application|    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-feature android:name="android.hardware.location.gps" android:required="false" />\n\n    <application|g' "$MANIFEST"
+            fi
+            cat "$MANIFEST"
+          fi
+
       - name: "중복 클래스, 빌드 에러 및 파일 프로바이더 경로 보강"
         run: |
           echo "configurations.all { resolutionStrategy { force 'androidx.core:core:1.13.1'; force 'org.jetbrains.kotlin:kotlin-stdlib:2.2.20'; force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.2.20'; force 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2'; force 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2' } }" >> android/app/build.gradle

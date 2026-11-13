@@ -7,11 +7,11 @@ import {
 import {
   DEFAULT_FACTORY_CALIBRATION,
   applyCalibrationToAllJigs,
-  computeHaversineMeters,
-  generateCalibratedJigGps,
-  gpsToBlueprint,
-  identifyLocationFromCoords
+  identifyLocationFromGps,
+  generateCalibratedJigGps
 } from '../services/factoryTrackingService';
+import { saveAttendanceLocationSettings } from '../services/autoAttendanceService';
+import { getCurrentGpsPosition, getGpsDiagnosticInfo } from '../lib/geolocationHelper';
 import {
   Compass,
   Crosshair,
@@ -20,7 +20,10 @@ import {
   CheckCircle2,
   RotateCcw,
   Navigation,
-  Save
+  Save,
+  Smartphone,
+  ShieldCheck,
+  AlertTriangle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -91,14 +94,18 @@ export const FactoryGpsCalibrationPanel: React.FC<FactoryGpsCalibrationPanelProp
   const [capturingDir, setCapturingDir] = useState<CardinalDirection | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isTestingMatch, setIsTestingMatch] = useState(false);
+  const [isSyncingAttendance, setIsSyncingAttendance] = useState(false);
   const [testMatchResult, setTestMatchResult] = useState<{
     lat: number;
     lng: number;
     accuracy: number;
+    source: string;
     matchedLabel: string;
     isInsideFactory: boolean;
     nearestDistanceMeters?: number;
   } | null>(null);
+
+  const gpsDiag = useMemo(() => getGpsDiagnosticInfo(), []);
 
   useEffect(() => {
     if (calibration) {
@@ -121,43 +128,33 @@ export const FactoryGpsCalibrationPanel: React.FC<FactoryGpsCalibrationPanelProp
     }).length;
   }, [draft]);
 
-  const handleCaptureDirectionGps = (dir: CardinalDirection) => {
-    if (!navigator.geolocation) {
-      toast.error('이 기기/브라우저에서는 GPS 위치 측정을 지원하지 않습니다.');
-      return;
-    }
-
+  const handleCaptureDirectionGps = async (dir: CardinalDirection) => {
     setCapturingDir(dir);
-    toast.loading(`${DIRECTION_META[dir].title} GPS 좌표를 정밀 수신 중...`, { id: `gps-cap-${dir}` });
+    toast.loading(`${DIRECTION_META[dir].title} GPS 좌표를 수신 중...`, { id: `gps-cap-${dir}` });
 
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = Number(pos.coords.latitude.toFixed(7));
-        const lng = Number(pos.coords.longitude.toFixed(7));
-        const accuracy = Math.round(pos.coords.accuracy * 10) / 10;
+    try {
+      const pos = await getCurrentGpsPosition({ timeoutMs: 12000, maximumAgeMs: 0 });
+      setDraft(prev => ({
+        ...prev,
+        [dir]: {
+          lat: pos.lat,
+          lng: pos.lng,
+          accuracy: pos.accuracy,
+          capturedAt: new Date().toISOString(),
+          label: DIRECTION_META[dir].title
+        }
+      }));
 
-        setDraft(prev => ({
-          ...prev,
-          [dir]: {
-            lat,
-            lng,
-            accuracy,
-            capturedAt: new Date().toISOString(),
-            label: DIRECTION_META[dir].title
-          }
-        }));
-
-        toast.dismiss(`gps-cap-${dir}`);
-        toast.success(`${DIRECTION_META[dir].title} GPS 등록 완료 (오차 ±${accuracy}m)`);
-        setCapturingDir(null);
-      },
-      (err) => {
-        toast.dismiss(`gps-cap-${dir}`);
-        toast.error(`GPS 수신 실패: ${err.message}`);
-        setCapturingDir(null);
-      },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
-    );
+      toast.dismiss(`gps-cap-${dir}`);
+      toast.success(
+        `${DIRECTION_META[dir].title} GPS 등록 완료 (오차 ±${pos.accuracy}m${pos.isFallbackCoarse ? ' · 실내 보정' : ''})`
+      );
+    } catch (err: any) {
+      toast.dismiss(`gps-cap-${dir}`);
+      toast.error(err?.message || 'GPS 수신에 실패했습니다.');
+    } finally {
+      setCapturingDir(null);
+    }
   };
 
   const handleManualCoordChange = (dir: CardinalDirection, field: 'lat' | 'lng', rawVal: string) => {
@@ -220,55 +217,69 @@ export const FactoryGpsCalibrationPanel: React.FC<FactoryGpsCalibrationPanelProp
     }
   };
 
-  const handleTestCurrentPositionMatch = () => {
+  const handleSyncToAttendanceBase = async () => {
     if (!preview.basis) {
-      toast.error('먼저 동·서·남·북 기준점 GPS를 1개 이상 등록해 주세요.');
+      toast.error('먼저 동·서·남·북 기준점 GPS가 등록되어 있어야 합니다.');
       return;
     }
-    if (!navigator.geolocation) {
-      toast.error('위치 정보를 지원하지 않는 기기입니다.');
+    setIsSyncingAttendance(true);
+    try {
+      await saveAttendanceLocationSettings(
+        {
+          centerLat: preview.basis.centerLat,
+          centerLng: preview.basis.centerLng,
+          locationName: '건명기업 중형선 7공장 (실측 기준)'
+        },
+        userName || '대표이사'
+      );
+      toast.success(
+        `전사 출퇴근 GPS 기준점이 7공장 중심(${preview.basis.centerLat.toFixed(5)}, ${preview.basis.centerLng.toFixed(5)})으로 재정립되었습니다.`
+      );
+    } catch (err) {
+      console.error(err);
+      toast.error('출퇴근 GPS 기준점 동기화 중 오류가 발생했습니다.');
+    } finally {
+      setIsSyncingAttendance(false);
+    }
+  };
+
+  const handleTestCurrentPositionMatch = async () => {
+    if (!preview.basis) {
+      toast.error('먼저 동·서·남·북 기준점 GPS를 1개 이상 등록해 주세요.');
       return;
     }
 
     setIsTestingMatch(true);
     toast.loading('현재 서 계신 위치로 가장 가까운 정반 블럭을 판정 중...', { id: 'test-match' });
 
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        const accuracy = Math.round(pos.coords.accuracy * 10) / 10;
-        const mapped = gpsToBlueprint(lat, lng, preview.basis!);
-        const loc = identifyLocationFromCoords(mapped.mapX, mapped.mapY, preview.calibratedJigs[0]?.id || 'jig-01', preview.calibratedJigs);
+    try {
+      const pos = await getCurrentGpsPosition({ timeoutMs: 12000, maximumAgeMs: 0 });
+      const loc = identifyLocationFromGps(
+        pos.lat,
+        pos.lng,
+        preview.calibratedJigs[0]?.id || 'jig-01',
+        preview.calibratedJigs,
+        draft
+      );
 
-        let nearestDist: number | undefined;
-        if (loc.jigId) {
-          const matchedJig = preview.calibratedJigs.find(j => j.id === loc.jigId);
-          if (matchedJig?.centerLat && matchedJig?.centerLng) {
-            nearestDist = computeHaversineMeters(lat, lng, matchedJig.centerLat, matchedJig.centerLng);
-          }
-        }
+      setTestMatchResult({
+        lat: pos.lat,
+        lng: pos.lng,
+        accuracy: pos.accuracy,
+        source: pos.source === 'CAPACITOR_NATIVE' ? '앱 네이티브 GPS' : '웹 브라우저 GPS',
+        matchedLabel: loc.locationLabel,
+        isInsideFactory: loc.isInsideFactory,
+        nearestDistanceMeters: loc.nearestJigDistanceMeters
+      });
 
-        setTestMatchResult({
-          lat: Number(lat.toFixed(7)),
-          lng: Number(lng.toFixed(7)),
-          accuracy,
-          matchedLabel: loc.locationLabel,
-          isInsideFactory: mapped.isInsideFactory,
-          nearestDistanceMeters: nearestDist
-        });
-
-        toast.dismiss('test-match');
-        toast.success(`현재 위치 판정: ${loc.locationLabel}`);
-        setIsTestingMatch(false);
-      },
-      (err) => {
-        toast.dismiss('test-match');
-        toast.error(`위치 판정 실패: ${err.message}`);
-        setIsTestingMatch(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
+      toast.dismiss('test-match');
+      toast.success(`현재 위치 판정: ${loc.locationLabel}`);
+    } catch (err: any) {
+      toast.dismiss('test-match');
+      toast.error(err?.message || '위치 판정에 실패했습니다.');
+    } finally {
+      setIsTestingMatch(false);
+    }
   };
 
   const renderCardinalBox = (dir: CardinalDirection) => {
@@ -366,14 +377,35 @@ export const FactoryGpsCalibrationPanel: React.FC<FactoryGpsCalibrationPanelProp
         </div>
 
         {preview.basis && (
-          <div className="flex items-center gap-2 text-xs font-mono tabular-nums text-emerald-400 font-bold shrink-0">
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
-            <span>
-              중심 {preview.basis.centerLat.toFixed(5)}, {preview.basis.centerLng.toFixed(5)} · 방위각 {preview.basis.rotationDeg}°
-            </span>
+          <div className="flex flex-col items-start md:items-end gap-1 shrink-0">
+            <div className="flex items-center gap-2 text-xs font-mono tabular-nums text-emerald-400 font-bold">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>
+                중심 {preview.basis.centerLat.toFixed(5)}, {preview.basis.centerLng.toFixed(5)} · 방위각 {preview.basis.rotationDeg}°
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px] font-bold text-muted-foreground">
+              <Smartphone className="w-3.5 h-3.5 text-cyan-400" />
+              <span>
+                {gpsDiag.isNative
+                  ? `Capacitor 네이티브 GPS (${gpsDiag.platform.toUpperCase()})`
+                  : gpsDiag.isSecureContext
+                  ? '웹 브라우저 보안 GPS (HTTPS)'
+                  : '비보안 HTTP 접속 (GPS 차단 가능)'}
+              </span>
+            </div>
           </div>
         )}
       </div>
+
+      {!gpsDiag.isNative && !gpsDiag.isSecureContext && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-start gap-2.5 text-xs text-amber-300 font-bold">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>
+            현재 HTTPS 보안 연결이 아니어서 웹 브라우저 GPS가 차단될 수 있습니다. 깃허브 빌드 APK 앱 또는 HTTPS 주소에서 실행해 주세요.
+          </span>
+        </div>
+      )}
 
       {/* Cardinal Cross Layout (South Top, East Left, Dimensions Center, West Right, North Bottom) */}
       <div className="space-y-3">
@@ -453,7 +485,7 @@ export const FactoryGpsCalibrationPanel: React.FC<FactoryGpsCalibrationPanelProp
                 className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs gap-2 cursor-pointer whitespace-nowrap"
               >
                 <Save className="w-4 h-4 shrink-0" />
-                <span>{isSaving ? '산출 및 저장 중...' : '정반 블럭 10개 GPS 자동 산출 · 저장'}</span>
+                <span>{isSaving ? '재정립 및 저장 중...' : '10개 정반 GPS 재정립 · 저장'}</span>
               </Button>
 
               <Button
@@ -467,19 +499,33 @@ export const FactoryGpsCalibrationPanel: React.FC<FactoryGpsCalibrationPanelProp
                 <span>{isTestingMatch ? '위치 확인 중...' : '현 위치로 정반 매칭 테스트'}</span>
               </Button>
 
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleSyncToAttendanceBase}
+                disabled={isSyncingAttendance || !preview.basis}
+                className="w-full h-9 rounded-xl border-border text-[11px] font-bold gap-1.5 cursor-pointer whitespace-nowrap text-muted-foreground hover:text-foreground"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>{isSyncingAttendance ? '동기화 중...' : '7공장 중심 → 출퇴근 GPS 기준점 동기화'}</span>
+              </Button>
+
               {testMatchResult && (
                 <div className="p-2.5 rounded-xl bg-card border border-cyan-500/40 text-[11px] space-y-1">
-                  <div className="flex items-center justify-between font-bold">
-                    <span className="text-cyan-400">{testMatchResult.matchedLabel}</span>
-                    <span className="font-mono tabular-nums text-muted-foreground">±{testMatchResult.accuracy}m</span>
+                  <div className="flex items-center justify-between font-bold gap-2">
+                    <span className="text-cyan-400 truncate">{testMatchResult.matchedLabel}</span>
+                    <span className="font-mono tabular-nums text-muted-foreground shrink-0">±{testMatchResult.accuracy}m</span>
                   </div>
-                  <div className="font-mono tabular-nums text-[10px] text-muted-foreground flex items-center justify-between">
-                    <span>{testMatchResult.lat}, {testMatchResult.lng}</span>
-                    <span>
+                  <div className="font-mono tabular-nums text-[10px] text-muted-foreground flex items-center justify-between gap-2">
+                    <span className="truncate">{testMatchResult.lat}, {testMatchResult.lng}</span>
+                    <span className="shrink-0">
                       {testMatchResult.nearestDistanceMeters !== undefined
-                        ? `중심거리 ${testMatchResult.nearestDistanceMeters}m`
+                        ? `최근접 ${testMatchResult.nearestDistanceMeters}m`
                         : testMatchResult.isInsideFactory ? '공장 내부' : '공장 외곽'}
                     </span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-bold">
+                    수신: {testMatchResult.source}
                   </div>
                 </div>
               )}

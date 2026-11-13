@@ -29,9 +29,10 @@ import {
   TWO_HOUR_WINDOWS,
   getWindowForSlot,
   fetchFactoryCalibration,
-  computeCalibrationBasis,
-  gpsToBlueprint
+  reconcileJigsWithCalibration,
+  identifyLocationFromGps
 } from '../services/factoryTrackingService';
+import { getCurrentGpsPosition } from '../lib/geolocationHelper';
 import { FactoryBlueprintMap } from '../components/FactoryBlueprintMap';
 import { FactoryGpsCalibrationPanel } from '../components/FactoryGpsCalibrationPanel';
 import { 
@@ -138,7 +139,8 @@ export const FactoryDwellMonitoring: React.FC = () => {
         fetchFactoryCalibration()
       ]);
 
-      setJigs(fetchedJigs.length > 0 ? fetchedJigs : DEFAULT_FACTORY_JIGS);
+      const baseJigs = fetchedJigs.length > 0 ? fetchedJigs : DEFAULT_FACTORY_JIGS;
+      setJigs(reconcileJigsWithCalibration(baseJigs, fetchedCalibration));
       setRecords(fetchedRecords);
       setDwellSummaries(fetchedSummaries);
       setDelayLogs(fetchedDelayLogs);
@@ -169,74 +171,53 @@ export const FactoryDwellMonitoring: React.FC = () => {
     }
   };
 
-  // Check-in current user GPS
+  // Check-in current user GPS (works in both Android APK & Web browser)
   const handleCheckInNow = async () => {
     if (!profile) return;
     toast.loading('현재 GPS 위치를 측정 중입니다...', { id: 'gps-check' });
 
-    if (!navigator.geolocation) {
+    try {
+      const pos = await getCurrentGpsPosition({ timeoutMs: 12000, maximumAgeMs: 0 });
+      const assignedJig = jigs[0];
+      const locInfo = identifyLocationFromGps(pos.lat, pos.lng, assignedJig.id, jigs, calibration);
+
+      const slotIndex = TRACKING_TIME_SLOTS.indexOf(selectedSlot);
+      const recordId = `${profile.uid}_${selectedDate}_${slotIndex >= 0 ? slotIndex : 0}`;
+
+      const record: FactoryGpsRecord = {
+        id: recordId,
+        date: selectedDate,
+        slot: selectedSlot,
+        slotIndex: slotIndex >= 0 ? slotIndex : 0,
+        workerUid: profile.uid,
+        workerName: profile.displayName || '현장작업자',
+        employeeId: profile.employeeId || 'EMP',
+        teamName: profile.departmentName || '외주물량1팀',
+        jobRole: profile.jobRole || '취부사',
+        latitude: pos.lat,
+        longitude: pos.lng,
+        accuracy: pos.accuracy,
+        mapX: locInfo.mapX,
+        mapY: locInfo.mapY,
+        locationType: locInfo.locationType,
+        jigId: locInfo.jigId,
+        jigName: locInfo.jigName,
+        blockName: locInfo.blockName,
+        locationLabel: locInfo.locationLabel,
+        isAtAssignedJig: locInfo.isAtAssignedJig,
+        status: locInfo.status,
+        stayMinutesInSlot: 60,
+        recordedAt: new Date().toISOString()
+      };
+
+      await setDoc(doc(db, 'factoryGpsRecords', record.id), record, { merge: true });
       toast.dismiss('gps-check');
-      toast.error('단말기가 위치 정보를 지원하지 않습니다.');
-      return;
+      toast.success(`[${selectedSlot}] ${locInfo.locationLabel} 위치 체크인이 기록되었습니다!`);
+      await loadData();
+    } catch (err: any) {
+      toast.dismiss('gps-check');
+      toast.error(err?.message || 'GPS 체크인에 실패했습니다.');
     }
-
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const assignedJig = jigs[0];
-          const basis = calibration ? computeCalibrationBasis(calibration) : null;
-          const projected = basis
-            ? gpsToBlueprint(pos.coords.latitude, pos.coords.longitude, basis)
-            : null;
-
-          const mapX = projected ? projected.mapX : assignedJig.x + 30 + Math.random() * 80;
-          const mapY = projected ? projected.mapY : assignedJig.y + 30 + Math.random() * 80;
-          const locInfo = identifyLocationFromCoords(mapX, mapY, assignedJig.id, jigs);
-
-          const slotIndex = TRACKING_TIME_SLOTS.indexOf(selectedSlot);
-          const recordId = `${profile.uid}_${selectedDate}_${slotIndex >= 0 ? slotIndex : 0}`;
-
-          const record: FactoryGpsRecord = {
-            id: recordId,
-            date: selectedDate,
-            slot: selectedSlot,
-            slotIndex: slotIndex >= 0 ? slotIndex : 0,
-            workerUid: profile.uid,
-            workerName: profile.displayName || '현장작업자',
-            employeeId: profile.employeeId || 'EMP',
-            teamName: profile.departmentName || '외주물량1팀',
-            jobRole: profile.jobRole || '취부사',
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-            accuracy: pos.coords.accuracy,
-            mapX: Math.round(mapX),
-            mapY: Math.round(mapY),
-            locationType: locInfo.locationType,
-            jigId: locInfo.jigId,
-            jigName: locInfo.jigName,
-            blockName: locInfo.blockName,
-            locationLabel: locInfo.locationLabel,
-            isAtAssignedJig: locInfo.isAtAssignedJig,
-            status: locInfo.status,
-            stayMinutesInSlot: 60,
-            recordedAt: new Date().toISOString()
-          };
-
-          await setDoc(doc(db, 'factoryGpsRecords', record.id), record, { merge: true });
-          toast.dismiss('gps-check');
-          toast.success(`[${selectedSlot}] ${locInfo.locationLabel} 위치 체크인이 기록되었습니다!`);
-          await loadData();
-        } catch (e) {
-          toast.dismiss('gps-check');
-          toast.error('위치 저장에 실패했습니다.');
-        }
-      },
-      (err) => {
-        toast.dismiss('gps-check');
-        toast.error(`GPS 수신 오류: ${err.message}`);
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
   };
 
   const openJigEditModal = (jig: FactoryJig) => {
@@ -549,6 +530,7 @@ export const FactoryDwellMonitoring: React.FC = () => {
             jigs={jigs}
             records={records}
             delayLogs={delayLogs}
+            calibration={calibration}
             selectedSlot={selectedSlot}
             onSelectSlot={setSelectedSlot}
             selectedWorkerUid={selectedWorkerUid}

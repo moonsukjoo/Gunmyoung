@@ -29,7 +29,8 @@ import {
   TWO_HOUR_WINDOWS,
   getWindowForSlot,
   getHeatmapColors,
-  fetchFactoryCalibration
+  fetchFactoryCalibration,
+  reconcileJigsWithCalibration
 } from '../services/factoryTrackingService';
 import PCAdminLayout from '../components/PCAdminLayout';
 import { FactoryBlueprintMap } from '../components/FactoryBlueprintMap';
@@ -158,7 +159,8 @@ export const PCAdminFactoryDwell: React.FC = () => {
         fetchFactoryCalibration()
       ]);
 
-      setJigs(fetchedJigs.length > 0 ? fetchedJigs : DEFAULT_FACTORY_JIGS);
+      const baseJigs = fetchedJigs.length > 0 ? fetchedJigs : DEFAULT_FACTORY_JIGS;
+      setJigs(reconcileJigsWithCalibration(baseJigs, fetchedCalibration));
       setRecords(fetchedRecords);
       setDwellSummaries(fetchedSummaries);
       setDelayLogs(fetchedDelayLogs);
@@ -640,6 +642,7 @@ export const PCAdminFactoryDwell: React.FC = () => {
               jigs={jigs}
               records={records}
               delayLogs={delayLogs}
+              calibration={calibration}
               selectedSlot={selectedSlot}
               onSelectSlot={setSelectedSlot}
               selectedWorkerUid={selectedWorkerUid}

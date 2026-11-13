@@ -34,6 +34,7 @@ import {
 } from '@/services/attendanceNotificationScheduler';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { getCurrentGpsPosition } from '../lib/geolocationHelper';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 
@@ -291,18 +292,7 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
     setLastSyncTime(Date.now());
   }, []);
 
-  const handlePositionError = useCallback((err: GeolocationPositionError) => {
-    console.warn('Geolocation watch error:', err.message);
-    setGpsError(err.message || 'GPS 위치 정보를 가져올 수 없습니다.');
-    setIsTracking(false);
-  }, []);
-
   const refreshLocation = useCallback(async (options?: { forceHighAccuracy?: boolean; maximumAge?: number }): Promise<void> => {
-    if (!navigator.geolocation) {
-      setGpsError('현재 브라우저/기기가 GPS 위치 정보를 지원하지 않습니다.');
-      return;
-    }
-
     const isForce = options?.forceHighAccuracy && options?.maximumAge === 0;
 
     // 🛑 If GPS attendance feature is disabled, ignore non-forced background queries
@@ -322,22 +312,33 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
     const maxAge = options?.maximumAge ?? (isForegroundRef.current ? 5000 : 30000);
     const timeout = highAcc ? 12000 : 20000;
 
-    return new Promise((resolve) => {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          isRefreshingLocationRef.current = false;
-          handlePositionUpdate(pos);
-          resolve();
+    try {
+      const gps = await getCurrentGpsPosition({
+        timeoutMs: timeout,
+        maximumAgeMs: maxAge
+      });
+      isRefreshingLocationRef.current = false;
+      handlePositionUpdate({
+        coords: {
+          latitude: gps.lat,
+          longitude: gps.lng,
+          accuracy: gps.accuracy,
+          altitude: null,
+          altitudeAccuracy: null,
+          heading: null,
+          speed: null,
+          toJSON: () => ({})
         },
-        (err) => {
-          isRefreshingLocationRef.current = false;
-          handlePositionError(err);
-          resolve();
-        },
-        { enableHighAccuracy: highAcc, timeout, maximumAge: maxAge }
-      );
-    });
-  }, [handlePositionUpdate, handlePositionError]);
+        timestamp: gps.timestamp,
+        toJSON: () => ({})
+      } as GeolocationPosition);
+    } catch (err: any) {
+      isRefreshingLocationRef.current = false;
+      console.warn('Geolocation error:', err?.message);
+      setGpsError(err?.message || 'GPS 위치 정보를 가져올 수 없습니다.');
+      setIsTracking(false);
+    }
+  }, [handlePositionUpdate]);
 
   // Zero-Battery On-Demand Location Handler: eliminates continuous GPS GNSS chip drain
   const startWatcher = useCallback((_isFg: boolean) => {
@@ -909,20 +910,14 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
   // 8. 1-Click Save Current GPS as Base Point (기준점 등록)
   const saveCurrentLocationAsBasePoint = async (): Promise<boolean> => {
     try {
-      await refreshLocation({ forceHighAccuracy: true });
-      let lat = currentLocation?.latitude;
-      let lng = currentLocation?.longitude;
+      await refreshLocation({ forceHighAccuracy: true, maximumAge: 0 });
+      let lat = lastProcessedLocRef.current?.latitude || currentLocation?.latitude;
+      let lng = lastProcessedLocRef.current?.longitude || currentLocation?.longitude;
 
       if (!lat || !lng) {
-        // Attempt immediate one-time high-accuracy pull
-        const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,
-            timeout: 10000
-          });
-        });
-        lat = pos.coords.latitude;
-        lng = pos.coords.longitude;
+        const pos = await getCurrentGpsPosition({ timeoutMs: 12000, maximumAgeMs: 0 });
+        lat = pos.lat;
+        lng = pos.lng;
       }
 
       if (!lat || !lng) {
