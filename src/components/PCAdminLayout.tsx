@@ -23,7 +23,8 @@ import {
   Radio,
   FileBarChart,
   Activity,
-  Thermometer
+  Thermometer,
+  Layers
 } from 'lucide-react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthProvider';
@@ -81,6 +82,8 @@ const PCAdminLayout: React.FC<PCAdminLayoutProps> = ({ children, title }) => {
     );
   }
 
+  const isCEO = profile?.role === 'CEO' || profile?.email?.toLowerCase() === 'tjrwnfjqm1@gmail.com';
+
   const navGroups = [
     {
       group: '종합 관제 대시보드',
@@ -92,6 +95,7 @@ const PCAdminLayout: React.FC<PCAdminLayoutProps> = ({ children, title }) => {
     {
       group: '실시간 현장 관제',
       items: [
+        { id: 'factory_dwell', label: '중형선 7공장 블럭 체류 (A3)', icon: Layers, to: '/admin/pc/factory-dwell', requiresCEO: true },
         { id: 'highwork', label: '고소작업 실시간 관제', icon: BarChart3, to: '/admin/pc/highwork' },
         { id: 'beacons', label: '밀폐공간 위치 관제', icon: Radio, to: '/admin/pc/beacons' },
         { id: 'perceived_temp_mgmt', label: '실시간 체감온도 관제', icon: Thermometer, to: '/admin/pc/perceived-temp' },
@@ -169,7 +173,9 @@ const PCAdminLayout: React.FC<PCAdminLayoutProps> = ({ children, title }) => {
                 </div>
               )}
               <div className="space-y-1">
-                {group.items.map((item) => {
+                {group.items
+                  .filter((item: any) => !item.requiresCEO || isCEO)
+                  .map((item) => {
                   const itemPath = item.to.split('?')[0];
                   const itemQuery = item.to.split('?')[1] || '';
                   const pathnameMatch = location.pathname === itemPath;

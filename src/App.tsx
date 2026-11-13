@@ -113,6 +113,8 @@ const WorkInstructionManagement = lazyWithRetry(() => import('./pages/WorkInstru
 const PerceivedTemp = lazyWithRetry(() => import('./pages/PerceivedTemp').then(m => ({ default: m.PerceivedTemp })));
 const PCAdminPerceivedTemp = lazyWithRetry(() => import('./pages/PCAdminPerceivedTemp'));
 const RequestCenter = lazyWithRetry(() => import('./pages/RequestCenter').then(m => ({ default: m.RequestCenter })));
+const PCAdminFactoryDwell = lazyWithRetry(() => import('./pages/PCAdminFactoryDwell'));
+const FactoryDwellMonitoring = lazyWithRetry(() => import('./pages/FactoryDwellMonitoring'));
 
 const ProtectedRoute = ({ children, roles, permission, permissions }: { children: React.ReactNode, roles?: string[], permission?: string, permissions?: string[] }) => {
   const { user, profile, loading } = useAuth();
@@ -264,8 +266,8 @@ function AppContent() {
             <Route path="/admin/pc/evacuation-history" element={<ProtectedRoute permission="admin"><PCAdminEvacuationHistory /></ProtectedRoute>} />
             <Route path="/personnel" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="employee_mgmt"><EmployeeManagement /></ProtectedRoute>} />
             <Route path="/attendance" element={<ProtectedRoute><Attendance /></ProtectedRoute>} />
-            <Route path="/attendance/settings" element={<ProtectedRoute><AttendanceSettings /></ProtectedRoute>} />
-            <Route path="/attendance-settings" element={<ProtectedRoute><AttendanceSettings /></ProtectedRoute>} />
+            <Route path="/attendance/settings" element={<ProtectedRoute roles={['CEO']}><AttendanceSettings /></ProtectedRoute>} />
+            <Route path="/attendance-settings" element={<ProtectedRoute roles={['CEO']}><AttendanceSettings /></ProtectedRoute>} />
             <Route path="/accidents" element={<ProtectedRoute><AccidentReport /></ProtectedRoute>} />
             <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
             <Route path="/notices" element={<ProtectedRoute><Notices /></ProtectedRoute>} />
@@ -295,6 +297,8 @@ function AppContent() {
             <Route path="/admin/pc/redemption" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="admin"><PCAdminRedemption /></ProtectedRoute>} />
             <Route path="/admin/pc/coupons" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="admin"><PCAdminCoupons /></ProtectedRoute>} />
             <Route path="/admin/pc/highwork" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER']} permission="admin"><PCAdminHighWork /></ProtectedRoute>} />
+            <Route path="/admin/pc/factory-dwell" element={<ProtectedRoute roles={['CEO']}><PCAdminFactoryDwell /></ProtectedRoute>} />
+            <Route path="/factory-dwell" element={<ProtectedRoute roles={['CEO']}><FactoryDwellMonitoring /></ProtectedRoute>} />
             <Route path="/admin/pc/beacons" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER']} permission="admin"><PCAdminBeacons /></ProtectedRoute>} />
             <Route path="/enclosed-monitoring" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER']}><EnclosedSpaceMonitoring /></ProtectedRoute>} />
             <Route path="/admin/pc/notifications" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="admin"><PCAdminNotifications /></ProtectedRoute>} />

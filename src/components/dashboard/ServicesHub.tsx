@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/components/AuthProvider';
 import {
   ClipboardList,
   MessageSquare,
@@ -278,13 +279,17 @@ interface ServicesHubProps {
 
 export const ServicesHub: React.FC<ServicesHubProps> = () => {
   const navigate = useNavigate();
+  const { profile } = useAuth();
+  const isCEO = profile?.role === 'CEO' || profile?.email?.toLowerCase() === 'tjrwnfjqm1@gmail.com';
   const [isAllServicesOpen, setIsAllServicesOpen] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [selectedFolder, setSelectedFolder] = useState<'ALL' | 'SAFETY_WORK' | 'HR' | 'WELFARE'>('ALL');
   const [isExpandedOnDashboard, setIsExpandedOnDashboard] = useState(false);
 
+  const visibleServices = ALL_APP_SERVICES.filter(item => item.id !== 'settings' || isCEO);
+
   // Filtered list for the modal search / folder filter
-  const modalFilteredServices = ALL_APP_SERVICES.filter(item => {
+  const modalFilteredServices = visibleServices.filter(item => {
     const matchesFolder = selectedFolder === 'ALL' || item.category === selectedFolder;
     const matchesSearch = !searchKeyword.trim() || 
       item.label.toLowerCase().includes(searchKeyword.toLowerCase()) ||
@@ -292,10 +297,10 @@ export const ServicesHub: React.FC<ServicesHubProps> = () => {
     return matchesFolder && matchesSearch;
   });
 
-  // Displayed services on the main card: either top 8 essentials or all 17 when expanded
+  // Displayed services on the main card: either top essentials or all visible when expanded
   const displayedServices = isExpandedOnDashboard 
-    ? ALL_APP_SERVICES 
-    : ALL_APP_SERVICES.filter(s => s.isPrimary);
+    ? visibleServices 
+    : visibleServices.filter(s => s.isPrimary);
 
   return (
     <section className="bg-card/70 backdrop-blur-md border border-border/70 rounded-3xl p-3 sm:p-4 shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-2.5">
@@ -343,7 +348,7 @@ export const ServicesHub: React.FC<ServicesHubProps> = () => {
       <div className="grid grid-cols-3 gap-1.5">
         {(['SAFETY_WORK', 'HR', 'WELFARE'] as const).map((catKey) => {
           const meta = CATEGORY_META[catKey];
-          const count = ALL_APP_SERVICES.filter(s => s.category === catKey).length;
+          const count = visibleServices.filter(s => s.category === catKey).length;
           return (
             <button
               key={catKey}
@@ -405,7 +410,7 @@ export const ServicesHub: React.FC<ServicesHubProps> = () => {
           onClick={() => setIsAllServicesOpen(true)}
           className="w-full py-1.5 bg-muted/30 hover:bg-muted/60 border border-border/40 rounded-xl text-center text-[11px] font-bold text-muted-foreground hover:text-foreground transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap break-keep"
         >
-          <span>더 많은 서비스 ({ALL_APP_SERVICES.length - displayedServices.length}개) 전체보기</span>
+          <span>더 많은 서비스 ({visibleServices.length - displayedServices.length}개) 전체보기</span>
           <ChevronRight className="w-3 h-3 text-primary" />
         </button>
       )}
@@ -453,10 +458,10 @@ export const ServicesHub: React.FC<ServicesHubProps> = () => {
             {/* Folder Tabs */}
             <div className="flex bg-muted/60 p-1 rounded-2xl gap-1 overflow-x-auto no-scrollbar pt-1">
               {[
-                { id: 'ALL', label: '전체 (17)' },
-                { id: 'SAFETY_WORK', label: '🛠️ 현장·안전 (6)' },
-                { id: 'HR', label: '📋 인사·근태 (4)' },
-                { id: 'WELFARE', label: '🎁 복지·소통 (7)' }
+                { id: 'ALL', label: `전체 (${visibleServices.length})` },
+                { id: 'SAFETY_WORK', label: `🛠️ 현장·안전 (${visibleServices.filter(s => s.category === 'SAFETY_WORK').length})` },
+                { id: 'HR', label: `📋 인사·근태 (${visibleServices.filter(s => s.category === 'HR').length})` },
+                { id: 'WELFARE', label: `🎁 복지·소통 (${visibleServices.filter(s => s.category === 'WELFARE').length})` }
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -481,7 +486,7 @@ export const ServicesHub: React.FC<ServicesHubProps> = () => {
             {selectedFolder === 'ALL' && !searchKeyword.trim() ? (
               (['SAFETY_WORK', 'HR', 'WELFARE'] as const).map((catKey) => {
                 const meta = CATEGORY_META[catKey];
-                const groupItems = ALL_APP_SERVICES.filter(s => s.category === catKey);
+                const groupItems = visibleServices.filter(s => s.category === catKey);
 
                 return (
                   <div key={catKey} className="space-y-2">

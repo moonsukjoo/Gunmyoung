@@ -15,6 +15,19 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
+    function isCEO() {
+      let email = (request.auth != null && 'email' in request.auth.token && request.auth.token.email != null) ? request.auth.token.email.lower() : '';
+      let userExists = exists(/databases/$(database)/documents/users/$(request.auth.uid));
+      let userData = userExists ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data : null;
+      let userEmail = userData != null ? userData.get('email', '').lower() : '';
+      let userRole = userData != null ? userData.get('role', '') : '';
+      return isAuthenticated() && (
+        email == "tjrwnfjqm1@gmail.com" ||
+        userEmail == "tjrwnfjqm1@gmail.com" ||
+        userRole == 'CEO'
+      );
+    }
+
     function isCoreAdmin() {
       let email = (request.auth != null && 'email' in request.auth.token && request.auth.token.email != null) ? request.auth.token.email.lower() : '';
       let userExists = exists(/databases/$(database)/documents/users/$(request.auth.uid));
@@ -67,6 +80,13 @@ service cloud.firestore {
       let userData = userExists ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data : null;
       let userRole = userData != null ? userData.get('role', '') : '';
       return isHRManager() || userRole == 'SAFETY_MANAGER';
+    }
+
+    function canManagePayslip() {
+      let userExists = exists(/databases/$(database)/documents/users/$(request.auth.uid));
+      let userData = userExists ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data : null;
+      let userPermissions = (userData != null && 'permissions' in userData && userData.permissions != null && userData.permissions is list) ? userData.permissions : [];
+      return isHRManager() || isCoreAdmin() || (!isExcludedRole() && userPermissions.hasAny(['payslip_mgmt']));
     }
 
     function isRestrictedUser(data, email) {
@@ -352,8 +372,8 @@ service cloud.firestore {
     }
 
     match /payslips/{payslipId} {
-      allow read: if isAuthenticated() && (isOwner(resource.data.uid) || isHRManager());
-      allow write: if isHRManager() || isCoreAdmin();
+      allow read: if isAuthenticated() && (isOwner(resource.data.uid) || canManagePayslip());
+      allow create, update, delete: if canManagePayslip();
     }
 
     match /lunchRequests/{requestId} {
@@ -467,6 +487,23 @@ service cloud.firestore {
         isHRManager() || 
         isCoreAdmin()
       );
+    }
+
+    // Strictly CEO-only access: workers must NEVER read or write factory layout, dwell analytics, or critical delay reasons
+    match /factoryJigs/{jigId} {
+      allow read, write: if isCEO();
+    }
+
+    match /factoryGpsRecords/{recordId} {
+      allow read, write: if isCEO();
+    }
+
+    match /workerDwellSummaries/{summaryId} {
+      allow read, write: if isCEO();
+    }
+
+    match /factoryDelayLogs/{logId} {
+      allow read, write: if isCEO();
     }
 
     // Default deny at the end

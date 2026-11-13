@@ -126,6 +126,7 @@ export const Attendance: React.FC = () => {
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date>(new Date());
   const [simulatedExitTime, setSimulatedExitTime] = useState<string>('19:00');
 
+  const isCEO = profile?.role === 'CEO' || profile?.email?.toLowerCase() === 'tjrwnfjqm1@gmail.com';
   const isAdminUser = profile && [
     'CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'GENERAL_AFFAIRS', 'SAFETY_MANAGER', 'ADMIN'
   ].includes(profile.role?.toUpperCase() || '');
@@ -407,15 +408,17 @@ export const Attendance: React.FC = () => {
           <p className="text-xs font-bold text-muted-foreground">{format(now, 'yyyy.MM.dd EEEE', { locale: ko })}</p>
         </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => navigate('/attendance/settings')}
-          className="rounded-2xl border-border bg-card/80 text-xs font-bold flex items-center gap-1.5 shadow-sm hover:bg-muted"
-        >
-          <Sliders className="w-3.5 h-3.5 text-blue-500" />
-          <span>근무시간 설정</span>
-        </Button>
+        {isCEO && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('/attendance/settings')}
+            className="rounded-2xl border-border bg-card/80 text-xs font-bold flex items-center gap-1.5 shadow-sm hover:bg-muted"
+          >
+            <Sliders className="w-3.5 h-3.5 text-blue-500" />
+            <span>근무시간 설정</span>
+          </Button>
+        )}
         <style>{`
           .rdp { --rdp-cell-size: 100%; margin: 0; width: 100%; }
           .rdp-table { width: 100%; border-collapse: separate; border-spacing: 4px; }
@@ -470,8 +473,8 @@ export const Attendance: React.FC = () => {
       {/* ================= TAB 1: 📌 출퇴근 체크 (Check-in & Location Live) ================= */}
       {activeTab === 'CHECK_IN' && (
         <div className="space-y-3 animate-in fade-in duration-200">
-          {/* 🛡️ Location Retention Mode Active Banner (위치 유지 모드 가동 중) */}
-          {isLocationRetentionActive && providerTodayAttendance?.clockIn && !providerTodayAttendance?.clockOut && !pendingExitState && (
+          {/* 🛡️ Location Retention Mode Active Banner (CEO Only) */}
+          {isCEO && isLocationRetentionActive && providerTodayAttendance?.clockIn && !providerTodayAttendance?.clockOut && !pendingExitState && (
             <div className="bg-emerald-500/10 border-2 border-emerald-500/40 rounded-3xl p-4.5 space-y-2 text-foreground shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
@@ -501,8 +504,8 @@ export const Attendance: React.FC = () => {
             </div>
           )}
 
-          {/* Departure Pending Alert Banner */}
-          {pendingExitState && (
+          {/* Departure Pending Alert Banner (CEO Only) */}
+          {isCEO && pendingExitState && (
             <div className="bg-amber-500/10 border-2 border-amber-500/40 rounded-3xl p-4.5 space-y-3 relative overflow-hidden shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2.5">
@@ -642,35 +645,35 @@ export const Attendance: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* GPS Geofence & Auto Attendance Live Status */}
-          <Card className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.03)]">
-            <CardContent className="p-4.5 space-y-3.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <div className="relative flex items-center justify-center">
-                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full" />
-                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping absolute" />
+          {/* GPS Geofence & Auto Attendance Live Status (CEO Only) */}
+          {isCEO && (
+            <Card className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.03)]">
+              <CardContent className="p-4.5 space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="relative flex items-center justify-center">
+                      <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full" />
+                      <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping absolute" />
+                    </div>
+                    <span className="text-xs font-black text-foreground">GPS 위치 기반 자동 출퇴근 (대표 전용 관리)</span>
+                    <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-none text-[9px] font-black py-0 px-2">
+                      포그라운드 즉시 동기화
+                    </Badge>
+                    <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-none text-[9px] font-black py-0 px-2">
+                      500m 버퍼 · 15분 유지모드
+                    </Badge>
                   </div>
-                  <span className="text-xs font-black text-foreground">GPS 위치 기반 자동 출퇴근</span>
-                  <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-none text-[9px] font-black py-0 px-2">
-                    포그라운드 즉시 동기화
-                  </Badge>
-                  <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-none text-[9px] font-black py-0 px-2">
-                    500m 버퍼 · 15분 유지모드
-                  </Badge>
-                </div>
 
-                <div className="flex items-center gap-1.5">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => refreshLocation()}
-                    className="w-7 h-7 text-muted-foreground hover:text-foreground rounded-lg"
-                    title="GPS 위치 새로고침"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                  </Button>
-                  {isAdminUser && (
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => refreshLocation()}
+                      className="w-7 h-7 text-muted-foreground hover:text-foreground rounded-lg"
+                      title="GPS 위치 새로고침"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -680,86 +683,86 @@ export const Attendance: React.FC = () => {
                     >
                       <Sliders className="w-3.5 h-3.5" />
                     </Button>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div className="bg-muted/40 rounded-2xl p-3 border border-border/40 flex items-center justify-between">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
-                      <Navigation className="w-4 h-4" />
-                    </div>
-                    <div className="truncate">
-                      <p className="text-[9px] font-bold text-muted-foreground uppercase">사업장 기준점 거리</p>
-                      <p className="text-sm font-black text-foreground truncate">
-                        {distanceToCenter !== null ? formatDistance(distanceToCenter) : '측정 중...'}
-                      </p>
-                    </div>
                   </div>
+                </div>
 
-                  <div>
-                    {distanceToCenter !== null ? (
-                      isInsideCheckInZone ? (
-                        <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-none font-black text-[10px]">
-                          🟢 반경 1km+500m 버퍼 (출근 구역)
-                        </Badge>
-                      ) : distanceToCenter < ((locationSettings?.checkOutRadius || 2000) + (geofenceBufferMeters || 500)) ? (
-                        <Badge className="bg-blue-500/15 text-blue-600 dark:text-blue-400 border-none font-black text-[10px]">
-                          🔵 1.5~2.5km (근무 인정)
-                        </Badge>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="bg-muted/40 rounded-2xl p-3 border border-border/40 flex items-center justify-between">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
+                        <Navigation className="w-4 h-4" />
+                      </div>
+                      <div className="truncate">
+                        <p className="text-[9px] font-bold text-muted-foreground uppercase">사업장 기준점 거리</p>
+                        <p className="text-sm font-black text-foreground truncate">
+                          {distanceToCenter !== null ? formatDistance(distanceToCenter) : '측정 중...'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div>
+                      {distanceToCenter !== null ? (
+                        isInsideCheckInZone ? (
+                          <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-none font-black text-[10px]">
+                            🟢 반경 1km+500m 버퍼 (출근 구역)
+                          </Badge>
+                        ) : distanceToCenter < ((locationSettings?.checkOutRadius || 2000) + (geofenceBufferMeters || 500)) ? (
+                          <Badge className="bg-blue-500/15 text-blue-600 dark:text-blue-400 border-none font-black text-[10px]">
+                            🔵 1.5~2.5km (근무 인정)
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-none font-black text-[10px]">
+                            🟠 2.5km 초과 (이탈 대기)
+                          </Badge>
+                        )
                       ) : (
-                        <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-none font-black text-[10px]">
-                          🟠 2.5km 초과 (이탈 대기)
+                        <Badge variant="outline" className="text-[10px] font-bold">
+                          GPS 수신 중
                         </Badge>
-                      )
-                    ) : (
-                      <Badge variant="outline" className="text-[10px] font-bold">
-                        GPS 수신 중
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-
-                <div className="bg-muted/40 rounded-2xl p-3 border border-border/40 flex items-center justify-between">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
-                      <ShieldCheck className="w-4 h-4" />
+                      )}
                     </div>
-                    <div className="truncate">
-                      <p className="text-[9px] font-bold text-muted-foreground uppercase">근무 시간 기본 규칙</p>
-                      <p className="text-xs font-black text-foreground truncate">
-                        08:00 ~ 17:00 (점심 12-13시 제외)
-                      </p>
+                  </div>
+
+                  <div className="bg-muted/40 rounded-2xl p-3 border border-border/40 flex items-center justify-between">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+                        <ShieldCheck className="w-4 h-4" />
+                      </div>
+                      <div className="truncate">
+                        <p className="text-[9px] font-bold text-muted-foreground uppercase">근무 시간 기본 규칙</p>
+                        <p className="text-xs font-black text-foreground truncate">
+                          08:00 ~ 17:00 (점심 12-13시 제외)
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Quick Action: Register Current Location as Reference Point */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-1 border-t border-border/40">
-                <div className="text-[11px] font-bold text-muted-foreground flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
-                  <span>기준점: {locationSettings?.centerLat ? `${locationSettings.centerLat.toFixed(5)}, ${locationSettings.centerLng.toFixed(5)}` : '미설정'}</span>
+                {/* Quick Action: Register Current Location as Reference Point */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-1 border-t border-border/40">
+                  <div className="text-[11px] font-bold text-muted-foreground flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
+                    <span>기준점: {locationSettings?.centerLat ? `${locationSettings.centerLat.toFixed(5)}, ${locationSettings.centerLng.toFixed(5)}` : '미설정'}</span>
+                  </div>
+
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      setIsSavingLocation(true);
+                      await saveCurrentLocationAsBasePoint();
+                      setIsSavingLocation(false);
+                    }}
+                    disabled={isSavingLocation}
+                    className="h-8 text-xs font-black bg-primary/5 hover:bg-primary/10 text-primary border-primary/20 rounded-xl flex items-center gap-1.5"
+                  >
+                    <MapPin className="w-3.5 h-3.5" />
+                    {isSavingLocation ? '기준점 저장 중...' : '📍 현재 위치를 기준점으로 등록'}
+                  </Button>
                 </div>
-
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={async () => {
-                    setIsSavingLocation(true);
-                    await saveCurrentLocationAsBasePoint();
-                    setIsSavingLocation(false);
-                  }}
-                  disabled={isSavingLocation}
-                  className="h-8 text-xs font-black bg-primary/5 hover:bg-primary/10 text-primary border-primary/20 rounded-xl flex items-center gap-1.5"
-                >
-                  <MapPin className="w-3.5 h-3.5" />
-                  {isSavingLocation ? '기준점 저장 중...' : '📍 현재 위치를 기준점으로 등록'}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 
@@ -1197,7 +1200,8 @@ export const Attendance: React.FC = () => {
             </div>
          </DialogContent>
       </Dialog>
-      {/* Location Geofence Settings Dialog */}
+      {/* Location Geofence Settings Dialog (CEO Only) */}
+      {isCEO && (
       <Dialog open={isLocationSettingOpen} onOpenChange={setIsLocationSettingOpen}>
         <DialogContent className="bg-background border border-border rounded-3xl max-w-md w-full p-6 space-y-4">
           <DialogHeader>
@@ -1343,6 +1347,7 @@ export const Attendance: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   );
 };

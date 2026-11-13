@@ -53,7 +53,9 @@ import {
   Settings2,
   FolderKanban,
   Delete,
-  Keyboard
+  Keyboard,
+  CircleDollarSign,
+  Layers
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useNavigate } from 'react-router-dom';
@@ -490,6 +492,8 @@ export const MyPage: React.FC = () => {
   ];
 
   const adminItems = [
+    { label: '7공장 블럭 체류 관제', desc: 'A3 지그/블럭 GPS 체류', icon: Layers, to: '/factory-dwell', color: 'text-cyan-500', bgColor: 'bg-cyan-500/10', isPrimary: true },
+    { label: '전사 급여명세서 관리', desc: '엑셀 붙여넣기 & 사번 매칭', icon: CircleDollarSign, to: '/payslip-mgmt', color: 'text-teal-500', bgColor: 'bg-teal-500/10', isPrimary: true },
     { label: '임직원 정보 관리', desc: '사원 명부 및 직책 수정', icon: Users, to: '/personnel', color: 'text-blue-500', bgColor: 'bg-blue-500/10', isPrimary: true },
     { label: '임직원 근태 현황', desc: '실시간 팀 출근 모니터링', icon: Navigation, to: '/attendance-mgmt', color: 'text-indigo-500', bgColor: 'bg-indigo-500/10', isPrimary: true },
     { label: '연차 신청 승인/조회', desc: '휴가 결재 및 승인 관리', icon: CalendarDays, to: '/leave-mgmt', color: 'text-purple-500', bgColor: 'bg-purple-500/10', isPrimary: true },

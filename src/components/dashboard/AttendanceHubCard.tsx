@@ -31,6 +31,8 @@ interface AttendanceHubCardProps {
     progressPercent: number;
   } | null;
   isGpsAttendanceEnabled?: boolean;
+  showGpsControls?: boolean;
+  isCEO?: boolean;
 }
 
 export const AttendanceHubCard: React.FC<AttendanceHubCardProps> = ({
@@ -42,7 +44,9 @@ export const AttendanceHubCard: React.FC<AttendanceHubCardProps> = ({
   handleClockIn,
   handleClockOut,
   pendingExitState,
-  isGpsAttendanceEnabled = false
+  isGpsAttendanceEnabled = false,
+  showGpsControls = false,
+  isCEO = false
 }) => {
   const navigate = useNavigate();
   const [showWeekly, setShowWeekly] = useState(false);
@@ -90,14 +94,16 @@ export const AttendanceHubCard: React.FC<AttendanceHubCardProps> = ({
               <span className="font-mono text-[11px] font-bold text-muted-foreground bg-muted/70 px-1.5 py-0.5 rounded-md shrink-0">
                 {currentTimeStr}
               </span>
-              {isGpsAttendanceEnabled ? (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-bold border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10">
-                  GPS ON
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-bold border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10">
-                  수동 모드 (GPS OFF)
-                </Badge>
+              {showGpsControls && (
+                isGpsAttendanceEnabled ? (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-bold border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10">
+                    GPS ON
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-bold border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10">
+                    수동 모드 (GPS OFF)
+                  </Badge>
+                )
               )}
             </div>
             <p className="text-[11px] font-bold text-muted-foreground truncate">
@@ -107,16 +113,18 @@ export const AttendanceHubCard: React.FC<AttendanceHubCardProps> = ({
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate('/attendance/settings')}
-            className="h-7 px-2 text-[10px] font-bold text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-lg flex items-center gap-1"
-            title="근무시간 및 자동출퇴근 설정"
-          >
-            <Settings2 className="w-3.5 h-3.5 text-primary" />
-            <span className="hidden sm:inline">설정</span>
-          </Button>
+          {isCEO && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/attendance/settings')}
+              className="h-7 px-2 text-[10px] font-bold text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-lg flex items-center gap-1"
+              title="근무시간 및 GPS 자동출퇴근 설정 (대표 전용)"
+            >
+              <Settings2 className="w-3.5 h-3.5 text-primary" />
+              <span className="hidden sm:inline">설정</span>
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -129,8 +137,8 @@ export const AttendanceHubCard: React.FC<AttendanceHubCardProps> = ({
         </div>
       </div>
 
-      {/* Pending Departure Warning */}
-      {pendingExitState && todayAttendance?.clockIn && !todayAttendance?.clockOut && (
+      {/* Pending Departure Warning (hidden on Home) */}
+      {showGpsControls && pendingExitState && todayAttendance?.clockIn && !todayAttendance?.clockOut && (
         <div className="bg-amber-500/15 border border-amber-500/30 rounded-2xl p-2.5 flex items-start gap-2 animate-pulse text-xs">
           <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">

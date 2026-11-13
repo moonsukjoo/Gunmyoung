@@ -477,12 +477,18 @@ export interface HealthReport {
   createdAt: string;
 }
 
+export interface PayslipExtraItem {
+  label: string;
+  amount: number;
+}
+
 export interface Payslip {
   id: string;
   uid: string;
   employeeId: string;
   userName: string;
   month: string; // YYYY-MM
+  workDays?: number;
   baseHours: number;
   weeklyHolidayHours: number;
   paidLeaveHours: number;
@@ -499,6 +505,7 @@ export interface Payslip {
   annualLeaveAllowance: number;
   mealAllowance: number;
   extraAllowance: number;
+  customEarnings?: PayslipExtraItem[];
   totalEarnings: number;
   incomeTax: number;
   localIncomeTax: number;
@@ -507,6 +514,7 @@ export interface Payslip {
   employmentInsurance: number;
   mealDeduction: number;
   laundryDeduction: number;
+  customDeductions?: PayslipExtraItem[];
   totalDeductions: number;
   netPay: number;
   annualLeaveBaseDate?: string;
@@ -576,4 +584,169 @@ export interface WorkRequest {
   resolvedAt?: string;
   remarks?: string;
 }
+
+// ==========================================
+// 중형선 7공장 A3 공장내부도 및 지그/블럭 GPS 체류 관제
+// ==========================================
+
+export const TRACKING_TIME_SLOTS = [
+  '08:20', // 1차 기록 (작업 개시 직후 현장 안착)
+  '09:45', // 2차 기록 (오전 휴게 10:00 직전)
+  '10:15', // 3차 기록 (오전 휴게 종료 후 작업 재개)
+  '11:45', // 4차 기록 (점심시간 12:00 직전)
+  '13:10', // 5차 기록 (오후 조업 시작 직후 안착)
+  '14:45', // 6차 기록 (오후 휴게 15:00 직전)
+  '15:15', // 7차 기록 (오후 휴게 종료 후 작업 재개)
+  '17:45', // 8차 기록 (정규 종료 및 잔업 확인)
+] as const;
+
+export type TrackingSlotTime = typeof TRACKING_TIME_SLOTS[number];
+
+export type DelayReasonCategory =
+  | 'MANPOWER_SHORTAGE'
+  | 'MATERIAL_DELAY'
+  | 'EQUIPMENT_CRANE'
+  | 'DESIGN_CHANGE'
+  | 'QUALITY_REWORK'
+  | 'WEATHER_SAFETY'
+  | 'SUBCONTRACTOR_DELAY'
+  | 'OTHER';
+
+export const DELAY_REASON_CATEGORIES: Record<DelayReasonCategory, string> = {
+  MANPOWER_SHORTAGE: '인원 부족 / 무단 이탈',
+  MATERIAL_DELAY: '자재 / 철판 반입 지연',
+  EQUIPMENT_CRANE: '크레인 / 장비 간섭',
+  DESIGN_CHANGE: '도면 / 설계 변경 대기',
+  QUALITY_REWORK: '품질 검사 / 수정 재작업',
+  WEATHER_SAFETY: '안전 조치 / 작업 중지',
+  SUBCONTRACTOR_DELAY: '외주 물량팀 공정 지연',
+  OTHER: '기타 크리티컬 사유',
+};
+
+export interface BlockDelayLog {
+  id: string;
+  jigId: string;
+  jigName: string;
+  blockName: string;
+  category: DelayReasonCategory;
+  severity: 'CRITICAL' | 'WARNING' | 'INFO';
+  reason: string;
+  actionPlan?: string;
+  delayDays: number;
+  progressAtTime: number;
+  recordedByUid: string;
+  recordedByName: string;
+  recordedAt: string;
+  resolved?: boolean;
+  resolvedAt?: string;
+  resolvedNote?: string;
+}
+
+export interface FactoryJig {
+  id: string; // e.g. 'jig-01'
+  jigNumber: number; // 1 ~ 10
+  jigName: string; // 'JIG-01'
+  blockName: string; // '2111 블럭'
+  blockType: string; // '선체 중앙 저판 블럭'
+  assignedTeam: string; // '물량1팀 (선체취부)'
+  currentProgress: number; // 0 ~ 100%
+  progressPercent?: number; // alias for progressPercent
+  startDate?: string; // 공정 시작일 (YYYY-MM-DD)
+  endDate?: string;   // 공정 완료/종료 예정일 (YYYY-MM-DD)
+  targetDays?: number; // 공정 계획 소요일수 (e.g. 10일)
+  // Critical delay summary metadata
+  latestDelayReason?: string;
+  latestDelayAt?: string;
+  latestDelaySeverity?: 'CRITICAL' | 'WARNING' | 'INFO';
+  delayLogCount?: number;
+  // Coordinates on the A3 landscape blueprint (0 ~ 1000 coordinate system)
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  bay: 'BAY_SOUTH' | 'BAY_NORTH'; // 위쪽(남쪽) Bay A, 아래쪽(북쪽) Bay B
+  status: 'ACTIVE' | 'HOLD' | 'COMPLETED';
+}
+
+export interface BlockDeploymentStats {
+  jigId: string;
+  jigName: string;
+  blockName: string;
+  blockType: string;
+  assignedTeam: string;
+  startDate: string;
+  endDate: string;
+  targetDays: number; // e.g. 10일
+  elapsedDays: number; // 현재 경과 일수
+  remainingDays: number; // D-Day (음수면 지연)
+  totalWorkersDeployed: number; // 누적 총 투입 유일 인원
+  totalManHours: number; // 누적 총 투입 공수 (시간)
+  avgDailyWorkers: number; // 일평균 투입 인원 (명/일)
+  currentProgress: number; // 0 ~ 100%
+  statusVerdict: 'ON_SCHEDULE' | 'BEHIND_SCHEDULE' | 'CRITICAL_DELAY' | 'COMPLETED';
+}
+
+export interface FactoryGpsRecord {
+  id: string;
+  date: string; // YYYY-MM-DD
+  slot: TrackingSlotTime;
+  slotIndex: number; // 0 ~ 7
+  workerUid: string;
+  workerName: string;
+  employeeId: string;
+  teamName: string;
+  jobRole: string; // 취부, 용접, 사상, 취부보조
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  // Mapped coordinate on the A3 factory blueprint (0 ~ 1000 coordinate system)
+  mapX: number;
+  mapY: number;
+  locationType: 'JIG' | 'REST_AREA' | 'RESTROOM' | 'MATERIAL_YARD' | 'OFFICE' | 'OUT_OF_BOUNDS';
+  jigId?: string;
+  jigName?: string;
+  blockName?: string;
+  locationLabel: string; // 'JIG-01 (2111 블럭)' or '물량팀 휴게실' or '현장 무단이탈'
+  isAtAssignedJig: boolean;
+  status: 'NORMAL' | 'AWAY' | 'RESTING' | 'UNKNOWN';
+  stayMinutesInSlot: number; // 체류 인정 분수 (슬롯 가중치: e.g. 85분, 30분, 90분 등)
+  recordedAt: string;
+}
+
+export interface WorkerBlockDwellDetail {
+  blockOrArea: string;
+  minutes: number;
+  percentage: number;
+  isWorkBlock: boolean;
+}
+
+export interface WorkerDwellSummary {
+  id: string; // `${workerUid}_${date}`
+  date: string; // YYYY-MM-DD
+  workerUid: string;
+  workerName: string;
+  employeeId: string;
+  teamName: string;
+  jobRole: string;
+  assignedJigId: string;
+  assignedBlockName: string;
+  totalShiftMinutes: number; // e.g. 420 mins (7 hours)
+  workBlockDwellMinutes: number; // assigned block total stay minutes
+  restAreaMinutes: number; // rest room & break minutes
+  awayMinutes: number; // unapproved away / unauthorized area minutes
+  complianceRate: number; // % (workBlockDwellMinutes / expectedWorkMinutes)
+  dwellDetails: WorkerBlockDwellDetail[];
+  slotRecords: {
+    slot: TrackingSlotTime;
+    timeLabel: string;
+    locationLabel: string;
+    blockName?: string;
+    status: 'NORMAL' | 'AWAY' | 'RESTING';
+    mapX: number;
+    mapY: number;
+  }[];
+  verdict: 'EXCELLENT' | 'NORMAL' | 'WARNING' | 'CRITICAL_AWAY'; // 공정 체류 성실도 판정
+  updatedAt: string;
+}
+
 

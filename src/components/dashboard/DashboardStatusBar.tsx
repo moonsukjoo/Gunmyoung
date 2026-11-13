@@ -30,6 +30,7 @@ interface DashboardStatusBarProps {
   isMonitoring: boolean;
   startMonitoring: () => void;
   geofenceBufferMeters?: number;
+  hideGps?: boolean;
 }
 
 export const DashboardStatusBar: React.FC<DashboardStatusBarProps> = ({
@@ -42,7 +43,8 @@ export const DashboardStatusBar: React.FC<DashboardStatusBarProps> = ({
   refreshLocation,
   isMonitoring,
   startMonitoring,
-  geofenceBufferMeters = 500
+  geofenceBufferMeters = 500,
+  hideGps = true
 }) => {
   const [isRetentionModalOpen, setIsRetentionModalOpen] = React.useState(false);
 
@@ -54,9 +56,10 @@ export const DashboardStatusBar: React.FC<DashboardStatusBarProps> = ({
 
   return (
     <>
-      {/* Balanced 2-Column Status Bar (Left: Workplace GPS / Right: Safety Sensor) */}
-      <div className="grid grid-cols-2 gap-2">
-        {/* Left: GPS & Workplace Geofence Status with ON/OFF Control */}
+      {/* Status Bar (GPS panel hidden on Home screen; only Safety Sensor shows) */}
+      <div className={cn("grid gap-2", hideGps ? "grid-cols-1" : "grid-cols-2")}>
+        {!hideGps && (
+        /* Left: GPS & Workplace Geofence Status with ON/OFF Control */
         <div 
           onClick={() => {
             if (isGpsAttendanceEnabled && isLocationRetentionActive) {
@@ -175,6 +178,7 @@ export const DashboardStatusBar: React.FC<DashboardStatusBarProps> = ({
             )}
           </div>
         </div>
+        )}
 
         {/* Right: Safety Sensor & Test Controller */}
         <div className="flex items-center justify-between p-2.5 rounded-2xl bg-card/75 backdrop-blur-md border border-border/70 shadow-2xs">

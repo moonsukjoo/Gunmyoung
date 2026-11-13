@@ -50,7 +50,8 @@ import {
   User,
   UserCheck,
   MapPin,
-  Navigation
+  Navigation,
+  Layers
 } from 'lucide-react';
 import { useAutoAttendance } from '@/components/AutoAttendanceProvider';
 import { db } from '@/firebase';
@@ -413,6 +414,7 @@ export const Admin: React.FC = () => {
       { to: '/admin/reports', label: '통합 보고서 관리', icon: FileBarChart, permission: 'admin', color: 'text-blue-300', bgColor: 'bg-blue-500/20' },
     ],
     safety: [
+      { to: '/factory-dwell', label: '7공장 블럭 체류 관제 (A3)', icon: Layers, permission: 'admin', color: 'text-cyan-400', bgColor: 'bg-cyan-500/20', requiresCEO: true },
       { to: '/admin/pc/attendance-status', label: '실시간 출근현황', icon: Users, permission: 'admin', color: 'text-teal-400', bgColor: 'bg-teal-500/20', requiresCEO: true },
       { onClick: () => navigate('/high-work-monitor'), label: '고소작업 현황', icon: BarChart3, permission: 'high_work_monitor', color: 'text-rose-400', bgColor: 'bg-rose-500/20' },
       { onClick: () => setIsEmergencyOpen(true), label: '비상 대피 (롤콜)', icon: AlertTriangle, permission: 'emergency_rollcall', color: 'text-red-400', bgColor: 'bg-red-500/20' },
@@ -439,7 +441,7 @@ export const Admin: React.FC = () => {
       { onClick: () => setIsShipSettingsOpen(true), label: '함선 파츠 확률', icon: Ship, permission: 'admin', color: 'text-blue-300', bgColor: 'bg-blue-500/20', requiresCEO: true },
       { onClick: () => setIsPermissionSettingsOpen(true), label: '사용자 권한 관리', icon: ShieldCheck, permission: 'admin', color: 'text-slate-300', bgColor: 'bg-slate-500/20', requiresCEO: true },
       { onClick: () => setIsSafetyManagerSettingsOpen(true), label: '기본 소장(안전책임자) 성함 설정', icon: UserCheck, permission: 'admin', color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
-      { onClick: () => setIsLocationSettingOpen(true), label: 'GPS 자동 출퇴근/기준점 설정', icon: MapPin, permission: 'admin', color: 'text-sky-400', bgColor: 'bg-sky-500/20' },
+      { onClick: () => setIsLocationSettingOpen(true), label: 'GPS 자동 출퇴근/기준점 설정', icon: MapPin, permission: 'admin', color: 'text-sky-400', bgColor: 'bg-sky-500/20', requiresCEO: true },
       { onClick: () => setIsDBResetOpen(true), label: '실운영 데이터 일괄 초기화', icon: AlertTriangle, permission: 'admin', color: 'text-rose-500', bgColor: 'bg-rose-500/20', requiresCEO: true },
     ]
   };
@@ -451,7 +453,8 @@ export const Admin: React.FC = () => {
       }
     }
 
-    if (link.requiresCEO && profile?.role !== 'CEO') {
+    const isCEOUser = profile?.role === 'CEO' || profile?.email?.toLowerCase() === 'tjrwnfjqm1@gmail.com';
+    if (link.requiresCEO && !isCEOUser) {
       return null;
     }
 

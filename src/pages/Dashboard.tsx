@@ -392,11 +392,14 @@ export const Dashboard: React.FC = () => {
   const [editShortcuts, setEditShortcuts] = useState<string[]>(DEFAULT_PINNED_SHORTCUTS);
   const [isSavingShortcuts, setIsSavingShortcuts] = useState(false);
 
+  const isCEO = profile?.role === 'CEO' || profile?.email?.toLowerCase() === 'tjrwnfjqm1@gmail.com';
+  const visibleShortcutOptions = ALL_SHORTCUT_OPTIONS.filter(opt => opt.id !== 'settings' || isCEO);
+
   const openShortcutConfig = () => {
     const current = (profile?.pinnedShortcuts && profile.pinnedShortcuts.length > 0)
       ? profile.pinnedShortcuts
       : DEFAULT_PINNED_SHORTCUTS;
-    setEditShortcuts([...current]);
+    setEditShortcuts(current.filter(id => id !== 'settings' || isCEO));
     setIsShortcutConfigOpen(true);
   };
 
@@ -461,7 +464,7 @@ export const Dashboard: React.FC = () => {
     : DEFAULT_PINNED_SHORTCUTS;
 
   const activePinnedShortcuts = activePinnedShortcutIds
-    .map(id => ALL_SHORTCUT_OPTIONS.find(opt => opt.id === id))
+    .map(id => visibleShortcutOptions.find(opt => opt.id === id))
     .filter(Boolean) as ShortcutOption[];
 
   useEffect(() => {
@@ -1243,7 +1246,7 @@ export const Dashboard: React.FC = () => {
         )}
       </header>
 
-      {/* 📍 Real-time Geofence Retention & Sensor Status Bar */}
+      {/* 📍 Real-time Geofence Retention & Sensor Status Bar (GPS hidden on Home) */}
       <DashboardStatusBar
         isLocationRetentionActive={isLocationRetentionActive}
         retentionRemainingMinutes={retentionRemainingMinutes}
@@ -1255,6 +1258,7 @@ export const Dashboard: React.FC = () => {
         geofenceBufferMeters={geofenceBufferMeters}
         isGpsAttendanceEnabled={isGpsAttendanceEnabled}
         toggleGpsAttendance={toggleGpsAttendance}
+        hideGps={true}
       />
 
       {/* 🚀 CUSTOMIZABLE QUICK ACTION SHORTCUTS (사용자 맞춤 빠른 실행 메뉴) */}
@@ -1427,7 +1431,7 @@ export const Dashboard: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
-                {ALL_SHORTCUT_OPTIONS.map((opt) => {
+                {visibleShortcutOptions.map((opt) => {
                   const isPinned = editShortcuts.includes(opt.id);
                   const Icon = opt.icon;
                   return (
@@ -1516,6 +1520,8 @@ export const Dashboard: React.FC = () => {
         handleClockOut={handleClockOut}
         pendingExitState={pendingExitState}
         isGpsAttendanceEnabled={isGpsAttendanceEnabled}
+        showGpsControls={false}
+        isCEO={isCEO}
       />
 
       {/* 🛠️ 3. STREAMLINED ALL-SERVICES HUB (모든 서비스 4열 아이콘 런처) */}

@@ -1,0 +1,960 @@
+import React, { useState } from 'react';
+import { 
+  FactoryJig, 
+  FactoryGpsRecord, 
+  TrackingSlotTime, 
+  TRACKING_TIME_SLOTS,
+  BlockDelayLog
+} from '../types';
+import { 
+  FACTORY_BOUNDS, 
+  FACTORY_FACILITIES, 
+  formatMinutesToKorean 
+} from '../services/factoryTrackingService';
+import { 
+  Compass, 
+  Layers, 
+  User, 
+  AlertTriangle, 
+  CheckCircle2, 
+  Coffee, 
+  HardHat, 
+  Maximize2, 
+  Minimize2, 
+  Info,
+  Clock,
+  ArrowRight,
+  Smartphone,
+  Map as MapIcon,
+  ShieldAlert
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+
+interface FactoryBlueprintMapProps {
+  jigs: FactoryJig[];
+  records: FactoryGpsRecord[];
+  delayLogs?: BlockDelayLog[];
+  selectedSlot: TrackingSlotTime;
+  selectedWorkerUid?: string | null;
+  onSelectWorker?: (workerUid: string | null) => void;
+  onSelectJig?: (jig: FactoryJig) => void;
+  selectedJigId?: string | null;
+  isPrintMode?: boolean;
+}
+
+export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
+  jigs,
+  records,
+  delayLogs = [],
+  selectedSlot,
+  selectedWorkerUid,
+  onSelectWorker,
+  onSelectJig,
+  selectedJigId,
+  isPrintMode = false
+}) => {
+  const [hoveredWorker, setHoveredWorker] = useState<FactoryGpsRecord | null>(null);
+  const [hoveredJig, setHoveredJig] = useState<FactoryJig | null>(null);
+  const [showPath, setShowPath] = useState(true);
+  const [viewMode, setViewMode] = useState<'MOBILE_GRID' | 'BLUEPRINT_A3'>(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768 && !isPrintMode) {
+      return 'MOBILE_GRID';
+    }
+    return 'BLUEPRINT_A3';
+  });
+
+  // Filter records for the currently active slot
+  const currentSlotRecords = records.filter(r => r.slot === selectedSlot);
+
+  // Worker records across all 8 slots for the selected worker (for path display)
+  const selectedWorkerHistory = selectedWorkerUid 
+    ? records.filter(r => r.workerUid === selectedWorkerUid).sort((a, b) => a.slotIndex - b.slotIndex)
+    : [];
+
+  // Group current slot records by JIG
+  const workerCountByJig: Record<string, number> = {};
+  const workersByJig: Record<string, FactoryGpsRecord[]> = {};
+  const awayOrFacilityWorkers: FactoryGpsRecord[] = [];
+  currentSlotRecords.forEach(r => {
+    if (r.jigId) {
+      workerCountByJig[r.jigId] = (workerCountByJig[r.jigId] || 0) + 1;
+      if (!workersByJig[r.jigId]) workersByJig[r.jigId] = [];
+      workersByJig[r.jigId].push(r);
+    } else {
+      awayOrFacilityWorkers.push(r);
+    }
+  });
+
+  // Group unresolved/total delay logs per JIG
+  const delayLogsByJig: Record<string, BlockDelayLog[]> = {};
+  delayLogs.forEach(l => {
+    if (!delayLogsByJig[l.jigId]) delayLogsByJig[l.jigId] = [];
+    delayLogsByJig[l.jigId].push(l);
+  });
+
+  const southJigs = jigs.filter(j => j.bay === 'BAY_SOUTH').sort((a, b) => a.jigNumber - b.jigNumber);
+  const northJigs = jigs.filter(j => j.bay === 'BAY_NORTH').sort((a, b) => a.jigNumber - b.jigNumber);
+
+  const effectiveViewMode = isPrintMode ? 'BLUEPRINT_A3' : viewMode;
+
+  return (
+    <div className={`relative w-full overflow-hidden bg-slate-950 text-slate-100 rounded-[2rem] border border-slate-800 shadow-2xl select-none ${isPrintMode ? 'rounded-none border-0 shadow-none' : ''}`}>
+      {/* Blueprint Header & Orientation Ribbon */}
+      <div className="bg-slate-900/90 border-b border-slate-800 px-4 sm:px-6 py-3.5 flex flex-col lg:flex-row lg:items-center justify-between gap-3 backdrop-blur-md">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-blue-600/20 text-blue-400 flex items-center justify-center border border-blue-500/30 shrink-0">
+              <Layers className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-blue-400">7공장 내부도</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  2시간 GPS 관제
+                </span>
+              </div>
+              <h3 className="text-xs sm:text-base font-black text-white truncate">중형선 7공장 지그 및 블럭 체류 현황</h3>
+            </div>
+          </div>
+
+          {/* Mobile/CAD Layout Mode Switcher */}
+          {!isPrintMode && (
+            <div className="flex items-center bg-slate-800/90 p-1 rounded-xl border border-slate-700 shrink-0">
+              <button
+                type="button"
+                onClick={() => setViewMode('MOBILE_GRID')}
+                className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-black flex items-center gap-1 transition-all cursor-pointer ${
+                  effectiveViewMode === 'MOBILE_GRID'
+                    ? 'bg-cyan-500 text-slate-950 shadow-sm'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                <Smartphone className="w-3 h-3" />
+                <span>모바일뷰</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('BLUEPRINT_A3')}
+                className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-black flex items-center gap-1 transition-all cursor-pointer ${
+                  effectiveViewMode === 'BLUEPRINT_A3'
+                    ? 'bg-blue-500 text-white shadow-sm'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                <MapIcon className="w-3 h-3" />
+                <span>A3 도면</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Compass & Directional Indicator Badge */}
+        <div className="flex items-center justify-center gap-2 bg-slate-800/80 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border border-slate-700/80 overflow-x-auto no-scrollbar">
+          <Compass className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400 shrink-0" />
+          <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs font-black whitespace-nowrap">
+            <span className="text-amber-400">← 동(E)</span>
+            <span className="text-slate-600">|</span>
+            <span className="text-amber-400">서(W) →</span>
+            <span className="text-slate-600">|</span>
+            <span className="text-cyan-400">↑ 남(S)</span>
+            <span className="text-slate-600">|</span>
+            <span className="text-cyan-400">↓ 북(N)</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ================= MODE 1: MOBILE-FIRST VERTICAL CARD INTERIOR LAYOUT ================= */}
+      {effectiveViewMode === 'MOBILE_GRID' ? (
+        <div className="p-3 sm:p-5 bg-[#080d1a] space-y-3.5">
+          {/* South Perimeter & Top Facilities */}
+          <div className="flex flex-col gap-2">
+            <div className="text-center py-1 px-3 rounded-full bg-slate-900 border border-cyan-500/40 text-[10px] font-black text-cyan-300 tracking-wider">
+              ▲ 위쪽: 남쪽 (SOUTH) • BAY A 라인 / 안벽 방면 ▲
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-[10px]">
+              <div className="bg-sky-950/40 border border-sky-500/30 rounded-xl p-2 flex items-center justify-between">
+                <span className="font-black text-sky-400">☕ 물량팀 휴게실</span>
+                <span className="text-slate-400 font-bold">
+                  {awayOrFacilityWorkers.filter(w => w.locationType === 'REST_AREA').length}명
+                </span>
+              </div>
+              <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-xl p-2 flex items-center justify-between">
+                <span className="font-black text-emerald-400">🛡️ 안전실/화장실</span>
+                <span className="text-slate-400 font-bold">
+                  {awayOrFacilityWorkers.filter(w => w.locationType === 'RESTROOM').length}명
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* BAY A (남측 지그 1~5) */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[11px] font-black text-cyan-400 tracking-tight">
+                [ BAY A - 남측 대조립 지그 ]
+              </span>
+              <span className="text-[10px] text-slate-400 font-bold">동(←) ~ 서(→)</span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+              {southJigs.map(jig => {
+                const isSelected = selectedJigId === jig.id;
+                const jigWorkers = workersByJig[jig.id] || [];
+                const jigDelays = delayLogsByJig[jig.id] || [];
+                const unresolvedDelays = jigDelays.filter(d => !d.resolved);
+                const delayCount = unresolvedDelays.length || jig.delayLogCount || 0;
+                const progress = jig.currentProgress ?? jig.progressPercent ?? 0;
+
+                return (
+                  <div
+                    key={jig.id}
+                    onClick={() => onSelectJig && onSelectJig(jig)}
+                    className={`rounded-2xl border p-2.5 space-y-2 transition-all cursor-pointer active:scale-[0.98] ${
+                      isSelected
+                        ? 'bg-slate-800/90 border-cyan-400 ring-2 ring-cyan-400/30'
+                        : delayCount > 0 || jig.latestDelayReason
+                        ? 'bg-[#170f18] border-rose-500/40 hover:border-rose-400'
+                        : 'bg-[#0e1729] border-slate-800 hover:border-blue-500/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-slate-800 text-white border border-slate-700">
+                        {jig.jigName}
+                      </span>
+                      <span className={`text-[10px] font-black ${jigWorkers.length > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
+                        {jigWorkers.length > 0 ? `● ${jigWorkers.length}명` : '○ 대기'}
+                      </span>
+                    </div>
+
+                    <div className="bg-slate-950/90 border border-cyan-500/40 rounded-xl py-1.5 px-2 text-center">
+                      <p className="text-sm font-black text-cyan-300 tracking-tight truncate">{jig.blockName}</p>
+                      <p className="text-[9px] font-bold text-slate-400 truncate mt-0.5">{jig.assignedTeam}</p>
+                    </div>
+
+                    {/* Critical Delay Alert Pill */}
+                    {(delayCount > 0 || jig.latestDelayReason) && (
+                      <div className="bg-rose-500/15 border border-rose-500/30 rounded-lg px-2 py-1 text-[9.5px] text-rose-300 font-bold flex items-center gap-1">
+                        <ShieldAlert className="w-3 h-3 text-rose-400 shrink-0" />
+                        <span className="truncate">
+                          {jig.latestDelayReason || `${delayCount}건 지연사유`}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Progress & Dates */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[9px] font-bold">
+                        <span className="text-amber-400 font-mono">
+                          {jig.startDate ? jig.startDate.slice(5) : '11-03'}~{jig.endDate ? jig.endDate.slice(5) : '11-12'}
+                        </span>
+                        <span className="text-cyan-400 font-black">{progress}%</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${delayCount > 0 ? 'bg-rose-500' : 'bg-cyan-400'}`}
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Live Workers Inside This Block */}
+                    {jigWorkers.length > 0 && (
+                      <div className="pt-1 border-t border-slate-800/80 flex flex-wrap gap-1">
+                        {jigWorkers.map(w => {
+                          const isWSelected = selectedWorkerUid === w.workerUid;
+                          return (
+                            <button
+                              key={w.id}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSelectWorker && onSelectWorker(isWSelected ? null : w.workerUid);
+                              }}
+                              className={`px-1.5 py-0.5 rounded-md text-[9.5px] font-black flex items-center gap-1 border transition-all cursor-pointer ${
+                                isWSelected
+                                  ? 'bg-cyan-500 text-slate-950 border-white'
+                                  : w.status === 'NORMAL'
+                                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                                  : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                              }`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${w.status === 'NORMAL' ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                              {w.workerName}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Central Crane Transporter Walkway */}
+          <div className="bg-amber-500/10 border border-dashed border-amber-500/40 rounded-2xl p-2.5 space-y-1.5">
+            <div className="flex items-center justify-between text-[10px] font-black text-amber-300">
+              <span>◀ 동측 반입문</span>
+              <span>══ 중앙 크레인 통로 ══</span>
+              <span>서측 반출문 ▶</span>
+            </div>
+            {awayOrFacilityWorkers.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {awayOrFacilityWorkers.map(w => {
+                  const isWSelected = selectedWorkerUid === w.workerUid;
+                  return (
+                    <button
+                      key={w.id}
+                      type="button"
+                      onClick={() => onSelectWorker && onSelectWorker(isWSelected ? null : w.workerUid)}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-black border flex items-center gap-1 cursor-pointer ${
+                        isWSelected
+                          ? 'bg-cyan-500 text-slate-950 border-white'
+                          : w.status === 'RESTING'
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                          : 'bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse'
+                      }`}
+                    >
+                      <span>{w.workerName}</span>
+                      <span className="text-[8.5px] opacity-80">({w.status === 'RESTING' ? '휴게' : '이탈'})</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-[10px] text-center text-slate-400 font-bold">
+                현재 슬롯({selectedSlot}) 통로 이동 및 구역 이탈 인원 없음
+              </p>
+            )}
+          </div>
+
+          {/* BAY B (북측 지그 6~10) */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[11px] font-black text-blue-400 tracking-tight">
+                [ BAY B - 북측 특수/의장 지그 ]
+              </span>
+              <span className="text-[10px] text-slate-400 font-bold">동(←) ~ 서(→)</span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+              {northJigs.map(jig => {
+                const isSelected = selectedJigId === jig.id;
+                const jigWorkers = workersByJig[jig.id] || [];
+                const jigDelays = delayLogsByJig[jig.id] || [];
+                const unresolvedDelays = jigDelays.filter(d => !d.resolved);
+                const delayCount = unresolvedDelays.length || jig.delayLogCount || 0;
+                const progress = jig.currentProgress ?? jig.progressPercent ?? 0;
+
+                return (
+                  <div
+                    key={jig.id}
+                    onClick={() => onSelectJig && onSelectJig(jig)}
+                    className={`rounded-2xl border p-2.5 space-y-2 transition-all cursor-pointer active:scale-[0.98] ${
+                      isSelected
+                        ? 'bg-slate-800/90 border-cyan-400 ring-2 ring-cyan-400/30'
+                        : delayCount > 0 || jig.latestDelayReason
+                        ? 'bg-[#170f18] border-rose-500/40 hover:border-rose-400'
+                        : 'bg-[#0e1729] border-slate-800 hover:border-blue-500/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-slate-800 text-white border border-slate-700">
+                        {jig.jigName}
+                      </span>
+                      <span className={`text-[10px] font-black ${jigWorkers.length > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
+                        {jigWorkers.length > 0 ? `● ${jigWorkers.length}명` : '○ 대기'}
+                      </span>
+                    </div>
+
+                    <div className="bg-slate-950/90 border border-blue-500/40 rounded-xl py-1.5 px-2 text-center">
+                      <p className="text-sm font-black text-blue-300 tracking-tight truncate">{jig.blockName}</p>
+                      <p className="text-[9px] font-bold text-slate-400 truncate mt-0.5">{jig.assignedTeam}</p>
+                    </div>
+
+                    {(delayCount > 0 || jig.latestDelayReason) && (
+                      <div className="bg-rose-500/15 border border-rose-500/30 rounded-lg px-2 py-1 text-[9.5px] text-rose-300 font-bold flex items-center gap-1">
+                        <ShieldAlert className="w-3 h-3 text-rose-400 shrink-0" />
+                        <span className="truncate">
+                          {jig.latestDelayReason || `${delayCount}건 지연사유`}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[9px] font-bold">
+                        <span className="text-amber-400 font-mono">
+                          {jig.startDate ? jig.startDate.slice(5) : '11-03'}~{jig.endDate ? jig.endDate.slice(5) : '11-12'}
+                        </span>
+                        <span className="text-blue-400 font-black">{progress}%</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${delayCount > 0 ? 'bg-rose-500' : 'bg-blue-400'}`}
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {jigWorkers.length > 0 && (
+                      <div className="pt-1 border-t border-slate-800/80 flex flex-wrap gap-1">
+                        {jigWorkers.map(w => {
+                          const isWSelected = selectedWorkerUid === w.workerUid;
+                          return (
+                            <button
+                              key={w.id}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSelectWorker && onSelectWorker(isWSelected ? null : w.workerUid);
+                              }}
+                              className={`px-1.5 py-0.5 rounded-md text-[9.5px] font-black flex items-center gap-1 border transition-all cursor-pointer ${
+                                isWSelected
+                                  ? 'bg-cyan-500 text-slate-950 border-white'
+                                  : w.status === 'NORMAL'
+                                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                                  : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                              }`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${w.status === 'NORMAL' ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                              {w.workerName}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Bottom Facilities & North Perimeter */}
+          <div className="flex flex-col gap-2">
+            <div className="grid grid-cols-2 gap-2 text-[10px]">
+              <div className="bg-amber-950/40 border border-amber-500/30 rounded-xl p-2 font-black text-amber-400 truncate">
+                📦 공구 및 용접기자재실
+              </div>
+              <div className="bg-violet-950/40 border border-violet-500/30 rounded-xl p-2 font-black text-violet-400 truncate text-right">
+                📦 완성 블럭 검사대기장
+              </div>
+            </div>
+            <div className="text-center py-1 px-3 rounded-full bg-slate-900 border border-slate-700 text-[10px] font-black text-slate-300 tracking-wider">
+              ▼ 아래쪽: 북쪽 (NORTH) • BAY B 라인 / 원자재 반입 방면 ▼
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* ================= MODE 2: A3 LANDSCAPE CAD BLUEPRINT SVG ================= */
+        <div className="overflow-x-auto bg-[#0a0f1d]">
+          <div className="relative min-w-[760px] w-full aspect-[1414/1000] p-4 sm:p-6 bg-[#0a0f1d] overflow-hidden">
+            <svg
+              viewBox="0 0 1414 1000"
+              className="w-full h-full drop-shadow-2xl"
+              style={{ shapeRendering: 'geometricPrecision' }}
+            >
+          <defs>
+            {/* Grid pattern */}
+            <pattern id="gridPattern" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255, 255, 255, 0.03)" strokeWidth="1" />
+            </pattern>
+            {/* Steel Jig Grid */}
+            <pattern id="jigGrid" width="20" height="20" patternUnits="userSpaceOnUse">
+              <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(56, 189, 248, 0.08)" strokeWidth="1" />
+            </pattern>
+            {/* Caution stripes for Crane walkway */}
+            <pattern id="craneStripes" width="20" height="20" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+              <line x1="0" y1="0" x2="0" y2="20" stroke="rgba(234, 179, 8, 0.06)" strokeWidth="10" />
+            </pattern>
+            {/* Glow filters */}
+            <filter id="glowGreen" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="4" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+            <filter id="glowRed" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="5" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+          </defs>
+
+          {/* Background Grid */}
+          <rect width="1414" height="1000" fill="#060913" />
+          <rect width="1414" height="1000" fill="url(#gridPattern)" />
+
+          {/* Outer Workshop Perimeter Walls */}
+          <rect
+            x="20"
+            y="20"
+            width="1374"
+            height="960"
+            fill="none"
+            stroke="#1e293b"
+            strokeWidth="4"
+            rx="16"
+          />
+
+          {/* Compass Graphic in Background (South Top, North Bottom, East Left, West Right) */}
+          <g transform="translate(1300, 110)" opacity="0.35">
+            <circle r="44" fill="#0f172a" stroke="#334155" strokeWidth="2" />
+            <path d="M 0 -35 L 8 0 L 0 35 L -8 0 Z" fill="#0284c7" />
+            <path d="M -35 0 L 0 8 L 35 0 L 0 -8 Z" fill="#f59e0b" />
+            <text x="0" y="-38" textAnchor="middle" fill="#38bdf8" fontSize="11" fontWeight="900">↑ 남 (S)</text>
+            <text x="0" y="48" textAnchor="middle" fill="#94a3b8" fontSize="10" fontWeight="900">↓ 북 (N)</text>
+            <text x="-42" y="4" textAnchor="end" fill="#f59e0b" fontSize="10" fontWeight="900">← 동(E)</text>
+            <text x="42" y="4" textAnchor="start" fill="#f59e0b" fontSize="10" fontWeight="900">서(W) →</text>
+          </g>
+
+          {/* Factory Boundary Directional Labels */}
+          {/* Top: South */}
+          <g transform="translate(707, 34)">
+            <rect x="-180" y="-12" width="360" height="24" fill="#0f172a" rx="12" stroke="#38bdf8" strokeWidth="1.5" />
+            <text x="0" y="4" textAnchor="middle" fill="#38bdf8" fontSize="11" fontWeight="900" letterSpacing="2">
+              ▲ 위쪽: 남쪽 (SOUTH) • 조업 BAY A 라인 / 안벽 방면 ▲
+            </text>
+          </g>
+
+          {/* Bottom: North */}
+          <g transform="translate(707, 970)">
+            <rect x="-180" y="-12" width="360" height="24" fill="#0f172a" rx="12" stroke="#64748b" strokeWidth="1.5" />
+            <text x="0" y="4" textAnchor="middle" fill="#cbd5e1" fontSize="11" fontWeight="900" letterSpacing="2">
+              ▼ 아래쪽: 북쪽 (NORTH) • 조업 BAY B 라인 / 원자재 반입 방면 ▼
+            </text>
+          </g>
+
+          {/* Left: East */}
+          <g transform="translate(30, 500) rotate(-90)">
+            <rect x="-150" y="-12" width="300" height="24" fill="#0f172a" rx="12" stroke="#f59e0b" strokeWidth="1.5" />
+            <text x="0" y="4" textAnchor="middle" fill="#f59e0b" fontSize="11" fontWeight="900" letterSpacing="2">
+              ◀ 왼쪽: 동쪽 (EAST) • 제6공장 연결 & 자재 반입문
+            </text>
+          </g>
+
+          {/* Right: West */}
+          <g transform="translate(1384, 500) rotate(90)">
+            <rect x="-150" y="-12" width="300" height="24" fill="#0f172a" rx="12" stroke="#f59e0b" strokeWidth="1.5" />
+            <text x="0" y="4" textAnchor="middle" fill="#f59e0b" fontSize="11" fontWeight="900" letterSpacing="2">
+              오른쪽: 서쪽 (WEST) • 완성 블럭 반출문 & 도크 방면 ▶
+            </text>
+          </g>
+
+          {/* Central Transporter Highway (중앙 주통로 / 대차 레일, Y: 430 ~ 570) */}
+          <rect x="50" y="430" width="1314" height="140" fill="url(#craneStripes)" stroke="#334155" strokeWidth="1.5" strokeDasharray="6 4" rx="8" />
+          
+          {/* Double Crane Rails spanning East to West */}
+          <line x1="50" y1="450" x2="1364" y2="450" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="12 6" opacity="0.6" />
+          <line x1="50" y1="550" x2="1364" y2="550" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="12 6" opacity="0.6" />
+          
+          <g transform="translate(707, 505)">
+            <text x="0" y="0" textAnchor="middle" fill="#94a3b8" fontSize="12" fontWeight="900" letterSpacing="3">
+              ═══ 중앙 트랜스포터 주통로 (50T / 30T 오버헤드 천장 크레인 주행로) ═══
+            </text>
+          </g>
+
+          {/* East Main Door */}
+          <g transform="translate(20, 460)">
+            <rect x="0" y="0" width="8" height="80" fill="#f59e0b" rx="2" />
+            <text x="14" y="44" fill="#f59e0b" fontSize="10" fontWeight="900" transform="rotate(-90 14 44)">동측 반입문 (GATE E)</text>
+          </g>
+
+          {/* West Main Door */}
+          <g transform="translate(1386, 460)">
+            <rect x="0" y="0" width="8" height="80" fill="#10b981" rx="2" />
+            <text x="14" y="44" fill="#10b981" fontSize="10" fontWeight="900" transform="rotate(90 14 44)">서측 반출문 (GATE W)</text>
+          </g>
+
+          {/* Facilities (휴게실, 공구실, 안전관리실, 검사장) */}
+          {FACTORY_FACILITIES.map(fac => (
+            <g key={fac.id} transform={`translate(${fac.x}, ${fac.y})`}>
+              <rect
+                width={fac.width}
+                height={fac.height}
+                fill="#0f172a"
+                stroke={fac.color}
+                strokeWidth="2"
+                strokeDasharray="4 2"
+                rx="12"
+              />
+              <rect
+                x="4"
+                y="4"
+                width={fac.width - 8}
+                height="22"
+                fill={`${fac.color}25`}
+                rx="8"
+              />
+              <text
+                x={fac.width / 2}
+                y="18"
+                textAnchor="middle"
+                fill={fac.color}
+                fontSize="9"
+                fontWeight="900"
+              >
+                {fac.type === 'REST_AREA' ? '☕ 휴게구역' : fac.type === 'RESTROOM' ? '🛡️ 관리/화장실' : '📦 자재/검사'}
+              </text>
+              <text
+                x={fac.width / 2}
+                y={fac.height / 2 + 8}
+                textAnchor="middle"
+                fill="#f8fafc"
+                fontSize="10"
+                fontWeight="800"
+              >
+                {fac.name.split(' ')[0]}
+              </text>
+              <text
+                x={fac.width / 2}
+                y={fac.height / 2 + 22}
+                textAnchor="middle"
+                fill="#94a3b8"
+                fontSize="8"
+                fontWeight="700"
+              >
+                {fac.name.split(' ').slice(1).join(' ')}
+              </text>
+            </g>
+          ))}
+
+          {/* Bay Headers */}
+          <g transform="translate(180, 140)">
+            <text x="0" y="0" fill="#38bdf8" fontSize="12" fontWeight="900" letterSpacing="1">
+              [ BAY A - 남측 라인 : 선체 저판 및 외판 대조립 지그 구역 ]
+            </text>
+          </g>
+          <g transform="translate(180, 595)">
+            <text x="0" y="0" fill="#38bdf8" fontSize="12" fontWeight="900" letterSpacing="1">
+              [ BAY B - 북측 라인 : 탱크, 선수/선미 특수 조립 및 선행의장 지그 구역 ]
+            </text>
+          </g>
+
+          {/* JIGS (지그 및 블럭) */}
+          {jigs.map(jig => {
+            const isSelected = selectedJigId === jig.id;
+            const isHovered = hoveredJig?.id === jig.id;
+            const workerCount = workerCountByJig[jig.id] || 0;
+            const jigDelayCount = (delayLogsByJig[jig.id] || []).length || jig.delayLogCount || 0;
+
+            return (
+              <g
+                key={jig.id}
+                transform={`translate(${jig.x}, ${jig.y})`}
+                className="cursor-pointer transition-all duration-200"
+                onClick={() => onSelectJig && onSelectJig(jig)}
+                onMouseEnter={() => setHoveredJig(jig)}
+                onMouseLeave={() => setHoveredJig(null)}
+              >
+                {/* JIG Base Plate */}
+                <rect
+                  width={jig.width}
+                  height={jig.height}
+                  fill={isSelected ? '#1e293b' : jigDelayCount > 0 ? '#180d16' : '#0c1322'}
+                  stroke={isSelected ? '#38bdf8' : jigDelayCount > 0 ? '#f43f5e' : isHovered ? '#60a5fa' : '#1e3a5f'}
+                  strokeWidth={isSelected ? '3.5' : isHovered ? '2.5' : '1.5'}
+                  rx="12"
+                />
+
+                {/* Steel Jig Internal Grid */}
+                <rect
+                  x="8"
+                  y="8"
+                  width={jig.width - 16}
+                  height={jig.height - 16}
+                  fill="url(#jigGrid)"
+                  rx="8"
+                />
+
+                {/* Ship Block Silhouette Representation */}
+                <rect
+                  x="18"
+                  y="46"
+                  width={jig.width - 36}
+                  height={jig.height - 84}
+                  fill="#172554"
+                  stroke="#2563eb"
+                  strokeWidth="1.5"
+                  strokeDasharray="4 3"
+                  rx="6"
+                  opacity="0.75"
+                />
+
+                {/* JIG Header Badge */}
+                <rect
+                  x="10"
+                  y="10"
+                  width={jig.width - 20}
+                  height="26"
+                  fill={isSelected ? '#0284c7' : jigDelayCount > 0 ? '#881337' : '#1e293b'}
+                  rx="6"
+                />
+                <text
+                  x="20"
+                  y="27"
+                  fill="#ffffff"
+                  fontSize="11"
+                  fontWeight="900"
+                  letterSpacing="0.5"
+                >
+                  {jig.jigName}{jigDelayCount > 0 ? ` · 🚨${jigDelayCount}` : ''}
+                </text>
+                <text
+                  x={jig.width - 20}
+                  y="27"
+                  textAnchor="end"
+                  fill={workerCount > 0 ? '#4ade80' : '#94a3b8'}
+                  fontSize="10"
+                  fontWeight="900"
+                >
+                  {workerCount > 0 ? `● ${workerCount}명 작업 중` : '○ 미작업'}
+                </text>
+
+                {/* PROMINENT SHIP BLOCK CODE (사용자 요청: "지그위에 블럭명 추가해서") */}
+                <g transform={`translate(${jig.width / 2}, ${jig.height / 2 - 4})`}>
+                  <rect
+                    x="-65"
+                    y="-20"
+                    width="130"
+                    height="40"
+                    fill="#0f172a"
+                    stroke="#38bdf8"
+                    strokeWidth="2"
+                    rx="8"
+                  />
+                  <text
+                    x="0"
+                    y="5"
+                    textAnchor="middle"
+                    fill="#38bdf8"
+                    fontSize="16"
+                    fontWeight="900"
+                    letterSpacing="1"
+                  >
+                    {jig.blockName}
+                  </text>
+                </g>
+
+                {/* Block Type / Subtitle */}
+                <text
+                  x={jig.width / 2}
+                  y={jig.height / 2 + 28}
+                  textAnchor="middle"
+                  fill="#cbd5e1"
+                  fontSize="9.5"
+                  fontWeight="700"
+                >
+                  {jig.blockType}
+                </text>
+
+                {/* Schedule Dates & Target Days */}
+                <text
+                  x={jig.width / 2}
+                  y={jig.height / 2 + 42}
+                  textAnchor="middle"
+                  fill="#f59e0b"
+                  fontSize="8.5"
+                  fontWeight="900"
+                >
+                  📅 {jig.startDate ? jig.startDate.slice(5) : '11.03'}~{jig.endDate ? jig.endDate.slice(5) : '11.12'} ({jig.targetDays || 10}일 공정)
+                </text>
+
+                {/* Assigned Team & Progress Bar */}
+                <text
+                  x="18"
+                  y={jig.height - 24}
+                  fill="#94a3b8"
+                  fontSize="9"
+                  fontWeight="700"
+                >
+                  {jig.assignedTeam}
+                </text>
+                
+                {/* Mini Progress track */}
+                <rect
+                  x="18"
+                  y={jig.height - 18}
+                  width={jig.width - 36}
+                  height="6"
+                  fill="#1e293b"
+                  rx="3"
+                />
+                <rect
+                  x="18"
+                  y={jig.height - 18}
+                  width={((jig.width - 36) * (jig.currentProgress ?? jig.progressPercent ?? 0)) / 100}
+                  height="6"
+                  fill={jigDelayCount > 0 ? '#f43f5e' : '#38bdf8'}
+                  rx="3"
+                />
+              </g>
+            );
+          })}
+
+          {/* Historical Path Trail for Selected Worker */}
+          {showPath && selectedWorkerHistory.length > 1 && (
+            <g>
+              {/* Path line */}
+              <polyline
+                points={selectedWorkerHistory.map(h => `${h.mapX},${h.mapY}`).join(' ')}
+                fill="none"
+                stroke="#f43f5e"
+                strokeWidth="3.5"
+                strokeDasharray="6 4"
+                opacity="0.8"
+              />
+              {/* Step numbers on the path */}
+              {selectedWorkerHistory.map((h, i) => (
+                <g key={`history_point_${h.id}_${i}`} transform={`translate(${h.mapX}, ${h.mapY})`}>
+                  <circle r="12" fill="#f43f5e" stroke="#ffffff" strokeWidth="2" />
+                  <text x="0" y="4" textAnchor="middle" fill="#ffffff" fontSize="9" fontWeight="900">
+                    {i + 1}
+                  </text>
+                  <text x="0" y="-16" textAnchor="middle" fill="#fecdd3" fontSize="8" fontWeight="800">
+                    {h.slot}
+                  </text>
+                </g>
+              ))}
+            </g>
+          )}
+
+          {/* Worker Location Pins for the Active Slot (08:20, 09:45, ...) */}
+          {currentSlotRecords.map(worker => {
+            const isSelected = selectedWorkerUid === worker.workerUid;
+            const isHovered = hoveredWorker?.id === worker.id;
+            const isNormal = worker.status === 'NORMAL';
+            const isResting = worker.status === 'RESTING';
+            const pinColor = isNormal ? '#22c55e' : isResting ? '#eab308' : '#ef4444';
+
+            return (
+              <g
+                key={worker.id}
+                transform={`translate(${worker.mapX}, ${worker.mapY})`}
+                className="cursor-pointer transition-transform duration-200"
+                onClick={() => onSelectWorker && onSelectWorker(isSelected ? null : worker.workerUid)}
+                onMouseEnter={() => setHoveredWorker(worker)}
+                onMouseLeave={() => setHoveredWorker(null)}
+              >
+                {/* Glow ring if selected or slacker */}
+                {(!isNormal || isSelected) && (
+                  <circle
+                    r={isSelected ? 26 : 20}
+                    fill={pinColor}
+                    opacity="0.25"
+                    className="animate-ping"
+                  />
+                )}
+
+                {/* Pin Shadow */}
+                <circle r="15" fill="#020617" opacity="0.6" cy="2" />
+
+                {/* Worker Pin Head */}
+                <circle
+                  r={isSelected ? 16 : 13}
+                  fill={pinColor}
+                  stroke="#ffffff"
+                  strokeWidth={isSelected ? '3' : '2'}
+                  filter={!isNormal ? 'url(#glowRed)' : 'url(#glowGreen)'}
+                />
+
+                {/* Worker Icon */}
+                <text
+                  x="0"
+                  y="4"
+                  textAnchor="middle"
+                  fill="#ffffff"
+                  fontSize={isSelected ? '10' : '8.5'}
+                  fontWeight="900"
+                >
+                  {worker.workerName.slice(0, 1)}
+                </text>
+
+                {/* Worker Name Label Tag */}
+                <g transform={`translate(0, ${isSelected ? -22 : -18})`}>
+                  <rect
+                    x="-32"
+                    y="-11"
+                    width="64"
+                    height="16"
+                    fill={isSelected ? '#0284c7' : '#0f172a'}
+                    stroke={pinColor}
+                    strokeWidth="1.5"
+                    rx="5"
+                  />
+                  <text
+                    x="0"
+                    y="1"
+                    textAnchor="middle"
+                    fill="#ffffff"
+                    fontSize="8.5"
+                    fontWeight="800"
+                  >
+                    {worker.workerName}
+                  </text>
+                </g>
+              </g>
+            );
+          })}
+        </svg>
+
+        {/* Hover / Detail Popover for Worker */}
+        {hoveredWorker && (
+          <div
+            className="absolute z-30 pointer-events-none bg-slate-900/95 border border-slate-700 p-3.5 rounded-2xl shadow-2xl backdrop-blur-md text-xs space-y-1.5 w-64 animate-in fade-in zoom-in-95 duration-150"
+            style={{
+              left: `${Math.min(75, Math.max(10, (hoveredWorker.mapX / 1414) * 100))}%`,
+              top: `${Math.min(75, Math.max(10, (hoveredWorker.mapY / 1000) * 100))}%`
+            }}
+          >
+            <div className="flex items-center justify-between border-b border-slate-700 pb-1.5">
+              <div className="flex items-center gap-1.5">
+                <div className={`w-2.5 h-2.5 rounded-full ${hoveredWorker.status === 'NORMAL' ? 'bg-emerald-500' : hoveredWorker.status === 'RESTING' ? 'bg-amber-500' : 'bg-rose-500'}`} />
+                <span className="font-black text-white text-sm">{hoveredWorker.workerName}</span>
+                <span className="text-[10px] text-slate-400 font-mono">({hoveredWorker.employeeId})</span>
+              </div>
+              <span className="text-[10px] font-black px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                {hoveredWorker.slot}
+              </span>
+            </div>
+            <div className="text-[11px] space-y-1 text-slate-300">
+              <p><strong className="text-slate-400">소속팀:</strong> {hoveredWorker.teamName}</p>
+              <p><strong className="text-slate-400">현재 위치:</strong> <span className={hoveredWorker.status === 'NORMAL' ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>{hoveredWorker.locationLabel}</span></p>
+              <p><strong className="text-slate-400">체류 상태:</strong> {hoveredWorker.status === 'NORMAL' ? '정상 조업 체류' : hoveredWorker.status === 'RESTING' ? '휴게시간 체류' : '⚠️ 지정 블럭 이탈'}</p>
+            </div>
+          </div>
+        )}
+          </div>
+        </div>
+      )}
+
+      {/* Blueprint Legend & Quick Summary Footer */}
+      <div className="bg-slate-900/95 border-t border-slate-800 p-4 px-6 flex flex-wrap items-center justify-between gap-4 text-xs font-semibold">
+        <div className="flex flex-wrap items-center gap-5">
+          <span className="text-slate-400 font-bold flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block shadow-sm shadow-emerald-500/50" />
+            정상 블럭 체류 ({currentSlotRecords.filter(r => r.status === 'NORMAL').length}명)
+          </span>
+          <span className="text-slate-400 font-bold flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-full bg-amber-500 inline-block shadow-sm shadow-amber-500/50" />
+            휴게실/화장실 ({currentSlotRecords.filter(r => r.status === 'RESTING').length}명)
+          </span>
+          <span className="text-slate-400 font-bold flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-full bg-rose-500 inline-block shadow-sm shadow-rose-500/50 animate-pulse" />
+            지정 블럭 이탈/미체류 ({currentSlotRecords.filter(r => r.status === 'AWAY').length}명)
+          </span>
+        </div>
+
+        <div className="flex items-center gap-4">
+          {selectedWorkerUid && (
+            <button
+              onClick={() => onSelectWorker && onSelectWorker(null)}
+              className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-all border border-slate-700 cursor-pointer"
+            >
+              선택 해제 (전체 보기)
+            </button>
+          )}
+          <span className="text-[11px] text-slate-400">
+            총 지그 10기 (블럭 10개) • 현재 슬롯 검출 {currentSlotRecords.length}명
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};

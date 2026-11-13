@@ -401,6 +401,7 @@
         "employeeId": { "type": "string" },
         "userName": { "type": "string" },
         "month": { "type": "string", "description": "YYYY-MM" },
+        "workDays": { "type": "number" },
         "baseHours": { "type": "number" },
         "weeklyHolidayHours": { "type": "number" },
         "paidLeaveHours": { "type": "number" },
@@ -417,6 +418,10 @@
         "annualLeaveAllowance": { "type": "number" },
         "mealAllowance": { "type": "number" },
         "extraAllowance": { "type": "number" },
+        "customEarnings": {
+          "type": "array",
+          "description": "Additional dynamic earning items added to payslip"
+        },
         "totalEarnings": { "type": "number" },
         "incomeTax": { "type": "number" },
         "localIncomeTax": { "type": "number" },
@@ -425,6 +430,10 @@
         "employmentInsurance": { "type": "number" },
         "mealDeduction": { "type": "number" },
         "laundryDeduction": { "type": "number" },
+        "customDeductions": {
+          "type": "array",
+          "description": "Additional dynamic deduction items added to payslip"
+        },
         "totalDeductions": { "type": "number" },
         "netPay": { "type": "number" },
         "annualLeaveBaseDate": { "type": "string" },
@@ -675,6 +684,53 @@
         "remarks": { "type": "string" }
       },
       "required": ["senderUid", "receiverUid", "content", "category", "status", "createdAt"]
+    },
+    "FactoryJig": {
+      "title": "Factory 7 JIG & Block",
+      "description": "Assembly JIG and ship block progress & schedule inside Factory 7 (CEO-only)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "jigNumber": { "type": "number" },
+        "jigName": { "type": "string" },
+        "blockName": { "type": "string" },
+        "blockType": { "type": "string" },
+        "assignedTeam": { "type": "string" },
+        "currentProgress": { "type": "number" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "targetDays": { "type": "number" },
+        "latestDelayReason": { "type": "string" },
+        "latestDelayAt": { "type": "string" },
+        "latestDelaySeverity": { "type": "string", "enum": ["CRITICAL", "WARNING", "INFO"] },
+        "delayLogCount": { "type": "number" },
+        "bay": { "type": "string", "enum": ["BAY_SOUTH", "BAY_NORTH"] },
+        "status": { "type": "string", "enum": ["ACTIVE", "HOLD", "COMPLETED"] }
+      },
+      "required": ["id", "jigNumber", "jigName", "blockName"]
+    },
+    "FactoryDelayLog": {
+      "title": "Factory Block Critical Delay Log",
+      "description": "Cumulative chronological critical delay reason log per block/JIG (CEO-only)",
+      "type": "object",
+      "properties": {
+        "jigId": { "type": "string" },
+        "jigName": { "type": "string" },
+        "blockName": { "type": "string" },
+        "category": { "type": "string" },
+        "severity": { "type": "string", "enum": ["CRITICAL", "WARNING", "INFO"] },
+        "reason": { "type": "string" },
+        "actionPlan": { "type": "string" },
+        "delayDays": { "type": "number" },
+        "progressAtTime": { "type": "number" },
+        "recordedByUid": { "type": "string" },
+        "recordedByName": { "type": "string" },
+        "recordedAt": { "type": "string", "format": "date-time" },
+        "resolved": { "type": "boolean" },
+        "resolvedAt": { "type": "string", "format": "date-time" },
+        "resolvedNote": { "type": "string" }
+      },
+      "required": ["jigId", "jigName", "blockName", "category", "severity", "reason", "recordedByUid", "recordedAt"]
     }
   },
   "firestore": {
@@ -821,6 +877,22 @@
     "/workRequests/{requestId}": {
       "schema": "WorkRequest",
       "description": "Work and safety action requests submitted between personnel"
+    },
+    "/factoryJigs/{jigId}": {
+      "schema": "FactoryJig",
+      "description": "Factory 7 assembly JIG and block schedule records (CEO-only)"
+    },
+    "/factoryGpsRecords/{recordId}": {
+      "schema": "object",
+      "description": "Factory 7 2-hour interval worker GPS dwell records (CEO-only)"
+    },
+    "/workerDwellSummaries/{summaryId}": {
+      "schema": "object",
+      "description": "Factory 7 daily worker dwell compliance summaries (CEO-only)"
+    },
+    "/factoryDelayLogs/{logId}": {
+      "schema": "FactoryDelayLog",
+      "description": "Cumulative critical delay reason logs for Factory 7 blocks (CEO-only)"
     }
   }
 }
