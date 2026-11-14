@@ -165,11 +165,6 @@ export const PCAdminFactoryDwell: React.FC = () => {
       setDwellSummaries(fetchedSummaries);
       setDelayLogs(fetchedDelayLogs);
       setCalibration(fetchedCalibration);
-
-      // If no records for selected date, suggest auto-seeding
-      if (fetchedRecords.length === 0) {
-        toast.info(`${selectedDate} 일자의 기록이 없습니다. 상단의 [모의 데이터 생성]을 누르면 현장 기록을 즉시 생성하여 확인할 수 있습니다.`);
-      }
     } catch (error) {
       console.error('Error loading factory tracking data:', error);
       toast.error('공장 관제 데이터를 불러오지 못했습니다.');

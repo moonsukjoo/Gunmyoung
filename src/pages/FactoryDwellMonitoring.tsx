@@ -29,10 +29,8 @@ import {
   TWO_HOUR_WINDOWS,
   getWindowForSlot,
   fetchFactoryCalibration,
-  reconcileJigsWithCalibration,
-  identifyLocationFromGps
+  reconcileJigsWithCalibration
 } from '../services/factoryTrackingService';
-import { getCurrentGpsPosition } from '../lib/geolocationHelper';
 import { FactoryBlueprintMap } from '../components/FactoryBlueprintMap';
 import { FactoryGpsCalibrationPanel } from '../components/FactoryGpsCalibrationPanel';
 import { 
@@ -51,7 +49,6 @@ import {
   HardHat,
   ChevronLeft,
   ArrowRight,
-  Send,
   Monitor,
   Edit3,
   X,
@@ -63,8 +60,6 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { doc, setDoc } from 'firebase/firestore';
-import { db } from '../firebase';
 
 export const FactoryDwellMonitoring: React.FC = () => {
   const navigate = useNavigate();
@@ -168,55 +163,6 @@ export const FactoryDwellMonitoring: React.FC = () => {
       toast.error('데이터 생성에 실패했습니다.');
     } finally {
       setIsSeeding(false);
-    }
-  };
-
-  // Check-in current user GPS (works in both Android APK & Web browser)
-  const handleCheckInNow = async () => {
-    if (!profile) return;
-    toast.loading('현재 GPS 위치를 측정 중입니다...', { id: 'gps-check' });
-
-    try {
-      const pos = await getCurrentGpsPosition({ timeoutMs: 12000, maximumAgeMs: 0 });
-      const assignedJig = jigs[0];
-      const locInfo = identifyLocationFromGps(pos.lat, pos.lng, assignedJig.id, jigs, calibration);
-
-      const slotIndex = TRACKING_TIME_SLOTS.indexOf(selectedSlot);
-      const recordId = `${profile.uid}_${selectedDate}_${slotIndex >= 0 ? slotIndex : 0}`;
-
-      const record: FactoryGpsRecord = {
-        id: recordId,
-        date: selectedDate,
-        slot: selectedSlot,
-        slotIndex: slotIndex >= 0 ? slotIndex : 0,
-        workerUid: profile.uid,
-        workerName: profile.displayName || '현장작업자',
-        employeeId: profile.employeeId || 'EMP',
-        teamName: profile.departmentName || '외주물량1팀',
-        jobRole: profile.jobRole || '취부사',
-        latitude: pos.lat,
-        longitude: pos.lng,
-        accuracy: pos.accuracy,
-        mapX: locInfo.mapX,
-        mapY: locInfo.mapY,
-        locationType: locInfo.locationType,
-        jigId: locInfo.jigId,
-        jigName: locInfo.jigName,
-        blockName: locInfo.blockName,
-        locationLabel: locInfo.locationLabel,
-        isAtAssignedJig: locInfo.isAtAssignedJig,
-        status: locInfo.status,
-        stayMinutesInSlot: 60,
-        recordedAt: new Date().toISOString()
-      };
-
-      await setDoc(doc(db, 'factoryGpsRecords', record.id), record, { merge: true });
-      toast.dismiss('gps-check');
-      toast.success(`[${selectedSlot}] ${locInfo.locationLabel} 위치 체크인이 기록되었습니다!`);
-      await loadData();
-    } catch (err: any) {
-      toast.dismiss('gps-check');
-      toast.error(err?.message || 'GPS 체크인에 실패했습니다.');
     }
   };
 
@@ -378,14 +324,15 @@ export const FactoryDwellMonitoring: React.FC = () => {
             모의 데이터 생성
           </Button>
 
-          {/* GPS Checkin */}
+          {/* Refresh Worker Dwell Data */}
           <Button
-            onClick={handleCheckInNow}
+            onClick={loadData}
+            disabled={loading}
             size="sm"
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl gap-1 shadow-sm whitespace-nowrap shrink-0"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl gap-1 shadow-sm whitespace-nowrap shrink-0 cursor-pointer"
           >
-            <Send className="w-3.5 h-3.5" />
-            현 위치 체크인
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            체류 기록 새로고침
           </Button>
         </div>
       </div>

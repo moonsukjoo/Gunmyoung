@@ -24,7 +24,8 @@ import {
   FileBarChart,
   Activity,
   Thermometer,
-  Layers
+  Layers,
+  Compass
 } from 'lucide-react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthProvider';
@@ -96,6 +97,13 @@ const PCAdminLayout: React.FC<PCAdminLayoutProps> = ({ children, title }) => {
       group: '실시간 현장 관제',
       items: [
         { id: 'factory_dwell', label: '중형선 7공장 블럭 체류 (A3)', icon: Layers, to: '/admin/pc/factory-dwell', requiresCEO: true },
+        {
+          id: 'gps_debug',
+          label: '실시간 GPS 좌표 디버깅',
+          icon: Compass,
+          onClick: () => window.dispatchEvent(new CustomEvent('secret-gps-debug-control', { detail: { mode: 'EXPANDED' } })),
+          requiresCEO: true
+        },
         { id: 'highwork', label: '고소작업 실시간 관제', icon: BarChart3, to: '/admin/pc/highwork' },
         { id: 'beacons', label: '밀폐공간 위치 관제', icon: Radio, to: '/admin/pc/beacons' },
         { id: 'perceived_temp_mgmt', label: '실시간 체감온도 관제', icon: Thermometer, to: '/admin/pc/perceived-temp' },
@@ -175,7 +183,25 @@ const PCAdminLayout: React.FC<PCAdminLayoutProps> = ({ children, title }) => {
               <div className="space-y-1">
                 {group.items
                   .filter((item: any) => !item.requiresCEO || isCEO)
-                  .map((item) => {
+                  .map((item: any) => {
+                  if (item.onClick) {
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={item.onClick}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all group relative text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 cursor-pointer text-left"
+                      >
+                        <item.icon className="w-5 h-5 shrink-0 transition-transform group-hover:scale-110" />
+                        {isSidebarOpen && <span className="text-sm font-bold">{item.label}</span>}
+                        {!isSidebarOpen && (
+                          <div className="absolute left-full ml-4 px-3 py-1.5 bg-slate-800 text-white text-xs font-bold rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-[100] border border-slate-700">
+                            {item.label}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  }
                   const itemPath = item.to.split('?')[0];
                   const itemQuery = item.to.split('?')[1] || '';
                   const pathnameMatch = location.pathname === itemPath;

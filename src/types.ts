@@ -50,6 +50,7 @@ export interface UserProfile {
   hasImpacted?: boolean;
   impactDetectedAt?: string;
   workScheduleSettings?: EmployeeWorkScheduleSettings;
+  assignedJigId?: string;
 }
 
 export type SchedulePresetType = 'REGULAR' | 'EARLY' | 'OFFICE' | 'NIGHT' | 'CUSTOM';
@@ -744,6 +745,9 @@ export interface FactoryGpsRecord {
   status: 'NORMAL' | 'AWAY' | 'RESTING' | 'UNKNOWN';
   stayMinutesInSlot: number; // 체류 인정 분수 (슬롯 가중치: e.g. 85분, 30분, 90분 등)
   recordedAt: string;
+  sampleCount?: number; // GPS 다중 평균 샘플 수
+  spreadMeters?: number; // 평균 산포 오차 (m)
+  measurementMode?: 'AUTO_SCHEDULED_AVG' | 'MANUAL' | 'SIMULATED';
 }
 
 export interface WorkerBlockDwellDetail {

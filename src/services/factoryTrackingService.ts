@@ -1632,4 +1632,363 @@ export const applyCalibrationToAllJigs = async (
   return { basis, calibratedJigs };
 };
 
+export interface CardinalBoundaryComparison {
+  hasCalibration: boolean;
+  basis: CalibrationBasis | null;
+  u: number;
+  v: number;
+  mapX: number;
+  mapY: number;
+  rawMapX: number;
+  rawMapY: number;
+  eastWestLengthMeters: number;
+  northSouthLengthMeters: number;
+  isInsideStrictWalls: boolean;
+  isInsideFactory: boolean;
+  boundaryDistanceMeters: number;
+  /** Signed meters inside each boundary wall (positive = inside wall, negative = outside beyond wall) */
+  wallClearances: {
+    east: number | null;
+    west: number | null;
+    south: number | null;
+    north: number | null;
+  };
+  /** Direct Haversine distances in meters to registered E/W/S/N anchors and factory center */
+  anchorDistances: {
+    east: number | null;
+    west: number | null;
+    south: number | null;
+    north: number | null;
+    center: number | null;
+  };
+  nearestJigs: Array<{
+    id: string;
+    jigName: string;
+    blockName: string;
+    distanceMeters: number;
+    radiusMeters: number;
+    withinRadius: boolean;
+  }>;
+  location: ReturnType<typeof identifyLocationFromGps>;
+}
+
+/**
+ * Evaluates live device GPS coordinates against calibrated East/West/South/North walls,
+ * direct cardinal anchor points, and all 10 factory JIG centers for real-time debugging.
+ */
+export const evaluateDeviceVsBoundaries = (
+  lat: number,
+  lng: number,
+  jigs: FactoryJig[],
+  cal: FactoryBoundaryCalibration | null
+): CardinalBoundaryComparison => {
+  const effectiveJigs = reconcileJigsWithCalibration(
+    jigs.length > 0 ? jigs : DEFAULT_FACTORY_JIGS,
+    cal
+  );
+  const basis = cal ? computeCalibrationBasis(cal) : null;
+  const location = identifyLocationFromGps(
+    lat,
+    lng,
+    effectiveJigs[0]?.id || 'jig-01',
+    effectiveJigs,
+    cal
+  );
+
+  if (!basis || !cal) {
+    return {
+      hasCalibration: false,
+      basis: null,
+      u: 0,
+      v: 0,
+      mapX: BP_CENTER_X,
+      mapY: BP_CENTER_Y,
+      rawMapX: BP_CENTER_X,
+      rawMapY: BP_CENTER_Y,
+      eastWestLengthMeters: cal?.eastWestLengthMeters || DEFAULT_FACTORY_CALIBRATION.eastWestLengthMeters,
+      northSouthLengthMeters: cal?.northSouthLengthMeters || DEFAULT_FACTORY_CALIBRATION.northSouthLengthMeters,
+      isInsideStrictWalls: false,
+      isInsideFactory: false,
+      boundaryDistanceMeters: 0,
+      wallClearances: { east: null, west: null, south: null, north: null },
+      anchorDistances: { east: null, west: null, south: null, north: null, center: null },
+      nearestJigs: [],
+      location
+    };
+  }
+
+  const mapped = gpsToBlueprint(lat, lng, basis);
+  const halfEW = basis.eastWestLengthMeters / 2;
+  const halfNS = basis.northSouthLengthMeters / 2;
+
+  const round1 = (n: number) => Math.round(n * 10) / 10;
+
+  const wallClearances = {
+    east: round1((mapped.u + 1) * halfEW),
+    west: round1((1 - mapped.u) * halfEW),
+    south: round1((mapped.v + 1) * halfNS),
+    north: round1((1 - mapped.v) * halfNS)
+  };
+
+  const anchorDistances = {
+    east: isValidGpsPoint(cal.east) ? computeHaversineMeters(lat, lng, cal.east.lat, cal.east.lng) : null,
+    west: isValidGpsPoint(cal.west) ? computeHaversineMeters(lat, lng, cal.west.lat, cal.west.lng) : null,
+    south: isValidGpsPoint(cal.south) ? computeHaversineMeters(lat, lng, cal.south.lat, cal.south.lng) : null,
+    north: isValidGpsPoint(cal.north) ? computeHaversineMeters(lat, lng, cal.north.lat, cal.north.lng) : null,
+    center: computeHaversineMeters(lat, lng, basis.centerLat, basis.centerLng)
+  };
+
+  const nearestJigs = effectiveJigs
+    .filter(j => j.centerLat !== undefined && j.centerLng !== undefined)
+    .map(j => {
+      const distanceMeters = computeHaversineMeters(lat, lng, j.centerLat!, j.centerLng!);
+      const radiusMeters = j.gpsRadiusMeters || 12;
+      return {
+        id: j.id,
+        jigName: j.jigName,
+        blockName: j.blockName,
+        distanceMeters,
+        radiusMeters,
+        withinRadius: distanceMeters <= radiusMeters + 8
+      };
+    })
+    .sort((a, b) => a.distanceMeters - b.distanceMeters)
+    .slice(0, 3);
+
+  return {
+    hasCalibration: true,
+    basis,
+    u: round1(mapped.u * 100) / 100,
+    v: round1(mapped.v * 100) / 100,
+    mapX: mapped.mapX,
+    mapY: mapped.mapY,
+    rawMapX: mapped.rawMapX,
+    rawMapY: mapped.rawMapY,
+    eastWestLengthMeters: basis.eastWestLengthMeters,
+    northSouthLengthMeters: basis.northSouthLengthMeters,
+    isInsideStrictWalls: Math.abs(mapped.u) <= 1 && Math.abs(mapped.v) <= 1,
+    isInsideFactory: mapped.isInsideFactory,
+    boundaryDistanceMeters: mapped.boundaryDistanceMeters,
+    wallClearances,
+    anchorDistances,
+    nearestJigs,
+    location
+  };
+};
+
+// ========================================================
+// 일반 작업자 정시 무음 다중평균 GPS 자동 기록 엔진
+// ========================================================
+
+export const getLocalDateString = (date: Date = new Date()): string => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const parseSlotMinutes = (slot: TrackingSlotTime): number => {
+  const [hh, mm] = slot.split(':').map(Number);
+  return (hh || 0) * 60 + (mm || 0);
+};
+
+/**
+ * Matches current local time to an exact scheduled measurement slot within [slotTime, slotTime + toleranceMinutes].
+ * E.g. 08:20 matches from 08:20:00 up to 08:24:59 so exact schedule ticks fire cleanly even if app wakes slightly late.
+ */
+export const findMatchingTrackingSlot = (
+  date: Date = new Date(),
+  toleranceMinutes = 4
+): { slot: TrackingSlotTime; slotIndex: number; slotMinutes: number } | null => {
+  const currentMinutes = date.getHours() * 60 + date.getMinutes();
+
+  for (let i = 0; i < TRACKING_TIME_SLOTS.length; i++) {
+    const slot = TRACKING_TIME_SLOTS[i];
+    const slotMins = parseSlotMinutes(slot);
+    if (currentMinutes >= slotMins && currentMinutes <= slotMins + toleranceMinutes) {
+      return { slot, slotIndex: i, slotMinutes: slotMins };
+    }
+  }
+  return null;
+};
+
+/**
+ * Computes milliseconds remaining until the next scheduled measurement slot's exact :00 second.
+ */
+export const getMsUntilNextTrackingSlot = (
+  date: Date = new Date()
+): { nextSlot: TrackingSlotTime; msUntil: number } | null => {
+  const nowSecOfDay = date.getHours() * 3600 + date.getMinutes() * 60 + date.getSeconds();
+  const nowMsRemainder = date.getMilliseconds();
+
+  for (let i = 0; i < TRACKING_TIME_SLOTS.length; i++) {
+    const slot = TRACKING_TIME_SLOTS[i];
+    const slotSec = parseSlotMinutes(slot) * 60;
+    if (slotSec > nowSecOfDay) {
+      const msUntil = (slotSec - nowSecOfDay) * 1000 - nowMsRemainder;
+      return { nextSlot: slot, msUntil: Math.max(500, msUntil) };
+    }
+  }
+  return null;
+};
+
+export const resolveWorkerAssignedJigId = (
+  worker: { assignedJigId?: string; departmentName?: string } | null | undefined,
+  jigs: FactoryJig[] = DEFAULT_FACTORY_JIGS
+): string => {
+  if (worker?.assignedJigId && jigs.some(j => j.id === worker.assignedJigId)) {
+    return worker.assignedJigId;
+  }
+  const dept = (worker?.departmentName || '').replace(/\s+/g, '').toLowerCase();
+  if (dept) {
+    const matched = jigs.find(j => {
+      const assigned = (j.assignedTeam || '').replace(/\s+/g, '').toLowerCase();
+      return assigned && (assigned.includes(dept) || dept.includes(assigned.split('(')[0]));
+    });
+    if (matched) return matched.id;
+  }
+  return jigs[0]?.id || 'jig-01';
+};
+
+export const buildScheduledWorkerGpsRecord = (params: {
+  workerUid: string;
+  workerName: string;
+  employeeId: string;
+  teamName: string;
+  jobRole: string;
+  assignedJigId: string;
+  dateStr: string;
+  slot: TrackingSlotTime;
+  slotIndex: number;
+  lat: number;
+  lng: number;
+  accuracy: number;
+  sampleCount: number;
+  spreadMeters: number;
+  jigs: FactoryJig[];
+  calibration: FactoryBoundaryCalibration | null;
+}): FactoryGpsRecord => {
+  const reconciledJigs = reconcileJigsWithCalibration(
+    params.jigs.length > 0 ? params.jigs : DEFAULT_FACTORY_JIGS,
+    params.calibration
+  );
+  const locInfo = identifyLocationFromGps(
+    params.lat,
+    params.lng,
+    params.assignedJigId,
+    reconciledJigs,
+    params.calibration
+  );
+
+  return {
+    id: `${params.workerUid}_${params.dateStr}_${params.slotIndex}`,
+    date: params.dateStr,
+    slot: params.slot,
+    slotIndex: params.slotIndex,
+    workerUid: params.workerUid,
+    workerName: params.workerName,
+    employeeId: params.employeeId,
+    teamName: params.teamName,
+    jobRole: params.jobRole,
+    latitude: params.lat,
+    longitude: params.lng,
+    accuracy: params.accuracy,
+    mapX: locInfo.mapX,
+    mapY: locInfo.mapY,
+    locationType: locInfo.locationType,
+    jigId: locInfo.jigId,
+    jigName: locInfo.jigName,
+    blockName: locInfo.blockName,
+    locationLabel: locInfo.locationLabel,
+    isAtAssignedJig: locInfo.isAtAssignedJig,
+    status: locInfo.status,
+    stayMinutesInSlot: SLOT_MINUTES_MAP[params.slot] || 60,
+    recordedAt: new Date().toISOString(),
+    sampleCount: params.sampleCount,
+    spreadMeters: params.spreadMeters,
+    measurementMode: 'AUTO_SCHEDULED_AVG'
+  };
+};
+
+export const recordWorkerScheduledSlotGps = async (params: {
+  workerUid: string;
+  workerName: string;
+  employeeId: string;
+  teamName: string;
+  jobRole: string;
+  assignedJigId?: string;
+  dateStr: string;
+  slot: TrackingSlotTime;
+  slotIndex: number;
+  lat: number;
+  lng: number;
+  accuracy: number;
+  sampleCount: number;
+  spreadMeters: number;
+}): Promise<FactoryGpsRecord> => {
+  const [fetchedJigs, fetchedCalibration] = await Promise.all([
+    (async () => {
+      try {
+        const snap = await getDocs(collection(db, 'factoryJigs'));
+        if (snap.empty) return DEFAULT_FACTORY_JIGS;
+        return snap.docs.map(d => ({ ...d.data() } as FactoryJig)).sort((a, b) => a.jigNumber - b.jigNumber);
+      } catch {
+        return DEFAULT_FACTORY_JIGS;
+      }
+    })(),
+    fetchFactoryCalibration()
+  ]);
+
+  const effectiveJigs = reconcileJigsWithCalibration(
+    fetchedJigs.length > 0 ? fetchedJigs : DEFAULT_FACTORY_JIGS,
+    fetchedCalibration
+  );
+  const resolvedAssignedJigId = resolveWorkerAssignedJigId(
+    { assignedJigId: params.assignedJigId, departmentName: params.teamName },
+    effectiveJigs
+  );
+
+  const record = buildScheduledWorkerGpsRecord({
+    ...params,
+    assignedJigId: resolvedAssignedJigId,
+    jigs: effectiveJigs,
+    calibration: fetchedCalibration
+  });
+
+  try {
+    await setDoc(doc(db, 'factoryGpsRecords', record.id), record, { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `factoryGpsRecords/${record.id}`);
+    throw err;
+  }
+
+  // Keep daily dwell summary synchronized for CEO dashboard & 2-hour heatmap
+  try {
+    const workerDaySnap = await getDocs(
+      query(
+        collection(db, 'factoryGpsRecords'),
+        where('date', '==', params.dateStr),
+        where('workerUid', '==', params.workerUid)
+      )
+    );
+    const workerDayRecords = workerDaySnap.docs.map(d => ({ id: d.id, ...d.data() } as FactoryGpsRecord));
+    const summary = computeWorkerDwellSummary(
+      params.workerUid,
+      params.workerName,
+      params.employeeId,
+      params.teamName,
+      params.jobRole,
+      resolvedAssignedJigId,
+      params.dateStr,
+      workerDayRecords,
+      effectiveJigs
+    );
+    await setDoc(doc(db, 'workerDwellSummaries', summary.id), summary, { merge: true });
+  } catch (err) {
+    console.warn('[FactoryGpsTracker] workerDwellSummary sync deferred:', err);
+  }
+
+  return record;
+};
+
 

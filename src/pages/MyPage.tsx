@@ -491,8 +491,20 @@ export const MyPage: React.FC = () => {
     { label: '미니게임 엔터놀이', desc: '휴게 시간 캐주얼 게임', icon: Sparkles, to: '/entertainment', color: 'text-emerald-500', bgColor: 'bg-emerald-500/10' },
   ];
 
+  const isCEO = profile?.role === 'CEO' || profile?.email?.toLowerCase() === 'tjrwnfjqm1@gmail.com';
+
   const adminItems = [
-    { label: '7공장 블럭 체류 관제', desc: 'A3 지그/블럭 GPS 체류', icon: Layers, to: '/factory-dwell', color: 'text-cyan-500', bgColor: 'bg-cyan-500/10', isPrimary: true },
+    { label: '7공장 블럭 체류 관제', desc: 'A3 지그/블럭 GPS 체류', icon: Layers, to: '/factory-dwell', color: 'text-cyan-500', bgColor: 'bg-cyan-500/10', isPrimary: true, requiresCEO: true },
+    {
+      label: '실시간 GPS 좌표 디버깅',
+      desc: '동·서·남·북 범위 & 다중평균 테스트',
+      icon: Navigation,
+      onClick: () => window.dispatchEvent(new CustomEvent('secret-gps-debug-control', { detail: { mode: 'EXPANDED' } })),
+      color: 'text-emerald-500',
+      bgColor: 'bg-emerald-500/10',
+      isPrimary: true,
+      requiresCEO: true
+    },
     { label: '전사 급여명세서 관리', desc: '엑셀 붙여넣기 & 사번 매칭', icon: CircleDollarSign, to: '/payslip-mgmt', color: 'text-teal-500', bgColor: 'bg-teal-500/10', isPrimary: true },
     { label: '임직원 정보 관리', desc: '사원 명부 및 직책 수정', icon: Users, to: '/personnel', color: 'text-blue-500', bgColor: 'bg-blue-500/10', isPrimary: true },
     { label: '임직원 근태 현황', desc: '실시간 팀 출근 모니터링', icon: Navigation, to: '/attendance-mgmt', color: 'text-indigo-500', bgColor: 'bg-indigo-500/10', isPrimary: true },
@@ -503,7 +515,7 @@ export const MyPage: React.FC = () => {
     { label: '안전 보건 교육 관리', desc: '교육과정 개설 및 평가', icon: BookOpen, to: '/training-mgmt', color: 'text-emerald-500', bgColor: 'bg-emerald-500/10' },
     { label: '작업지시 관리', desc: '현장 지시 현황 총괄', icon: ClipboardList, to: '/work-instruction-mgmt', color: 'text-cyan-500', bgColor: 'bg-cyan-500/10' },
     { label: '고급 관리자 설정', desc: '시스템 및 권한 마스터', icon: Lock, to: '/admin', color: 'text-red-500', bgColor: 'bg-red-500/10' },
-  ];
+  ].filter(item => !item.requiresCEO || isCEO);
 
   return (
     <div className="w-full space-y-4 pb-28 px-3.5 sm:px-4 overflow-x-hidden bg-background">
@@ -1066,7 +1078,7 @@ export const MyPage: React.FC = () => {
                   <button
                     key={idx}
                     type="button"
-                    onClick={() => navigate(item.to)}
+                    onClick={() => (item.onClick ? item.onClick() : navigate(item.to!))}
                     className="flex flex-col justify-between p-3 rounded-2xl bg-card/80 border border-border/60 hover:border-primary/40 hover:bg-muted/40 active:scale-98 transition-all text-left shadow-2xs group cursor-pointer h-24"
                   >
                     <div className="flex items-center justify-between w-full">

@@ -489,24 +489,47 @@ service cloud.firestore {
       );
     }
 
-    // Strictly CEO-only access: workers must NEVER read or write factory layout, dwell analytics, or critical delay reasons
+    // Factory 7 coordinate grid & calibration can be read by worker devices for silent on-device JIG mapping, writable only by CEO
     match /factoryJigs/{jigId} {
-      allow read, write: if isCEO();
-    }
-
-    match /factoryGpsRecords/{recordId} {
-      allow read, write: if isCEO();
-    }
-
-    match /workerDwellSummaries/{summaryId} {
-      allow read, write: if isCEO();
-    }
-
-    match /factoryDelayLogs/{logId} {
-      allow read, write: if isCEO();
+      allow read: if isAuthenticated();
+      allow write: if isCEO();
     }
 
     match /factoryCalibration/{factoryId} {
+      allow read: if isAuthenticated();
+      allow write: if isCEO();
+    }
+
+    // Workers may silently write/read ONLY their own scheduled GPS records; CEO has full oversight
+    match /factoryGpsRecords/{recordId} {
+      allow get: if isCEO() || (isAuthenticated() && resource != null && resource.data.workerUid == request.auth.uid);
+      allow list: if isCEO() || (isAuthenticated() && resource.data.workerUid == request.auth.uid);
+      allow create, update: if isCEO() || (
+        isAuthenticated() &&
+        request.resource.data.workerUid == request.auth.uid &&
+        request.resource.data.date is string &&
+        request.resource.data.date.size() <= 20 &&
+        request.resource.data.slot is string &&
+        request.resource.data.slot.size() <= 10
+      );
+      allow delete: if isCEO();
+    }
+
+    // Workers may update ONLY their own daily dwell summary at scheduled ticks; CEO reads/manages all
+    match /workerDwellSummaries/{summaryId} {
+      allow get: if isCEO() || (isAuthenticated() && resource != null && resource.data.workerUid == request.auth.uid);
+      allow list: if isCEO() || (isAuthenticated() && resource.data.workerUid == request.auth.uid);
+      allow create, update: if isCEO() || (
+        isAuthenticated() &&
+        request.resource.data.workerUid == request.auth.uid &&
+        request.resource.data.date is string &&
+        request.resource.data.date.size() <= 20
+      );
+      allow delete: if isCEO();
+    }
+
+    // Strictly CEO-only: workers must NEVER read or write critical delay reasons
+    match /factoryDelayLogs/{logId} {
       allow read, write: if isCEO();
     }
 

@@ -407,6 +407,16 @@ export const FactoryGpsCalibrationPanel: React.FC<FactoryGpsCalibrationPanelProp
         </div>
       )}
 
+      <div className="bg-muted/40 border border-border rounded-xl p-3 flex items-start gap-2.5 text-xs text-muted-foreground font-medium">
+        <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+        <span className="leading-relaxed">
+          <strong className="text-foreground font-bold">어플 종료(백그라운드) 자동 기록 지원:</strong>{' '}
+          안드로이드 APK에서는 앱을 완전히 끄거나 휴대폰 재부팅 후에도 지정 8개 시각(08:20~17:45)에 OS 알람이 무음 작동합니다.
+          단, 안드로이드 정책상 작업자 휴대폰에서 최초 1회 위치 권한 <strong className="text-foreground">‘항상 허용’</strong> 및{' '}
+          <strong className="text-foreground">배터리 ‘제한 없음’</strong> 설정이 되어 있어야 앱 종료 상태에서도 기록이 차단되지 않습니다.
+        </span>
+      </div>
+
       {/* Cardinal Cross Layout (South Top, East Left, Dimensions Center, West Right, North Bottom) */}
       <div className="space-y-3">
         {/* Top Row: SOUTH */}
@@ -508,6 +518,20 @@ export const FactoryGpsCalibrationPanel: React.FC<FactoryGpsCalibrationPanelProp
               >
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                 <span>{isSyncingAttendance ? '동기화 중...' : '7공장 중심 → 출퇴근 GPS 기준점 동기화'}</span>
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent('secret-gps-debug-control', { detail: { mode: 'EXPANDED' } })
+                  );
+                }}
+                className="w-full h-9 rounded-xl border-border text-[11px] font-bold gap-1.5 cursor-pointer whitespace-nowrap text-cyan-400 hover:text-cyan-300"
+              >
+                <Compass className="w-3.5 h-3.5 shrink-0" />
+                <span>실시간 GPS 좌표 디버깅 열기</span>
               </Button>
 
               {testMatchResult && (

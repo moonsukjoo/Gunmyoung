@@ -903,15 +903,15 @@
     },
     "/factoryJigs/{jigId}": {
       "schema": "FactoryJig",
-      "description": "Factory 7 assembly JIG and block schedule records (CEO-only)"
+      "description": "Factory 7 assembly JIG and block schedule records (CEO writes; authenticated workers read for silent slot mapping)"
     },
     "/factoryGpsRecords/{recordId}": {
       "schema": "object",
-      "description": "Factory 7 2-hour interval worker GPS dwell records (CEO-only)"
+      "description": "Factory 7 scheduled worker averaged GPS records (workers write own scheduled record silently; CEO oversight)"
     },
     "/workerDwellSummaries/{summaryId}": {
       "schema": "object",
-      "description": "Factory 7 daily worker dwell compliance summaries (CEO-only)"
+      "description": "Factory 7 daily worker dwell compliance summaries (workers update own summary silently; CEO oversight)"
     },
     "/factoryDelayLogs/{logId}": {
       "schema": "FactoryDelayLog",
@@ -919,7 +919,7 @@
     },
     "/factoryCalibration/{factoryId}": {
       "schema": "FactoryCalibration",
-      "description": "Factory 7 East/West/South/North GPS boundary calibration and measured dimensions (CEO-only)"
+      "description": "Factory 7 East/West/South/North GPS boundary calibration and measured dimensions (CEO writes; authenticated devices read)"
     }
   }
 }

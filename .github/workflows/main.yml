@@ -56,15 +56,10 @@ jobs:
       - name: "Capacitor 싱크 및 리소스 동기화"
         run: npx cap sync android
 
-      - name: "AndroidManifest 위치(GPS) 권한 자동 주입"
+      - name: "네이티브 백그라운드 GPS 스케줄러 및 AndroidManifest 패치"
         run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST" ]; then
-            if ! grep -q "android.permission.ACCESS_FINE_LOCATION" "$MANIFEST"; then
-              sed -i 's|<application|    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-feature android:name="android.hardware.location.gps" android:required="false" />\n\n    <application|g' "$MANIFEST"
-            fi
-            cat "$MANIFEST"
-          fi
+          node native-android/scripts/patch-android.mjs
+          cat android/app/src/main/AndroidManifest.xml
 
       - name: "중복 클래스, 빌드 에러 및 파일 프로바이더 경로 보강"
         run: |

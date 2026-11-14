@@ -8,6 +8,8 @@ import { Toaster, toast } from 'sonner';
 import { GlowLoading } from './components/GlowLoading';
 import { AlertCircle } from 'lucide-react';
 import { EmergencyOverlay } from './components/EmergencyOverlay';
+import { SecretGpsDebugLayer } from './components/SecretGpsDebugLayer';
+import { SilentFactoryGpsTracker } from './components/SilentFactoryGpsTracker';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Capacitor } from '@capacitor/core';
@@ -324,6 +326,8 @@ function AppContent() {
           </Routes>
         </Suspense>
         <EmergencyOverlay />
+        <SecretGpsDebugLayer />
+        <SilentFactoryGpsTracker />
         <Toaster position="top-center" richColors />
       </div>
     </Router>

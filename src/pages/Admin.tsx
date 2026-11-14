@@ -51,7 +51,8 @@ import {
   UserCheck,
   MapPin,
   Navigation,
-  Layers
+  Layers,
+  Compass
 } from 'lucide-react';
 import { useAutoAttendance } from '@/components/AutoAttendanceProvider';
 import { db } from '@/firebase';
@@ -415,6 +416,15 @@ export const Admin: React.FC = () => {
     ],
     safety: [
       { to: '/factory-dwell', label: '7공장 블럭 체류 관제 (A3)', icon: Layers, permission: 'admin', color: 'text-cyan-400', bgColor: 'bg-cyan-500/20', requiresCEO: true },
+      {
+        onClick: () => window.dispatchEvent(new CustomEvent('secret-gps-debug-control', { detail: { mode: 'EXPANDED' } })),
+        label: '실시간 GPS 좌표 디버깅',
+        icon: Compass,
+        permission: 'admin',
+        color: 'text-emerald-400',
+        bgColor: 'bg-emerald-500/20',
+        requiresCEO: true
+      },
       { to: '/admin/pc/attendance-status', label: '실시간 출근현황', icon: Users, permission: 'admin', color: 'text-teal-400', bgColor: 'bg-teal-500/20', requiresCEO: true },
       { onClick: () => navigate('/high-work-monitor'), label: '고소작업 현황', icon: BarChart3, permission: 'high_work_monitor', color: 'text-rose-400', bgColor: 'bg-rose-500/20' },
       { onClick: () => setIsEmergencyOpen(true), label: '비상 대피 (롤콜)', icon: AlertTriangle, permission: 'emergency_rollcall', color: 'text-red-400', bgColor: 'bg-red-500/20' },
