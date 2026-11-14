@@ -53,6 +53,7 @@ if (fs.existsSync(manifestPath)) {
     '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />',
     '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />',
     '<uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />',
+    '<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />',
     '<uses-permission android:name="android.permission.WAKE_LOCK" />',
     '<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />',
     '<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />',

@@ -1,12 +1,40 @@
 package com.gunmyoung.app;
 
+import android.Manifest;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Build;
+import android.provider.Settings;
+
+import androidx.activity.result.ActivityResult;
+
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 
-@CapacitorPlugin(name = "SilentBgGps")
+@CapacitorPlugin(
+    name = "SilentBgGps",
+    permissions = {
+        @Permission(
+            strings = {
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            },
+            alias = "location"
+        ),
+        @Permission(
+            strings = {
+                Manifest.permission.ACCESS_BACKGROUND_LOCATION
+            },
+            alias = "backgroundLocation"
+        )
+    }
+)
 public class SilentBgGpsPlugin extends Plugin {
     @PluginMethod
     public void syncConfig(PluginCall call) {
@@ -61,15 +89,78 @@ public class SilentBgGpsPlugin extends Plugin {
 
     @PluginMethod
     public void getStatus(PluginCall call) {
+        call.resolve(buildStatusObject());
+    }
+
+    /**
+     * Sequentially requests OS permissions needed for closed-app background measurement:
+     * 1) Foreground location (FINE / COARSE)
+     * 2) Background location ("항상 허용", Android 10+)
+     * 3) Battery optimization exemption ("제한 없음", Android 6+)
+     */
+    @PluginMethod
+    public void requestRequiredPermissions(PluginCall call) {
+        if (!SilentBgGpsRunner.hasAnyLocationPermission(getContext())) {
+            requestPermissionForAlias("location", call, "onLocationPermissionResult");
+            return;
+        }
+        proceedBackgroundLocationOrBattery(call);
+    }
+
+    @PermissionCallback
+    private void onLocationPermissionResult(PluginCall call) {
+        if (call == null) return;
+        proceedBackgroundLocationOrBattery(call);
+    }
+
+    private void proceedBackgroundLocationOrBattery(PluginCall call) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+            && SilentBgGpsRunner.hasAnyLocationPermission(getContext())
+            && !SilentBgGpsRunner.hasBackgroundLocationPermission(getContext())) {
+            requestPermissionForAlias("backgroundLocation", call, "onBackgroundLocationResult");
+            return;
+        }
+        proceedBatteryOptimization(call);
+    }
+
+    @PermissionCallback
+    private void onBackgroundLocationResult(PluginCall call) {
+        if (call == null) return;
+        proceedBatteryOptimization(call);
+    }
+
+    private void proceedBatteryOptimization(PluginCall call) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+            && !SilentBgGpsRunner.isIgnoringBatteryOptimizations(getContext())) {
+            try {
+                Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                intent.setData(Uri.parse("package:" + getContext().getPackageName()));
+                startActivityForResult(call, intent, "onBatteryOptimizationResult");
+                return;
+            } catch (Exception ignored) {
+                // Fallback safely if ROM blocks direct dialog intent
+            }
+        }
+        call.resolve(buildStatusObject());
+    }
+
+    @ActivityCallback
+    private void onBatteryOptimizationResult(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        call.resolve(buildStatusObject());
+    }
+
+    private JSObject buildStatusObject() {
         JSObject res = new JSObject();
         res.put("enabled", SilentBgGpsPrefs.isEnabled(getContext()));
         res.put("hasAnyPermission", SilentBgGpsRunner.hasAnyLocationPermission(getContext()));
         res.put("hasBackgroundPermission", SilentBgGpsRunner.hasBackgroundLocationPermission(getContext()));
+        res.put("isIgnoringBatteryOptimizations", SilentBgGpsRunner.isIgnoringBatteryOptimizations(getContext()));
         res.put("nextSlot", SilentBgGpsPrefs.getNextSlot(getContext()));
         res.put("nextTriggerAt", SilentBgGpsPrefs.getNextTriggerAt(getContext()));
         res.put("pendingQueueCount", SilentBgGpsPrefs.getPendingQueue(getContext()).length());
         res.put("lastRunAt", SilentBgGpsPrefs.getLastRunAt(getContext()));
         res.put("lastRunStatus", SilentBgGpsPrefs.getLastRunStatus(getContext()));
-        call.resolve(res);
+        return res;
     }
 }

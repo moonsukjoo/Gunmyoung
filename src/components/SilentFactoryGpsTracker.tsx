@@ -8,6 +8,7 @@ import { useAuth } from './AuthProvider';
 import { getAveragedGpsPosition } from '../lib/geolocationHelper';
 import {
   clearNativeBackgroundGpsSchedule,
+  requestNativeBackgroundPermissions,
   syncNativeBackgroundGpsConfig
 } from '../lib/nativeBgGpsBridge';
 import {
@@ -51,6 +52,7 @@ export const SilentFactoryGpsTracker: React.FC = () => {
   const { user, profile } = useAuth();
   const inFlightSlotRef = useRef<string | null>(null);
   const completedSessionSlotsRef = useRef<Set<string>>(new Set());
+  const requestedPermsUidRef = useRef<string | null>(null);
 
   const isCEO = Boolean(
     user &&
@@ -115,7 +117,22 @@ export const SilentFactoryGpsTracker: React.FC = () => {
       }
     };
 
-    syncNativeSchedule();
+    let didInitialRun = false;
+    const ensurePermsAndSync = async () => {
+      if (cancelled || didInitialRun) return;
+      didInitialRun = true;
+      if (requestedPermsUidRef.current !== profile.uid) {
+        requestedPermsUidRef.current = profile.uid;
+        await requestNativeBackgroundPermissions().catch(() => null);
+      }
+      if (!cancelled) {
+        await syncNativeSchedule();
+      }
+    };
+
+    const initialTimerId = window.setTimeout(() => {
+      ensurePermsAndSync();
+    }, 1200);
 
     const intervalId = window.setInterval(syncNativeSchedule, 30 * 60 * 1000);
 
@@ -140,6 +157,7 @@ export const SilentFactoryGpsTracker: React.FC = () => {
 
     return () => {
       cancelled = true;
+      window.clearTimeout(initialTimerId);
       window.clearInterval(intervalId);
       document.removeEventListener('visibilitychange', handleResumeSync);
       if (capSyncListener && typeof capSyncListener.remove === 'function') {

@@ -10,6 +10,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.HandlerThread;
 import android.os.Looper;
+import android.os.PowerManager;
 
 import androidx.core.content.ContextCompat;
 
@@ -58,6 +59,14 @@ public final class SilentBgGpsRunner {
         }
         return ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
             == PackageManager.PERMISSION_GRANTED;
+    }
+
+    public static boolean isIgnoringBatteryOptimizations(Context context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return true;
+        }
+        PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+        return pm != null && pm.isIgnoringBatteryOptimizations(context.getPackageName());
     }
 
     /**

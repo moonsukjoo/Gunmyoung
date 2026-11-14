@@ -20,6 +20,7 @@ export interface SilentBgGpsStatus {
   enabled: boolean;
   hasAnyPermission: boolean;
   hasBackgroundPermission: boolean;
+  isIgnoringBatteryOptimizations: boolean;
   nextSlot: string;
   nextTriggerAt: number;
   pendingQueueCount: number;
@@ -35,6 +36,7 @@ interface SilentBgGpsPluginInterface {
   }>;
   clearSchedule(): Promise<{ cleared: boolean }>;
   getStatus(): Promise<SilentBgGpsStatus>;
+  requestRequiredPermissions(): Promise<SilentBgGpsStatus>;
 }
 
 const SilentBgGpsPlugin = registerPlugin<SilentBgGpsPluginInterface>('SilentBgGps');
@@ -70,6 +72,17 @@ export const getNativeBackgroundGpsStatus = async (): Promise<SilentBgGpsStatus 
   }
   try {
     return await SilentBgGpsPlugin.getStatus();
+  } catch {
+    return null;
+  }
+};
+
+export const requestNativeBackgroundPermissions = async (): Promise<SilentBgGpsStatus | null> => {
+  if (!Capacitor.isNativePlatform()) {
+    return null;
+  }
+  try {
+    return await SilentBgGpsPlugin.requestRequiredPermissions();
   } catch {
     return null;
   }
