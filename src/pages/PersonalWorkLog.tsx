@@ -32,6 +32,8 @@ import SignatureCanvas from 'react-signature-canvas';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { MarineSubpageHero } from '@/components/MarineSubpageHero';
+import { Icon3DClipboard } from '@/components/icons/Marine3DIcons';
 
 const STEPS = [
   { id: 1, title: '근무 시간', desc: '일자 및 퇴근시간' },
@@ -66,6 +68,14 @@ export const PersonalWorkLog: React.FC = () => {
   const [isSignOpen, setIsSignOpen] = useState(false);
   const sigPad = useRef<SignatureCanvas>(null);
   const [justSigned, setJustSigned] = useState(false);
+
+  const isHighContrast = !!profile?.highContrast;
+  const isLight = profile?.lightTheme !== false && !isHighContrast;
+  const pearlCardClass = isHighContrast
+    ? "bg-card border border-border rounded-[26px] text-foreground"
+    : isLight
+      ? "bg-white border border-white rounded-[26px] text-slate-900 shadow-[0_12px_32px_rgba(15,23,42,0.06)]"
+      : "bg-[#111B2E]/92 border border-white/12 rounded-[26px] text-white shadow-[0_12px_32px_rgba(0,0,0,0.35)]";
 
   // Scroll to top on page load and step change
   useEffect(() => {
@@ -259,31 +269,35 @@ export const PersonalWorkLog: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 pb-24 px-2 sm:px-4 max-w-2xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between py-4">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="rounded-2xl h-11 w-11 bg-muted/40 hover:bg-muted">
-            <ChevronLeft className="w-6 h-6 text-foreground" />
+    <div className="w-full space-y-4 pb-24 overflow-x-hidden bg-background">
+      <MarineSubpageHero
+        isLight={isLight}
+        highContrast={isHighContrast}
+        icon={<Icon3DClipboard className="w-8 h-8" />}
+        iconBedClass={isLight ? "bg-[#EFF6FF]" : "bg-blue-500/15"}
+        subtitle={`${profile?.departmentName || '건명기업 현장'} · ${profile?.displayName || '사원'}`}
+        title="나의 작업일지"
+        rightAction={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCopyPreviousLog}
+            className={cn(
+              "font-black gap-1.5 rounded-2xl text-xs h-9 px-3 whitespace-nowrap shrink-0 cursor-pointer",
+              isLight
+                ? "bg-[#EFF6FF] border-blue-200/80 text-blue-700 hover:bg-blue-100/70"
+                : "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
+            )}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            전일 복사
           </Button>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">나의 작업일지 작성</h1>
-            <p className="text-xs text-muted-foreground font-bold">{profile?.departmentName || '소속'} · {profile?.displayName}</p>
-          </div>
-        </div>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={handleCopyPreviousLog}
-          className="bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 font-black gap-1.5 rounded-2xl text-xs h-10 px-3.5 shadow-sm"
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-          전일 복사
-        </Button>
-      </div>
+        }
+      />
 
+      <div className="px-4 space-y-4">
       {/* Step Indicator Bar */}
-      <div className="bg-card border border-border/70 rounded-3xl p-4 shadow-md">
+      <div className={cn(pearlCardClass, "p-4")}>
         <div className="flex items-center justify-between mb-3 px-1">
           {STEPS.map((step) => {
             const isActive = currentStep === step.id;
@@ -297,22 +311,22 @@ export const PersonalWorkLog: React.FC = () => {
                   else if (step.id === 2 && logDate && clockOutTime) setCurrentStep(2);
                 }}
                 className={cn(
-                  "flex items-center gap-2 group text-left transition-all",
-                  isActive ? "opacity-100" : isCompleted ? "opacity-90" : "opacity-40"
+                  "flex items-center gap-2 group text-left transition-all cursor-pointer",
+                  isActive ? "opacity-100" : isCompleted ? "opacity-90" : "opacity-45"
                 )}
               >
                 <div className={cn(
-                  "w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs transition-all shadow-sm",
+                  "w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs transition-all shadow-sm shrink-0",
                   isActive 
-                    ? "bg-primary text-white scale-110 shadow-primary/30" 
+                    ? "bg-gradient-to-br from-[#2563EB] to-[#1D4ED8] text-white scale-105 shadow-blue-600/25" 
                     : isCompleted 
                     ? "bg-emerald-500 text-white" 
-                    : "bg-muted text-muted-foreground"
+                    : isLight ? "bg-slate-100 text-slate-500" : "bg-muted text-muted-foreground"
                 )}>
                   {isCompleted ? <Check className="w-4 h-4 stroke-[3]" /> : step.id}
                 </div>
                 <div className="hidden sm:block">
-                  <p className={cn("text-xs font-black", isActive ? "text-primary" : "text-foreground")}>
+                  <p className={cn("text-xs font-black", isActive ? "text-blue-600 dark:text-primary" : "text-foreground")}>
                     {step.title}
                   </p>
                   <p className="text-[10px] text-muted-foreground font-medium">{step.desc}</p>
@@ -323,9 +337,9 @@ export const PersonalWorkLog: React.FC = () => {
         </div>
 
         {/* Progress bar line */}
-        <div className="w-full bg-muted h-1.5 rounded-full overflow-hidden">
+        <div className={cn("w-full h-1.5 rounded-full overflow-hidden", isLight ? "bg-slate-100" : "bg-muted")}>
           <motion.div 
-            className="h-full bg-primary"
+            className="h-full bg-gradient-to-r from-[#2563EB] to-[#1D4ED8]"
             initial={false}
             animate={{ width: `${((currentStep - 1) / (STEPS.length - 1)) * 100}%` }}
             transition={{ duration: 0.3 }}
@@ -344,10 +358,10 @@ export const PersonalWorkLog: React.FC = () => {
             transition={{ duration: 0.2 }}
             className="space-y-4"
           >
-            <Card className="bg-card border-border rounded-3xl overflow-hidden shadow-lg">
-              <CardHeader className="bg-muted/40 border-b border-border p-5">
+            <Card className={cn(pearlCardClass, "overflow-hidden")}>
+              <CardHeader className={cn("border-b p-5", isLight ? "bg-[#F8FAFC] border-slate-100" : "bg-muted/40 border-border")}>
                 <CardTitle className="text-base font-black flex items-center gap-2 text-foreground">
-                  <Calendar className="w-4 h-4 text-primary" /> 1단계: 근무 일자 및 퇴근 시간
+                  <Calendar className="w-4 h-4 text-blue-600" /> 1단계: 근무 일자 및 퇴근 시간
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-6 space-y-6">
@@ -411,7 +425,7 @@ export const PersonalWorkLog: React.FC = () => {
             <Button
               type="button"
               onClick={validateAndNext}
-              className="w-full h-14 bg-primary text-white font-black text-base rounded-2xl shadow-lg shadow-primary/25 hover:bg-primary/95 flex items-center justify-center gap-2"
+              className="w-full h-14 bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] text-white font-black text-base rounded-2xl shadow-lg shadow-blue-600/25 hover:opacity-95 flex items-center justify-center gap-2 cursor-pointer"
             >
               다음: 작업 내용 입력 <ChevronRight className="w-5 h-5" />
             </Button>
@@ -427,11 +441,11 @@ export const PersonalWorkLog: React.FC = () => {
             transition={{ duration: 0.2 }}
             className="space-y-4"
           >
-            <Card className="bg-card border-border rounded-3xl overflow-hidden shadow-lg">
-              <CardHeader className="bg-muted/40 border-b border-border p-5 flex flex-row items-center justify-between">
+            <Card className={cn(pearlCardClass, "overflow-hidden")}>
+              <CardHeader className={cn("border-b p-5 flex flex-row items-center justify-between", isLight ? "bg-[#F8FAFC] border-slate-100" : "bg-muted/40 border-border")}>
                 <div>
                   <CardTitle className="text-base font-black flex items-center gap-2 text-foreground">
-                    <ClipboardList className="w-4 h-4 text-primary" /> 2단계: 오늘 수행한 작업 내용
+                    <ClipboardList className="w-4 h-4 text-blue-600" /> 2단계: 오늘 수행한 작업 내용
                   </CardTitle>
                   <p className="text-[11px] text-muted-foreground font-bold mt-0.5">
                     작업 항목별 내용과 소요 시간을 입력해주세요.
@@ -528,7 +542,7 @@ export const PersonalWorkLog: React.FC = () => {
               <Button
                 type="button"
                 onClick={validateAndNext}
-                className="flex-[2] h-14 bg-primary text-white font-black text-base rounded-2xl shadow-lg shadow-primary/25 hover:bg-primary/95 flex items-center justify-center gap-2"
+                className="flex-[2] h-14 bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] text-white font-black text-base rounded-2xl shadow-lg shadow-blue-600/25 hover:opacity-95 flex items-center justify-center gap-2 cursor-pointer"
               >
                 다음: 서명 및 최종 확인 <ChevronRight className="w-5 h-5" />
               </Button>
@@ -546,8 +560,8 @@ export const PersonalWorkLog: React.FC = () => {
             className="space-y-4"
           >
             {/* Summary Review Card */}
-            <Card className="bg-card border-border rounded-3xl overflow-hidden shadow-lg">
-              <CardHeader className="bg-muted/40 border-b border-border p-5">
+            <Card className={cn(pearlCardClass, "overflow-hidden")}>
+              <CardHeader className={cn("border-b p-5", isLight ? "bg-[#F8FAFC] border-slate-100" : "bg-muted/40 border-border")}>
                 <CardTitle className="text-base font-black flex items-center gap-2 text-foreground">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500" /> 3단계: 작성 내용 검토 & 본인 서명
                 </CardTitle>
@@ -641,7 +655,7 @@ export const PersonalWorkLog: React.FC = () => {
                 type="button" 
                 onClick={() => handleSubmit()}
                 disabled={loading}
-                className="flex-[2] h-14 bg-primary text-white font-black text-base rounded-2xl shadow-xl shadow-primary/25 active:scale-95 transition-all gap-2"
+                className="flex-[2] h-14 bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] text-white font-black text-base rounded-2xl shadow-xl shadow-blue-600/25 active:scale-95 transition-all gap-2 cursor-pointer"
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
                 작업일지 최종 제출
@@ -652,23 +666,33 @@ export const PersonalWorkLog: React.FC = () => {
       </AnimatePresence>
 
       {/* Recent History */}
-      <div className="space-y-4 pt-6 border-t border-border">
-        <h3 className="text-xs font-black text-muted-foreground uppercase tracking-widest flex items-center gap-2">
-          <FileText className="w-4 h-4" />
+      <div className="space-y-3 pt-4 border-t border-border/60">
+        <h3 className="text-xs font-black text-muted-foreground flex items-center gap-2">
+          <FileText className="w-4 h-4 text-blue-600" />
           최근 제출 내역 (최근 5건)
         </h3>
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           {recentLogs.length === 0 ? (
-            <div className="py-8 text-center border border-dashed border-border rounded-3xl">
-              <p className="text-muted-foreground/40 text-xs font-bold">최근 제출 기록이 없습니다.</p>
+            <div className={cn("py-8 text-center border border-dashed rounded-3xl", isLight ? "bg-white/70 border-slate-200" : "border-border")}>
+              <p className="text-muted-foreground/60 text-xs font-bold">최근 제출 기록이 없습니다.</p>
             </div>
           ) : (
             recentLogs.map(log => (
-              <div key={log.id} className="bg-card border border-border p-4 rounded-2xl flex items-center justify-between shadow-sm">
+              <div
+                key={log.id}
+                className={cn(
+                  "p-4 rounded-[22px] border flex items-center justify-between transition-all",
+                  isHighContrast
+                    ? "bg-card border-border"
+                    : isLight
+                      ? "bg-white border-slate-200/70 shadow-[0_6px_18px_rgba(15,23,42,0.04)]"
+                      : "bg-[#111B2E] border-white/10"
+                )}
+              >
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-black text-foreground">{log.date}</span>
-                    <span className="text-[10px] font-bold text-muted-foreground/60">{log.clockOutTime} 퇴근</span>
+                    <span className="text-sm font-black text-foreground tabular-nums">{log.date}</span>
+                    <span className="text-[10px] font-bold text-muted-foreground">{log.clockOutTime} 퇴근</span>
                   </div>
                   <div className="flex gap-2">
                     {log.tasks.slice(0, 2).map((t, i) => (
@@ -676,14 +700,14 @@ export const PersonalWorkLog: React.FC = () => {
                         {t.content}
                       </span>
                     ))}
-                    {log.tasks.length > 2 && <span className="text-[10px] text-muted-foreground/30">...</span>}
+                    {log.tasks.length > 2 && <span className="text-[10px] text-muted-foreground/40">...</span>}
                   </div>
                 </div>
-                <div className={`px-3 py-1 rounded-full text-[10px] font-black border ${
-                  log.status === 'PENDING' ? 'bg-amber-500/10 text-amber-500 border-amber-500/10' :
-                  log.status === 'LEADER_APPROVED' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' :
-                  log.status === 'FINAL_APPROVED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
-                  'bg-red-500/10 text-red-500 border-red-500/20'
+                <div className={`px-3 py-1 rounded-full text-[10px] font-black border shrink-0 whitespace-nowrap ${
+                  log.status === 'PENDING' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' :
+                  log.status === 'LEADER_APPROVED' ? 'bg-blue-500/10 text-blue-600 border-blue-500/20' :
+                  log.status === 'FINAL_APPROVED' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
+                  'bg-red-500/10 text-red-600 border-red-500/20'
                 }`}>
                   {log.status === 'PENDING' ? '대기중' : 
                    log.status === 'LEADER_APPROVED' ? '팀장확인' : 
@@ -693,6 +717,7 @@ export const PersonalWorkLog: React.FC = () => {
             ))
           )}
         </div>
+      </div>
       </div>
 
       {/* Signature Dialog */}

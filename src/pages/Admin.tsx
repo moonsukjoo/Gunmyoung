@@ -91,6 +91,8 @@ const PERMISSIONS = [
 import { GlowLoading } from '@/components/GlowLoading';
 
 import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
+import { MarineSubpageHero } from '@/components/MarineSubpageHero';
+import { Icon3DHelmet } from '@/components/icons/Marine3DIcons';
 
 export const Admin: React.FC = () => {
   const { user, profile } = useAuth();
@@ -456,6 +458,26 @@ export const Admin: React.FC = () => {
     ]
   };
 
+  const isHighContrast = !!profile?.highContrast;
+  const isLight = profile?.lightTheme !== false && !isHighContrast;
+
+  const getLightIconStyles = (bgColor?: string, color?: string) => {
+    if (!isLight) {
+      return {
+        bed: bgColor || "bg-primary/15",
+        icon: color || "text-primary",
+      };
+    }
+    const key = `${bgColor || ''} ${color || ''}`;
+    if (key.includes('rose') || key.includes('red')) return { bed: 'bg-[#FFE4E6]', icon: 'text-rose-600' };
+    if (key.includes('amber') || key.includes('yellow') || key.includes('orange')) return { bed: 'bg-[#FEF3C7]', icon: 'text-amber-600' };
+    if (key.includes('emerald') || key.includes('teal') || key.includes('green')) return { bed: 'bg-[#E7F9F0]', icon: 'text-emerald-600' };
+    if (key.includes('indigo') || key.includes('purple') || key.includes('violet')) return { bed: 'bg-[#EEF2FF]', icon: 'text-indigo-600' };
+    if (key.includes('pink')) return { bed: 'bg-[#FCE7F3]', icon: 'text-pink-600' };
+    if (key.includes('cyan') || key.includes('sky')) return { bed: 'bg-[#E6F6FE]', icon: 'text-sky-600' };
+    return { bed: 'bg-[#EFF6FF]', icon: 'text-blue-600' };
+  };
+
   const renderLink = (link: any, idx: number) => {
     if (isExcludedRole) {
       if (link.label === '공지사항 관리' || link.label === '사고즉보 관리' || link.label === '나의 안전지수/랭킹 조회') {
@@ -475,15 +497,31 @@ export const Admin: React.FC = () => {
 
     if (!isAllowed) return null;
 
+    const iconStyle = getLightIconStyles(link.bgColor, link.color);
+
     const Content = (
-      <div className="bg-card p-4 rounded-3xl border border-border flex items-center gap-4 active:scale-95 transition-all w-full text-left hover:bg-muted group shadow-sm">
-        <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110", link.bgColor || "bg-primary/10")}>
-          <link.icon className={cn("w-6 h-6", link.color || "text-primary")} />
+      <div
+        className={cn(
+          "p-3.5 rounded-[22px] border flex items-center gap-3.5 active:scale-[0.98] transition-all w-full text-left group",
+          isHighContrast
+            ? "bg-card border-border hover:bg-muted/40"
+            : isLight
+              ? "bg-white border-slate-200/70 hover:border-blue-300 shadow-[0_8px_22px_rgba(15,23,42,0.05)]"
+              : "bg-[#111B2E]/92 border-white/10 hover:border-primary/40 hover:bg-[#162238] shadow-xs"
+        )}
+      >
+        <div className={cn("w-11 h-11 rounded-[15px] flex items-center justify-center shrink-0 transition-transform group-hover:scale-105", iconStyle.bed)}>
+          <link.icon className={cn("w-5 h-5", iconStyle.icon)} />
         </div>
         <div className="flex flex-col min-w-0">
           <span className="text-sm font-black text-foreground leading-tight truncate">{link.label}</span>
         </div>
-        <div className="ml-auto w-8 h-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground/20 group-hover:text-muted-foreground/60 transition-colors">
+        <div
+          className={cn(
+            "ml-auto w-8 h-8 rounded-full flex items-center justify-center transition-colors shrink-0",
+            isLight ? "bg-slate-100 text-slate-400 group-hover:text-blue-600" : "bg-muted/70 text-muted-foreground/60 group-hover:text-primary"
+          )}
+        >
           <ChevronRight className="w-4 h-4" />
         </div>
       </div>
@@ -500,7 +538,7 @@ export const Admin: React.FC = () => {
         {Content}
       </Link>
     ) : (
-      <button key={idx} onClick={link.onClick} className="w-full">{Content}</button>
+      <button key={idx} onClick={link.onClick} className="w-full cursor-pointer">{Content}</button>
     );
   };
 
@@ -513,47 +551,78 @@ export const Admin: React.FC = () => {
   );
 
   return (
-    <div className="space-y-8 pb-24 px-1 text-foreground">
-      <header className="py-6">
-        <h2 className="text-3xl font-black tracking-tight text-foreground leading-tight">관리자 시스템</h2>
-        <p className="text-muted-foreground font-bold">건명기업 시스템의 코어 설정을 제어합니다</p>
-      </header>
-
-      {/* Category Tabs - Grid for fixed size */}
-      <div className="grid grid-cols-3 gap-1 bg-muted p-1.5 rounded-3xl border border-border mx-1">
-        {[
-          { id: 'hr', label: '인사/기획', icon: Users, color: 'text-blue-500' },
-          { id: 'safety', label: '안전/관제', icon: HardHat, color: 'text-rose-500' },
-          { id: 'system', label: '시스템/보상', icon: Settings, color: 'text-amber-500' }
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveCategory(tab.id as any)}
+    <div className="w-full space-y-4 pb-24 overflow-x-hidden bg-background text-foreground">
+      <MarineSubpageHero
+        isLight={isLight}
+        highContrast={isHighContrast}
+        icon={<Icon3DHelmet className="w-8 h-8" />}
+        iconBedClass={isLight ? "bg-[#FEF9C3]" : "bg-amber-500/15"}
+        subtitle="건명기업 통합 운영 · 인사 · 현장 관제 · 보상"
+        title="관리자 제어 센터"
+        rightAction={
+          <Link
+            to="/admin/pc-dashboard"
+            target="_blank"
+            rel="noopener noreferrer"
             className={cn(
-              "flex-1 min-w-[100px] flex items-center justify-center gap-2 py-3.5 rounded-2xl transition-all duration-500",
-              activeCategory === tab.id 
-                ? "bg-card text-foreground shadow-md scale-[1.02] border border-border" 
-                : "text-muted-foreground/60 hover:text-muted-foreground/90"
+              "h-9 px-3 rounded-2xl border text-xs font-black flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all",
+              isLight
+                ? "bg-[#EFF6FF] border-blue-200/80 text-blue-700 hover:bg-blue-100/70"
+                : "bg-muted/60 border-border text-foreground hover:bg-muted"
             )}
           >
-            <tab.icon className={cn("w-4 h-4", activeCategory === tab.id ? tab.color : "text-muted-foreground/60")} />
-            <span className="text-[11px] font-black uppercase tracking-widest">{tab.label}</span>
-          </button>
-        ))}
-      </div>
+            <LayoutDashboard className="w-3.5 h-3.5 text-blue-600" />
+            <span>PC 관제</span>
+          </Link>
+        }
+      />
 
-      {/* Menus Content */}
-      <motion.div 
-        key={activeCategory}
-        initial={{ opacity: 0, x: 20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ type: "spring", damping: 25, stiffness: 200 }}
-        className="space-y-4 px-1"
-      >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {categorizedLinks[activeCategory].map((link, idx) => renderLink(link, idx))}
+      <div className="px-4 space-y-4">
+        {/* Clean 3-Category Tabs */}
+        <div
+          className={cn(
+            "grid grid-cols-3 gap-1 p-1 rounded-2xl border",
+            isHighContrast
+              ? "bg-card border-border"
+              : isLight
+                ? "bg-white border-slate-200/80 shadow-[0_6px_18px_rgba(15,23,42,0.04)]"
+                : "bg-[#111B2E] border-white/10"
+          )}
+        >
+          {[
+            { id: 'hr', label: '인사·근태', icon: Users },
+            { id: 'safety', label: '안전·관제', icon: HardHat },
+            { id: 'system', label: '시스템·보상', icon: Settings }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveCategory(tab.id as any)}
+              className={cn(
+                "flex items-center justify-center gap-1.5 py-2.5 px-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap",
+                activeCategory === tab.id 
+                  ? "bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] text-white shadow-sm shadow-blue-600/20" 
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <tab.icon className="w-3.5 h-3.5 shrink-0" />
+              <span className="text-xs font-black whitespace-nowrap">{tab.label}</span>
+            </button>
+          ))}
         </div>
-      </motion.div>
+
+        {/* Menus Content */}
+        <motion.div 
+          key={activeCategory}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2 }}
+          className="space-y-3"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {categorizedLinks[activeCategory].map((link, idx) => renderLink(link, idx))}
+          </div>
+        </motion.div>
+      </div>
 
       <Dialog open={isSafetySensorSettingsOpen} onOpenChange={setIsSafetySensorSettingsOpen}>
         <DialogContent className="bg-card border border-border rounded-3xl text-foreground max-w-sm p-6 overflow-hidden flex flex-col shadow-2xl">

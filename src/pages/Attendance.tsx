@@ -83,6 +83,8 @@ import {
 import { calculateAttendanceHours } from '@/lib/attendance';
 import { checkIsSpecialDay } from '@/lib/holidays';
 import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
+import { MarineSubpageHero } from '@/components/MarineSubpageHero';
+import { Icon3DClock } from '@/components/icons/Marine3DIcons';
 
 export const Attendance: React.FC = () => {
   const navigate = useNavigate();
@@ -130,6 +132,13 @@ export const Attendance: React.FC = () => {
   const isAdminUser = profile && [
     'CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'GENERAL_AFFAIRS', 'SAFETY_MANAGER', 'ADMIN'
   ].includes(profile.role?.toUpperCase() || '');
+  const isHighContrast = !!profile?.highContrast;
+  const isLight = profile?.lightTheme !== false && !isHighContrast;
+  const pearlCardClass = isHighContrast
+    ? "bg-card border border-border rounded-[26px] text-foreground"
+    : isLight
+      ? "bg-white border border-white rounded-[26px] text-slate-900 shadow-[0_12px_32px_rgba(15,23,42,0.06)]"
+      : "bg-[#111B2E]/92 border border-white/12 rounded-[26px] text-white shadow-[0_12px_32px_rgba(0,0,0,0.35)]";
 
   useEffect(() => {
     if (!profile || !isHistoryOpen) return;
@@ -400,75 +409,93 @@ export const Attendance: React.FC = () => {
   };
 
   return (
-    <div className="space-y-3 pb-20 px-2">
-      <header className="py-3 flex items-center justify-between">
-        <div className="space-y-0.5">
-          <p className="text-[9px] font-black text-muted-foreground/80 uppercase tracking-[0.2em]">근태 모니터링</p>
-          <h2 className="text-lg font-black tracking-tight text-foreground leading-tight">근태 관리</h2>
-          <p className="text-xs font-bold text-muted-foreground">{format(now, 'yyyy.MM.dd EEEE', { locale: ko })}</p>
-        </div>
+    <div className="w-full space-y-4 pb-24 overflow-x-hidden bg-background">
+      <style>{`
+        .rdp { --rdp-cell-size: 100%; margin: 0; width: 100%; }
+        .rdp-table { width: 100%; border-collapse: separate; border-spacing: 4px; }
+        .rdp-caption_label { color: var(--foreground); font-weight: 900; font-size: 1rem; display: flex; align-items: center; justify-content: center; gap: 4px; }
+        .rdp-head_cell { color: var(--muted-foreground); opacity: 0.8; font-weight: 900; font-size: 0.7rem; text-align: center; padding-bottom: 8px; }
+      `}</style>
 
-        {isCEO && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate('/attendance/settings')}
-            className="rounded-2xl border-border bg-card/80 text-xs font-bold flex items-center gap-1.5 shadow-sm hover:bg-muted"
+      <MarineSubpageHero
+        isLight={isLight}
+        highContrast={isHighContrast}
+        icon={<Icon3DClock className="w-8 h-8" />}
+        iconBedClass={isLight ? "bg-[#EFF6FF]" : "bg-blue-500/15"}
+        subtitle={`${format(now, 'yyyy.MM.dd EEEE', { locale: ko })} · ${profile?.departmentName || '건명기업 현장'}`}
+        title="근태 관리"
+        rightAction={
+          isCEO ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/attendance/settings')}
+              className={cn(
+                "rounded-2xl text-xs font-black flex items-center gap-1.5 h-9 px-3 whitespace-nowrap shrink-0 cursor-pointer",
+                isLight
+                  ? "bg-[#EFF6FF] border-blue-200/80 text-blue-700 hover:bg-blue-100/70"
+                  : "border-border bg-muted/60 hover:bg-muted text-foreground"
+              )}
+            >
+              <Sliders className="w-3.5 h-3.5 text-blue-500" />
+              <span>근무시간 설정</span>
+            </Button>
+          ) : undefined
+        }
+      />
+
+      <div className="px-4 space-y-4">
+        {/* Attendance Sub-Menu Navigation Tabs */}
+        <div
+          className={cn(
+            "p-1 rounded-2xl flex items-center gap-1 border",
+            isHighContrast
+              ? "bg-card border-border"
+              : isLight
+                ? "bg-white border-slate-200/80 shadow-[0_6px_18px_rgba(15,23,42,0.04)]"
+                : "bg-[#111B2E] border-white/10"
+          )}
+        >
+          <button
+            type="button"
+            onClick={() => setActiveTab('CHECK_IN')}
+            className={cn(
+              "flex-1 py-2.5 px-1.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap",
+              activeTab === 'CHECK_IN'
+                ? "bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] text-white shadow-sm shadow-blue-600/20"
+                : "text-muted-foreground hover:text-foreground"
+            )}
           >
-            <Sliders className="w-3.5 h-3.5 text-blue-500" />
-            <span>근무시간 설정</span>
-          </Button>
-        )}
-        <style>{`
-          .rdp { --rdp-cell-size: 100%; margin: 0; width: 100%; }
-          .rdp-table { width: 100%; border-collapse: separate; border-spacing: 4px; }
-          .rdp-caption_label { color: var(--foreground); font-weight: 900; font-size: 1rem; display: flex; align-items: center; justify-content: center; gap: 4px; }
-          .rdp-head_cell { color: var(--muted-foreground); opacity: 0.8; font-weight: 900; font-size: 0.7rem; text-align: center; padding-bottom: 8px; }
-        `}</style>
-      </header>
-
-      {/* 🗂️ Attendance Sub-Menu Navigation Tabs */}
-      <div className="bg-card border border-border/60 p-1 rounded-2xl flex items-center gap-1 shadow-xs">
-        <button
-          type="button"
-          onClick={() => setActiveTab('CHECK_IN')}
-          className={cn(
-            "flex-1 py-2 px-1.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap",
-            activeTab === 'CHECK_IN'
-              ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          <Clock className="w-3.5 h-3.5 shrink-0" />
-          <span>출퇴근 체크</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('HISTORY')}
-          className={cn(
-            "flex-1 py-2 px-1.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap",
-            activeTab === 'HISTORY'
-              ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          <CalendarIcon className="w-3.5 h-3.5 shrink-0" />
-          <span>근무기록·달력</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('OVERTIME_ALERT')}
-          className={cn(
-            "flex-1 py-2 px-1.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap",
-            activeTab === 'OVERTIME_ALERT'
-              ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          <Calculator className="w-3.5 h-3.5 shrink-0" />
-          <span>잔업·알림</span>
-        </button>
-      </div>
+            <Clock className="w-3.5 h-3.5 shrink-0" />
+            <span>출퇴근 체크</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('HISTORY')}
+            className={cn(
+              "flex-1 py-2.5 px-1.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap",
+              activeTab === 'HISTORY'
+                ? "bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] text-white shadow-sm shadow-blue-600/20"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <CalendarIcon className="w-3.5 h-3.5 shrink-0" />
+            <span>근무기록·달력</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('OVERTIME_ALERT')}
+            className={cn(
+              "flex-1 py-2.5 px-1.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap",
+              activeTab === 'OVERTIME_ALERT'
+                ? "bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] text-white shadow-sm shadow-blue-600/20"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Calculator className="w-3.5 h-3.5 shrink-0" />
+            <span>잔업·알림</span>
+          </button>
+        </div>
 
       {/* ================= TAB 1: 📌 출퇴근 체크 (Check-in & Location Live) ================= */}
       {activeTab === 'CHECK_IN' && (
@@ -552,15 +579,13 @@ export const Attendance: React.FC = () => {
           )}
 
           {/* Clocking Unit */}
-          <Card className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.03)] relative">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-[50px] -mr-12 -mt-12" />
+          <Card className={cn(pearlCardClass, "overflow-hidden relative")}>
             <CardContent className="p-5 space-y-5 relative z-10">
                <div className="flex flex-col items-center gap-1.5">
-                  <div className="flex items-center gap-2 px-3 py-1 bg-muted rounded-full border border-border/45">
-                    <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
-                    <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest">실시간 근무 모니터링</span>
-                  </div>
-                  <span className="text-4xl font-black text-foreground tabular-nums tracking-tighter drop-shadow-sm font-mono">{format(now, 'HH:mm:ss')}</span>
+                  <span className={cn("text-xs font-bold", isLight ? "text-blue-600" : "text-cyan-300")}>
+                    현재 근무 시각
+                  </span>
+                  <span className="text-4xl font-black text-foreground tabular-nums tracking-tight font-mono">{format(now, 'HH:mm:ss')}</span>
                </div>
                
                <div className="grid grid-cols-2 gap-3.5">
@@ -568,28 +593,28 @@ export const Attendance: React.FC = () => {
                     disabled={!!todayAttendance?.clockIn}
                     onClick={handleClockIn}
                     className={cn(
-                      "h-18 rounded-2xl flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 shadow-md border-b-[4px] cursor-pointer",
+                      "h-18 rounded-2xl flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer",
                       todayAttendance?.clockIn 
-                        ? "bg-muted text-muted-foreground/30 border-border"
-                        : "bg-blue-600 text-white border-blue-700 hover:bg-blue-500 hover:border-blue-600 shadow-blue-500/10"
+                        ? (isLight ? "bg-slate-100 text-slate-400 border border-slate-200/80" : "bg-muted text-muted-foreground/30 border border-border")
+                        : "bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] text-white shadow-lg shadow-blue-600/25 hover:opacity-95"
                     )}
                   >
                     <LogIn className="w-5 h-5" />
-                    <span className="font-black text-xs">출근 완료</span>
+                    <span className="font-black text-xs">출근 등록</span>
                   </button>
 
                   <button 
                     disabled={!todayAttendance?.clockIn || !!todayAttendance?.clockOut}
                     onClick={handleClockOut}
                     className={cn(
-                      "h-18 rounded-2xl flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 shadow-md border-b-[4px] cursor-pointer",
+                      "h-18 rounded-2xl flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer",
                       (!todayAttendance?.clockIn || !!todayAttendance?.clockOut)
-                        ? "bg-muted text-muted-foreground/30 border-border"
-                        : "bg-rose-600 text-white border-rose-700 hover:bg-rose-500 hover:border-rose-600 shadow-rose-500/10"
+                        ? (isLight ? "bg-slate-100 text-slate-400 border border-slate-200/80" : "bg-muted text-muted-foreground/30 border border-border")
+                        : "bg-gradient-to-r from-[#E11D48] to-[#BE123C] text-white shadow-lg shadow-rose-600/25 hover:opacity-95"
                     )}
                   >
                     <LogOut className="w-5 h-5" />
-                    <span className="font-black text-xs">퇴근 완료</span>
+                    <span className="font-black text-xs">퇴근 등록</span>
                   </button>
                </div>
 
@@ -647,7 +672,7 @@ export const Attendance: React.FC = () => {
 
           {/* GPS Geofence & Auto Attendance Live Status (CEO Only) */}
           {isCEO && (
-            <Card className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.03)]">
+            <Card className={cn(pearlCardClass, "overflow-hidden")}>
               <CardContent className="p-4.5 space-y-3.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -687,14 +712,14 @@ export const Attendance: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div className="bg-muted/40 rounded-2xl p-3 border border-border/40 flex items-center justify-between">
+                  <div className={cn("rounded-2xl p-3 border flex items-center justify-between", isLight ? "bg-[#F8FAFC] border-slate-200/70" : "bg-muted/40 border-border/40")}>
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
                         <Navigation className="w-4 h-4" />
                       </div>
                       <div className="truncate">
-                        <p className="text-[9px] font-bold text-muted-foreground uppercase">사업장 기준점 거리</p>
-                        <p className="text-sm font-black text-foreground truncate">
+                        <p className="text-[10px] font-bold text-muted-foreground">사업장 기준점 거리</p>
+                        <p className="text-sm font-black text-foreground truncate tabular-nums">
                           {distanceToCenter !== null ? formatDistance(distanceToCenter) : '측정 중...'}
                         </p>
                       </div>
@@ -723,13 +748,13 @@ export const Attendance: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="bg-muted/40 rounded-2xl p-3 border border-border/40 flex items-center justify-between">
+                  <div className={cn("rounded-2xl p-3 border flex items-center justify-between", isLight ? "bg-[#F8FAFC] border-slate-200/70" : "bg-muted/40 border-border/40")}>
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
                         <ShieldCheck className="w-4 h-4" />
                       </div>
                       <div className="truncate">
-                        <p className="text-[9px] font-bold text-muted-foreground uppercase">근무 시간 기본 규칙</p>
+                        <p className="text-[10px] font-bold text-muted-foreground">근무 시간 기본 규칙</p>
                         <p className="text-xs font-black text-foreground truncate">
                           08:00 ~ 17:00 (점심 12-13시 제외)
                         </p>
@@ -768,38 +793,36 @@ export const Attendance: React.FC = () => {
 
       {/* ================= TAB 2: 📅 근무 기록 & 캘린더 (History & Calendar) ================= */}
       {activeTab === 'HISTORY' && (
-        <div className="space-y-3 animate-in fade-in duration-200">
-          <div className="grid grid-cols-2 gap-3.5">
-             <div className="bg-card border border-border/50 p-4 rounded-3xl flex flex-col gap-1 items-start shadow-[0_2px_12px_rgba(0,0,0,0.01)] relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-16 h-16 bg-blue-500/5 rounded-full blur-xl group-hover:bg-blue-500/10 transition-colors" />
-                <div className="w-8 h-8 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-500 mb-1 border border-blue-500/10">
-                  <Clock className="w-4 h-4" />
+        <div className="space-y-3.5 animate-in fade-in duration-200">
+          <div className="grid grid-cols-2 gap-3">
+             <div className={cn(pearlCardClass, "p-4 flex flex-col gap-1 items-start")}>
+                <div className={cn("w-10 h-10 rounded-[14px] flex items-center justify-center mb-1", isLight ? "bg-[#EFF6FF]" : "bg-blue-500/15")}>
+                  <Icon3DClock className="w-6 h-6" />
                 </div>
-                <span className="text-[8px] font-black text-blue-500/80 uppercase tracking-widest leading-none">이달의 누적 근무</span>
-                <span className="text-xl font-black text-foreground">{stats.total.toFixed(0)}<span className="text-[10px] font-bold text-muted-foreground/40 ml-0.5 font-sans">H</span></span>
+                <span className="text-[11px] font-black text-blue-600">이번 달 누적 근무</span>
+                <span className="text-xl font-black text-foreground tabular-nums">{stats.total.toFixed(0)}<span className="text-xs font-bold text-muted-foreground ml-1">시간</span></span>
              </div>
-             <div className="bg-card border border-border/50 p-4 rounded-3xl flex flex-col gap-1 items-start shadow-[0_2px_12px_rgba(0,0,0,0.01)] relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-16 h-16 bg-amber-500/5 rounded-full blur-xl group-hover:bg-amber-500/10 transition-colors" />
-                <div className="w-8 h-8 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-500 mb-1 border border-amber-500/10">
-                  <Activity className="w-4 h-4" />
+             <div className={cn(pearlCardClass, "p-4 flex flex-col gap-1 items-start")}>
+                <div className={cn("w-10 h-10 rounded-[14px] flex items-center justify-center mb-1 text-amber-600", isLight ? "bg-[#FEF3C7]" : "bg-amber-500/15")}>
+                  <Activity className="w-5 h-5" />
                 </div>
-                <span className="text-[8px] font-black text-amber-600/80 uppercase tracking-widest leading-none">초과 근무 시간</span>
-                <span className="text-xl font-black text-amber-600">{stats.ot.toFixed(0)}<span className="text-[10px] font-bold text-amber-600/40 ml-0.5 font-sans">H</span></span>
+                <span className="text-[11px] font-black text-amber-600">이번 달 초과 근무</span>
+                <span className="text-xl font-black text-amber-600 tabular-nums">{stats.ot.toFixed(0)}<span className="text-xs font-bold text-amber-600/70 ml-1">시간</span></span>
              </div>
           </div>
 
-          <Card className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.01)]">
+          <Card className={cn(pearlCardClass, "overflow-hidden")}>
              <CardContent className="p-4">
                 <div className="flex items-center gap-1.5 mb-3">
-                   <Activity className="w-3.5 h-3.5 text-primary" />
+                   <Activity className="w-4 h-4 text-blue-600" />
                    <span className="text-xs font-black text-foreground">최근 근무 트렌드</span>
                 </div>
                 <div className="h-[140px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData}>
-                      <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill: 'var(--muted-foreground)', opacity: 0.5, fontSize: 10}} />
+                      <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill: 'var(--muted-foreground)', opacity: 0.65, fontSize: 10}} />
                       <Tooltip cursor={{fill: 'var(--muted)', opacity: 0.2}} contentStyle={{backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px', fontSize: '10px'}} />
-                      <Bar dataKey="hours" fill="var(--primary)" radius={[6, 6, 0, 0]} barSize={12} />
+                      <Bar dataKey="hours" fill={isLight ? "#2563EB" : "var(--primary)"} radius={[6, 6, 0, 0]} barSize={14} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -807,7 +830,7 @@ export const Attendance: React.FC = () => {
           </Card>
 
           {/* Calendar Card with integrated date selection indicator */}
-          <Card className="border-none shadow-none bg-card rounded-2xl overflow-hidden border border-border">
+          <Card className={cn(pearlCardClass, "overflow-hidden")}>
             <CardContent className="p-3 pt-5">
                <div className="flex items-center justify-between px-2 pb-2 mb-2 border-b border-border/40">
                  <div className="flex items-center gap-2">
@@ -895,14 +918,14 @@ export const Attendance: React.FC = () => {
 
       {/* ================= TAB 3: ⚡ 잔업 예측 & 스마트 알림 (Overtime & Alerts) ================= */}
       {activeTab === 'OVERTIME_ALERT' && (
-        <div className="space-y-3 animate-in fade-in duration-200">
+        <div className="space-y-3.5 animate-in fade-in duration-200">
           {/* Overtime Rules & Realtime Overtime Predictor Widget */}
-          <Card className="bg-card border border-border/60 rounded-3xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.03)]">
+          <Card className={cn(pearlCardClass, "overflow-hidden")}>
             <CardContent className="p-4.5 space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-black">
-                    <Calculator className="w-4 h-4" />
+                  <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center font-black", isLight ? "bg-[#FEF3C7] text-amber-600" : "bg-amber-500/15 text-amber-400")}>
+                    <Calculator className="w-4.5 h-4.5" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
@@ -1039,12 +1062,12 @@ export const Attendance: React.FC = () => {
           </Card>
 
           {/* Smart Timed Push Notification Card (07:30 / 17:00 / 18:00 / 19:00) */}
-          <Card className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.03)]">
+          <Card className={cn(pearlCardClass, "overflow-hidden")}>
             <CardContent className="p-4.5 space-y-3.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                    <BellRing className="w-4 h-4" />
+                  <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center", isLight ? "bg-[#EFF6FF] text-blue-600" : "bg-primary/15 text-primary")}>
+                    <BellRing className="w-4.5 h-4.5" />
                   </div>
                   <div>
                     <h3 className="text-xs font-black text-foreground">스마트 출퇴근 알림 (배터리 0% 절약형)</h3>
@@ -1348,6 +1371,7 @@ export const Attendance: React.FC = () => {
         </DialogContent>
       </Dialog>
       )}
+      </div>
     </div>
   );
 };

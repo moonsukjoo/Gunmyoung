@@ -43,19 +43,19 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon: Icon, label, active }) => (
   <Link
     to={to}
     className={cn(
-      "flex flex-col items-center justify-center gap-1.5 flex-1 py-1 transition-all duration-300 relative",
-      active ? "text-primary" : "text-muted-foreground hover:text-foreground"
+      "flex flex-col items-center justify-center gap-0.5 flex-1 py-1.5 transition-all duration-200 relative rounded-full",
+      active ? "text-[#2563EB] dark:text-primary" : "text-muted-foreground hover:text-foreground"
     )}
   >
     <div className={cn(
-      "w-12 h-7 rounded-full transition-all duration-300 flex items-center justify-center",
-      active ? "bg-primary/15 text-primary shadow-[0_2px_8px_rgba(59,130,246,0.12)]" : "bg-transparent"
+      "w-11 h-6 rounded-full transition-all duration-200 flex items-center justify-center",
+      active ? "bg-[#2563EB]/12 text-[#2563EB]" : "bg-transparent"
     )}>
-      <Icon className={cn("w-4.5 h-4.5 transition-all duration-300", active && "scale-105")} />
+      <Icon className={cn("w-[18px] h-[18px] transition-transform duration-200", active && "scale-110")} />
     </div>
     <span className={cn(
-      "text-[11.5px] font-black tracking-tight transition-all leading-none",
-      active ? "opacity-100 text-primary" : "opacity-70"
+      "text-[11px] font-black tracking-tight transition-all leading-none whitespace-nowrap",
+      active ? "opacity-100 text-[#2563EB]" : "opacity-75"
     )}>
       {label}
     </span>
@@ -81,7 +81,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     document.body.scrollTop = 0;
   }, [location.pathname, location.search]);
 
-  const lightTheme = profile?.lightTheme;
+  const lightTheme = profile?.lightTheme !== false;
   const highContrast = profile?.highContrast;
 
   useEffect(() => {
@@ -278,109 +278,158 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const navItems = [
     { to: '/', icon: LayoutDashboard, label: '홈' },
     { to: '/attendance', icon: Clock, label: '근태' },
+    { to: '/personal-work-log', icon: ClipboardList, label: '일지' },
     isAdmin && { to: '/admin', icon: Settings, label: '관리' },
-    { to: '/mypage', icon: User, label: '마이' },
+    { to: '/mypage', icon: User, label: '내정보' },
   ].filter(Boolean) as any[];
+
+  const isHome = location.pathname === '/';
+
+  const sosDialogModal = (
+    <Dialog open={isSOSDialogOpen} onOpenChange={setIsSOSDialogOpen}>
+      <DialogTrigger 
+        className="h-9 px-3 bg-rose-600 hover:bg-rose-700 rounded-full flex items-center justify-center gap-1 text-white active:scale-95 transition-all shadow-lg shadow-rose-600/30 cursor-pointer"
+      >
+        <ShieldAlert className="w-4 h-4 shrink-0" />
+        <span className="text-xs font-black whitespace-nowrap">긴급호출</span>
+      </DialogTrigger>
+      <DialogContent className="bg-card border border-border rounded-3xl p-0 overflow-hidden max-w-[300px]">
+        <div className="bg-rose-600 p-5 text-center text-white">
+          <h2 className="text-lg font-black">긴급 상황 전송</h2>
+          <p className="text-[11px] font-bold text-white/90 mt-1">유형을 선택하면 관리자에게 즉시 알림이 전송됩니다</p>
+        </div>
+        <div className="p-3.5 grid grid-cols-2 gap-2">
+          {['화재', '추락', '협착', '기타'].map(type => (
+            <button 
+              key={type}
+              onClick={() => handleEmergencySOS(type)}
+              disabled={isSOSLoading}
+              className="h-18 bg-muted rounded-2xl flex flex-col items-center justify-center gap-1 font-black text-xs border border-border active:scale-95 transition-all hover:bg-muted/80 cursor-pointer"
+            >
+              <span className="text-xl">{type === '화재' ? '🔥' : type === '추락' ? '🧗' : type === '협착' ? '🏗️' : '🆘'}</span>
+              <span className="text-foreground">{type}</span>
+            </button>
+          ))}
+        </div>
+        <div className="p-3 pt-0">
+          <Button variant="ghost" className="w-full text-muted-foreground font-black text-xs h-9 rounded-xl" onClick={() => setIsSOSDialogOpen(false)}>취소</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 
   return (
     <div className="flex flex-col h-screen bg-background font-sans text-foreground select-none">
-      <header className="h-13 bg-card/85 backdrop-blur-xl border-b border-border/40 flex items-center justify-center flex-shrink-0 sticky top-0 z-50 shadow-sm">
-        <div className="w-full px-4 flex items-center justify-between">
-          <div className="flex items-center gap-1">
-            {location.pathname !== '/' && (
+      {!isHome && (
+        <header
+          className={cn(
+            "h-14 backdrop-blur-xl border-b flex items-center justify-center flex-shrink-0 sticky top-0 z-50 transition-colors",
+            lightTheme && !highContrast
+              ? "bg-white/92 border-slate-200/80 shadow-[0_4px_16px_rgba(15,23,42,0.04)]"
+              : "bg-card/90 border-border/50 shadow-xs"
+          )}
+        >
+          <div className="w-full max-w-2xl px-4 flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => navigate(-1)}
-                className="w-8 h-8 -ml-1 text-muted-foreground hover:text-foreground transition-all rounded-lg"
+                className="w-9 h-9 -ml-1.5 text-muted-foreground hover:text-foreground transition-all rounded-full"
               >
                 <ChevronLeft className="w-5 h-5" />
               </Button>
-            )}
+              <Link to="/" className="flex items-center gap-2 group">
+                <div className={cn(
+                  "w-7 h-7 rounded-xl border flex items-center justify-center p-1 active:scale-95 transition-all",
+                  lightTheme && !highContrast
+                    ? "bg-[#EFF6FF] border-blue-200/70"
+                    : "bg-primary/10 border-primary/20"
+                )}>
+                  <CompanyLogo className="w-full h-full" />
+                </div>
+                <span className="font-black text-sm tracking-tight leading-none text-foreground whitespace-nowrap">
+                  건명기업
+                </span>
+              </Link>
+            </div>
+
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-md flex items-center justify-center p-1 active:scale-95 transition-all">
-                <CompanyLogo className="w-full h-full" />
-              </div>
-              <div className="flex flex-col">
-                <span className="font-extrabold text-xs tracking-tight leading-none text-foreground">건명기업</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <Dialog open={isSOSDialogOpen} onOpenChange={setIsSOSDialogOpen}>
-              <DialogTrigger 
-                className="w-8.5 h-8.5 bg-red-600 rounded-lg flex items-center justify-center text-white active:scale-90 transition-all shadow-md shadow-red-900/15"
-              >
-                <ShieldAlert className="w-4 h-4" />
-              </DialogTrigger>
-              <DialogContent className="bg-card border-none rounded-2xl p-0 overflow-hidden max-w-[280px]">
-                <div className="bg-red-600 p-5 text-center text-white">
-                  <h2 className="text-lg font-black">긴급 상황 전송</h2>
-                  <p className="text-[9px] font-bold text-white/90 mt-1">유형을 선택하면 관리자에게 즉시 알림이 전송됩니다</p>
-                </div>
-                <div className="p-3 grid grid-cols-2 gap-1.5">
-                  {['화재', '추락', '협착', '기타'].map(type => (
-                    <button 
-                      key={type}
-                      onClick={() => handleEmergencySOS(type)}
-                      className="h-16 bg-muted rounded-xl flex flex-col items-center justify-center gap-0.5 font-black text-[11px] border border-border active:scale-95 transition-all hover:bg-muted/80"
-                    >
-                      <span className="text-lg mb-0.5">{type === '화재' ? '🔥' : type === '추락' ? '🧗' : type === '협착' ? '🏗️' : '🆘'}</span>
-                      <span className="text-foreground">{type}</span>
-                    </button>
-                  ))}
-                </div>
-                <div className="p-3 pt-0">
-                  <Button variant="ghost" className="w-full text-muted-foreground font-black text-xs h-8" onClick={() => setIsSOSDialogOpen(false)}>취소</Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-
-            <div className="relative">
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className={cn(
-                  "w-8.5 h-8.5 text-muted-foreground hover:text-foreground transition-all rounded-lg relative z-10",
-                  hasImportantNotice && location.pathname === '/' && "animate-glow-pulse bg-red-500/15 text-red-500 hover:bg-red-500/25 border border-red-500/30"
+              <div className="relative">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className={cn(
+                    "w-9 h-9 text-foreground/80 hover:text-foreground transition-all rounded-full relative z-10",
+                    lightTheme && !highContrast ? "bg-slate-100/90 hover:bg-slate-200/80" : "bg-muted/60 hover:bg-muted"
+                  )}
+                  onClick={() => navigate('/notifications')}
+                >
+                  <Bell className="w-4.5 h-4.5" />
+                </Button>
+                {unreadCount > 0 && (
+                  <div className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-rose-500 rounded-full border border-background flex items-center justify-center z-20">
+                    <span className="text-[9px] font-black text-white leading-none">{unreadCount > 9 ? '9+' : unreadCount}</span>
+                  </div>
                 )}
-                onClick={() => navigate('/notifications')}
-              >
-                <Bell className={cn("w-4.5 h-4.5", hasImportantNotice && location.pathname === '/' && "scale-110")} />
-              </Button>
-              {unreadCount > 0 && (
-                <div className="absolute top-1.5 right-1.5 w-3 h-3 bg-red-500 rounded-full border border-background flex items-center justify-center z-20">
-                  <span className="text-[6px] font-black text-white">{unreadCount > 9 ? '9+' : unreadCount}</span>
-                </div>
-              )}
+              </div>
+
+              {sosDialogModal}
             </div>
           </div>
-        </div>
-      </header>
+        </header>
+      )}
 
       <main ref={mainRef} className="flex-1 overflow-y-auto bg-background relative overflow-x-hidden">
-        {/* Dynamic background glass glowing nodes */}
-        <div className="absolute top-8 left-8 w-64 h-64 rounded-full bg-primary/10 blur-[100px] pointer-events-none" />
-        <div className="absolute top-[40%] -right-16 w-80 h-80 rounded-full bg-indigo-500/8 blur-[120px] pointer-events-none" />
-        <div className="absolute bottom-16 -left-12 w-72 h-72 rounded-full bg-emerald-500/5 blur-[90px] pointer-events-none" />
-        
-        <div className="w-full pb-16 relative z-10 animate-fade-in">
+        <div className="w-full max-w-2xl mx-auto pb-24 relative z-10 animate-fade-in">
+          {/* Home route floating top-right Bell + SOS overlaid directly onto 3D Shipyard Hero */}
+          {isHome && (
+            <div className="absolute top-4 right-4 z-40 flex items-center gap-1.5">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => navigate('/notifications')}
+                  className={cn(
+                    "w-9 h-9 rounded-full bg-black/40 backdrop-blur-md border border-white/25 text-white flex items-center justify-center relative cursor-pointer hover:bg-black/55 transition-all",
+                    hasImportantNotice && "ring-2 ring-rose-500 bg-rose-600/70"
+                  )}
+                >
+                  <Bell className="w-4 h-4" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[15px] h-[15px] px-1 bg-rose-500 rounded-full text-[9px] font-black text-white flex items-center justify-center">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+              {sosDialogModal}
+            </div>
+          )}
           {children}
         </div>
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 h-14 bg-card/85 backdrop-blur-xl border-t border-border/40 flex items-center justify-around px-4 pb-safe z-50 shadow-[0_-8px_24px_rgba(0,0,0,0.12)]">
-        {navItems.map((item) => (
-          <NavItem 
-            key={item.to} 
-            to={item.to} 
-            icon={item.icon} 
-            label={item.label} 
-            active={location.pathname === item.to} 
-          />
-        ))}
-      </nav>
+      {/* Floating Pill Capsule Bottom Dock (Concept 1 3D Marine) */}
+      <div className="fixed bottom-3 left-3 right-3 z-50 flex justify-center pointer-events-none pb-safe">
+        <nav
+          className={cn(
+            "pointer-events-auto w-full max-w-md h-[60px] backdrop-blur-xl border rounded-full flex items-center justify-around px-3",
+            lightTheme && !highContrast
+              ? "bg-white/95 border-slate-200/85 shadow-[0_10px_30px_rgba(15,23,42,0.12)]"
+              : "bg-card/95 border-border/80 shadow-[0_10px_30px_rgba(0,0,0,0.4)]"
+          )}
+        >
+          {navItems.map((item) => (
+            <NavItem 
+              key={item.to} 
+              to={item.to} 
+              icon={item.icon} 
+              label={item.label} 
+              active={location.pathname === item.to} 
+            />
+          ))}
+        </nav>
+      </div>
       <CriticalIncidentAlertCenter />
     </div>
   );

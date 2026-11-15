@@ -45,7 +45,6 @@ import {
   Thermometer,
   Ticket,
   Wallet,
-  Volume2,
   MessageSquare,
   Settings2,
   Pin,
@@ -86,13 +85,12 @@ import { calculateAttendanceHours } from '@/lib/attendance';
 import { checkIsSpecialDay } from '@/lib/holidays';
 import { useSafetySensor } from '@/components/SafetySensorProvider';
 import { useAutoAttendance } from '@/components/AutoAttendanceProvider';
-import { DashboardStatusBar } from '@/components/dashboard/DashboardStatusBar';
-import { AttendanceHubCard } from '@/components/dashboard/AttendanceHubCard';
 import { ServicesHub } from '@/components/dashboard/ServicesHub';
-import { DailyBriefingCard } from '@/components/dashboard/DailyBriefingCard';
 
 import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
-import { AlertSoundPlayer } from '../lib/sound';
+import shipyardDayImg from '@/assets/images/shipyard_day_hero_1794698730955.jpg';
+import shipyardNightImg from '@/assets/images/shipyard_night_hero_1794698732193.jpg';
+import { Icon3DClipboard } from '@/components/icons/Marine3DIcons';
 
 export interface ShortcutOption {
   id: string;
@@ -228,7 +226,7 @@ export const ALL_SHORTCUT_OPTIONS: ShortcutOption[] = [
     id: 'training',
     label: '법정교육',
     sublabel: '의무 교육',
-    path: '/training-list',
+    path: '/training',
     icon: BookOpen,
     colorName: 'emerald',
     gradientBg: 'from-emerald-500/10 via-emerald-500/5 to-card',
@@ -244,7 +242,7 @@ export const ALL_SHORTCUT_OPTIONS: ShortcutOption[] = [
     id: 'payslip',
     label: '급여명세',
     sublabel: '명세서 조회',
-    path: '/my-payslip',
+    path: '/mypage/payslip',
     icon: Receipt,
     colorName: 'teal',
     gradientBg: 'from-teal-500/10 via-teal-500/5 to-card',
@@ -644,11 +642,11 @@ export const Dashboard: React.FC = () => {
 
     const today = format(new Date(), 'yyyy-MM-dd');
 
-    // Fetch last 15 attendance entries to build a week view (No orderBy to avoid composite index requirement)
+    // Fetch up to 45 attendance entries to compute current month count & week view
     const weeklyQ = query(
       collection(db, 'attendance'),
       where('uid', '==', profile.uid),
-      limit(15)
+      limit(45)
     );
     const unsubscribeWeekly = onSnapshot(weeklyQ, (snapshot) => {
       const map: Record<string, Attendance> = {};
@@ -661,7 +659,7 @@ export const Dashboard: React.FC = () => {
       console.error("Error fetching weekly attendance map:", error);
     });
 
-    // Notices for everyone
+    // Notices for everyone (TTS removed)
     const noticeQ = query(
       collection(db, 'notices'),
       orderBy('createdAt', 'desc'),
@@ -670,21 +668,12 @@ export const Dashboard: React.FC = () => {
 
     const unsubscribeNotices = onSnapshot(noticeQ, (snapshot) => {
       setRecentNotices(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notice)));
-      if (!isInitialNotices.current) {
-        snapshot.docChanges().forEach((change) => {
-          if (change.type === 'added') {
-            const data = change.doc.data() as Notice;
-            AlertSoundPlayer.trigger('notice', data.title);
-          }
-        });
-      } else {
-        isInitialNotices.current = false;
-      }
+      isInitialNotices.current = false;
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'notices');
     });
 
-    // Accidents for everyone
+    // Accidents for everyone (TTS removed)
     const accidentQ = query(
       collection(db, 'accidentCases'),
       orderBy('date', 'desc'),
@@ -692,16 +681,7 @@ export const Dashboard: React.FC = () => {
     );
     const unsubscribeAccidents = onSnapshot(accidentQ, (snapshot) => {
       setRecentAccidents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AccidentCase)));
-      if (!isInitialAccidents.current) {
-        snapshot.docChanges().forEach((change) => {
-          if (change.type === 'added') {
-            const data = change.doc.data() as AccidentCase;
-            AlertSoundPlayer.trigger('accident', data.title);
-          }
-        });
-      } else {
-        isInitialAccidents.current = false;
-      }
+      isInitialAccidents.current = false;
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'accidentCases');
     });
@@ -1181,150 +1161,229 @@ export const Dashboard: React.FC = () => {
     );
   }
 
-  return (
-    <div className="w-full space-y-4 pb-20 px-4 overflow-x-hidden bg-background">
-      {/* 1. Welcoming Corporate User Banner (NAHAGO Style) */}
-      <header className="pt-4 space-y-3">
-        <div className="flex items-center justify-between gap-3 bg-card/45 backdrop-blur-md border border-border/40 p-4 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
-          <div 
-            onClick={() => navigate('/mypage')}
-            className="flex items-center gap-3 cursor-pointer group flex-1"
-          >
-            <div className="w-13 h-13 rounded-full bg-muted border border-border/80 flex items-center justify-center text-muted-foreground shadow-inner shrink-0 relative group-hover:border-primary/40 transition-all duration-300">
-              {user?.photoURL ? (
-                <img 
-                  src={user.photoURL} 
-                  alt={profile?.displayName} 
-                  className="w-full h-full rounded-full object-cover" 
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <UserIcon className="w-6 h-6 text-muted-foreground/60 group-hover:text-primary transition-colors duration-300" />
-              )}
-              <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-card rounded-full" />
-            </div>
-            <div className="space-y-0.5 min-w-0 flex-1">
-              <div className="flex items-center gap-1">
-                <h1 className="text-lg font-black text-foreground tracking-tight group-hover:text-primary transition-colors flex items-center gap-1 truncate">
-                  {profile?.displayName || '사용자'}
-                  <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all duration-300" />
-                </h1>
-              </div>
-              <p className="text-xs font-bold text-muted-foreground/70 truncate tracking-tight">
-                주식회사 건명기업 ({profile?.departmentName || '경영혁신부'})
-              </p>
-            </div>
-          </div>
+  const isLight = profile?.lightTheme !== false && !profile?.highContrast;
+  const isClockedIn = !!todayAttendance?.clockIn;
+  const isClockedOut = !!todayAttendance?.clockOut;
+  const clockInTimeText = todayAttendance?.clockIn ? format(new Date(todayAttendance.clockIn), 'HH:mm') : '--:--';
+  const clockOutTimeText = todayAttendance?.clockOut ? format(new Date(todayAttendance.clockOut), 'HH:mm') : '--:--';
+  const currentMonthPrefix = format(new Date(), 'yyyy-MM');
+  const monthlyAttendanceDays = Object.values(weeklyAttendanceMap).filter(
+    (a) => a.date?.startsWith(currentMonthPrefix) && !!a.clockIn
+  ).length;
+  const elapsedHours = isClockedIn && !isClockedOut && todayAttendance?.clockIn
+    ? Math.max(0, Math.floor((Date.now() - new Date(todayAttendance.clockIn).getTime()) / (1000 * 60 * 60)))
+    : 0;
+  const latestNotice = recentNotices[0];
 
-          <div className="flex flex-col items-end gap-1.5 shrink-0">
-            <span className="text-xs font-black text-primary bg-primary/10 px-2.5 py-1 rounded-full border border-primary/15 shadow-sm">
-              {profile?.position || '사원'} 🏢
-            </span>
-            {workingDays && (
-              <span className="text-[11px] font-black text-muted-foreground/60 tracking-wider">
-                D+{workingDays}
+  return (
+    <div className="w-full space-y-4 pb-8 overflow-x-hidden bg-background">
+      {/* 1. 3D Atmospheric Dockyard Hero Stage + Overlapping Floating Glass Pass */}
+      <section className="relative w-full">
+        <div className="relative h-[290px] w-full overflow-hidden">
+          <img
+            src={isLight ? shipyardDayImg : shipyardNightImg}
+            alt="건명기업 조선소 도크"
+            className="w-full h-full object-cover"
+          />
+          <div
+            className={cn(
+              "absolute inset-0",
+              isLight
+                ? "bg-gradient-to-b from-[#0A254E]/60 via-transparent to-[#F3F6FB]"
+                : "bg-gradient-to-b from-[#080D18]/65 via-[#080D18]/20 to-[#080D18]"
+            )}
+          />
+
+          {/* Floating Top-Left Sensor/Workplace Pill (Top-Right houses Layout Bell & SOS overlay) */}
+          <div className="absolute top-4 left-4">
+            <button
+              type="button"
+              onClick={() => {
+                if (isMonitoring) {
+                  if ((window as any).simulateSafetySensor) {
+                    (window as any).simulateSafetySensor('IMPACT');
+                  } else {
+                    toast.info('안전 센서가 정상 작동 중입니다.');
+                  }
+                } else {
+                  startMonitoring();
+                }
+              }}
+              className="h-9 px-3 rounded-full bg-black/40 backdrop-blur-md border border-white/25 flex items-center gap-2 text-white cursor-pointer hover:bg-black/55 transition-colors"
+            >
+              <span className={cn("w-2 h-2 rounded-full", isMonitoring ? "bg-emerald-400 animate-pulse" : "bg-rose-400")} />
+              <span className="text-xs font-black whitespace-nowrap">
+                {profile?.workplace || '7공장'} · {isMonitoring ? '안전센서 ON' : '센서 대기'}
               </span>
+            </button>
+          </div>
+        </div>
+
+        {/* Overlapping Floating Glass Attendance & Worklog Hero Pass */}
+        <div className="px-4 -mt-[146px] relative z-10">
+          <div
+            className={cn(
+              "rounded-[26px] p-4 backdrop-blur-xl shadow-[0_18px_45px_rgba(15,23,42,0.14)] border space-y-3",
+              isLight
+                ? "bg-white/95 border-white text-slate-900"
+                : "bg-[#111B2E]/90 border-white/15 text-white"
+            )}
+          >
+            {/* User Header & Live Status */}
+            <div className="flex items-center justify-between gap-2">
+              <div
+                onClick={() => navigate('/mypage')}
+                className="min-w-0 flex-1 cursor-pointer group"
+              >
+                <p className={cn("text-xs font-bold truncate", isLight ? "text-blue-600" : "text-cyan-300")}>
+                  {profile?.displayName || '사원'} {profile?.position || ''} · {profile?.departmentName || '건명기업 현장'}
+                </p>
+                <p className="text-xl font-black tabular-nums mt-0.5 tracking-tight">
+                  {!isClockedIn
+                    ? '출근 대기 중'
+                    : !isClockedOut
+                      ? `${clockInTimeText} 정상 출근`
+                      : `${clockInTimeText} ~ ${clockOutTimeText} 퇴근`}
+                </p>
+              </div>
+
+              <span
+                className={cn(
+                  "px-3 py-1.5 rounded-full text-xs font-black shrink-0 shadow-xs",
+                  !isClockedIn
+                    ? (isLight ? "bg-slate-100 text-slate-600" : "bg-slate-800 text-slate-300")
+                    : !isClockedOut
+                      ? "bg-emerald-500 text-white"
+                      : "bg-blue-600 text-white"
+                )}
+              >
+                {!isClockedIn ? '출근 전' : !isClockedOut ? (elapsedHours > 0 ? `근무 ${elapsedHours}시간째` : '근무 중') : '근무 완료'}
+              </span>
+            </div>
+
+            {/* Primary Cobalt Blue CTA (Matches Concept 1 Screenshot) */}
+            {!isClockedIn ? (
+              <button
+                type="button"
+                onClick={handleClockIn}
+                disabled={isClockingIn}
+                className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] hover:opacity-95 text-white font-black text-sm flex items-center justify-between shadow-lg shadow-blue-600/25 cursor-pointer active:scale-[0.98] transition-all"
+              >
+                <div className="flex items-center gap-2.5">
+                  <Icon3DClipboard className="w-8 h-8" />
+                  <span>{isClockingIn ? '출근 등록 처리중...' : '지금 바로 출근 등록하기'}</span>
+                </div>
+                <span className="px-2 py-0.5 rounded-lg bg-amber-400 text-slate-950 text-[11px] font-black">
+                  터치 →
+                </span>
+              </button>
+            ) : !isClockedOut ? (
+              <div className="flex items-stretch gap-2">
+                <button
+                  type="button"
+                  onClick={() => navigate('/personal-work-log')}
+                  className="flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] hover:opacity-95 text-white font-black text-sm flex items-center justify-between shadow-lg shadow-blue-600/25 cursor-pointer active:scale-[0.98] transition-all"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Icon3DClipboard className="w-8 h-8 shrink-0" />
+                    <span className="truncate">오늘 작업일지 작성하기</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-lg bg-amber-400 text-slate-950 text-[11px] font-black shrink-0">
+                    작성 →
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClockOut}
+                  disabled={isClockingOut}
+                  className="px-3.5 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs shadow-md shadow-rose-600/20 cursor-pointer active:scale-95 transition-all shrink-0"
+                >
+                  {isClockingOut ? '중...' : '퇴근'}
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => navigate('/personal-work-log')}
+                className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] hover:opacity-95 text-white font-black text-sm flex items-center justify-between shadow-lg shadow-blue-600/25 cursor-pointer active:scale-[0.98] transition-all"
+              >
+                <div className="flex items-center gap-2.5">
+                  <Icon3DClipboard className="w-8 h-8" />
+                  <span>오늘 작업일지 확인하기</span>
+                </div>
+                <span className="px-2 py-0.5 rounded-lg bg-emerald-400 text-slate-950 text-[11px] font-black">
+                  완료 →
+                </span>
+              </button>
             )}
           </div>
         </div>
-
-        {/* Elegant Notice / Banner Ticker */}
-        {bannerText && (
-          <div className="bg-primary/[0.03] border border-primary/10 py-2.5 px-3.5 rounded-2xl flex items-center gap-2 overflow-hidden shadow-inner">
-            <Megaphone className="w-4 h-4 text-primary shrink-0 animate-bounce" />
-            <div className="flex-1 overflow-hidden relative h-4">
-              <div className="flex whitespace-nowrap animate-marquee">
-                <p className="inline-block text-xs font-bold text-foreground/80 px-2">
-                  {bannerText} • Safety First • ALWAYS BE CAREFUL • {profile?.displayName}님 오늘도 안전한 하루 보내세요
-                </p>
-                <p className="inline-block text-xs font-bold text-foreground/80 px-2">
-                  {bannerText} • Safety First • ALWAYS BE CAREFUL • {profile?.displayName}님 오늘도 안전한 하루 보내세요
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-      </header>
-
-      {/* 📍 Real-time Geofence Retention & Sensor Status Bar (GPS hidden on Home) */}
-      <DashboardStatusBar
-        isLocationRetentionActive={isLocationRetentionActive}
-        retentionRemainingMinutes={retentionRemainingMinutes}
-        isInsideCheckInZone={isInsideCheckInZone}
-        distanceToCenter={distanceToCenter}
-        refreshLocation={refreshLocation}
-        isMonitoring={isMonitoring}
-        startMonitoring={startMonitoring}
-        geofenceBufferMeters={geofenceBufferMeters}
-        isGpsAttendanceEnabled={isGpsAttendanceEnabled}
-        toggleGpsAttendance={toggleGpsAttendance}
-        hideGps={true}
-      />
-
-      {/* 🚀 CUSTOMIZABLE QUICK ACTION SHORTCUTS (사용자 맞춤 빠른 실행 메뉴) */}
-      <section className="bg-card/70 backdrop-blur-md border border-border/70 rounded-3xl p-3.5 shadow-[0_6px_24px_rgba(0,0,0,0.03)] space-y-2.5">
-        <div className="flex items-center justify-between px-1">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-            <span className="text-[11px] font-black text-foreground tracking-tight">자주 쓰는 빠른 실행</span>
-            <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-bold border-primary/30 text-primary bg-primary/5">
-              {activePinnedShortcuts.length}개 고정됨
-            </Badge>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={openShortcutConfig}
-            className="h-6 px-2 text-[10px] font-bold text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-lg flex items-center gap-1 cursor-pointer"
-          >
-            <Settings2 className="w-3 h-3 text-primary" />
-            메뉴 설정
-          </Button>
-        </div>
-
-        <div className={cn(
-          "grid gap-2.5 sm:gap-3",
-          activePinnedShortcuts.length <= 3 ? "grid-cols-3" :
-          activePinnedShortcuts.length === 4 ? "grid-cols-2 sm:grid-cols-4" :
-          activePinnedShortcuts.length === 5 ? "grid-cols-3 sm:grid-cols-5" :
-          "grid-cols-3 sm:grid-cols-6"
-        )}>
-          {activePinnedShortcuts.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                onClick={() => navigate(item.path)}
-                className={cn(
-                  "group relative flex flex-col items-center justify-center p-3 sm:p-3.5 rounded-2xl bg-gradient-to-b border active:scale-95 transition-all duration-300 shadow-sm hover:-translate-y-0.5 cursor-pointer overflow-hidden",
-                  item.gradientBg,
-                  item.borderColor,
-                  item.hoverBorderColor,
-                  item.hoverBg,
-                  item.shadowColor
-                )}
-              >
-                <div className="absolute -top-6 -right-6 w-14 h-14 bg-white/10 rounded-full blur-lg group-hover:scale-150 transition-all duration-500 pointer-events-none" />
-                <div className={cn(
-                  "w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center shadow-md group-hover:scale-110 transition-all duration-300 shrink-0 mb-1.5",
-                  item.iconBg
-                )}>
-                  <Icon className="w-5.5 h-5.5 sm:w-6 sm:h-6" />
-                </div>
-                <span className={cn(
-                  "text-xs sm:text-sm font-black text-foreground transition-colors",
-                  item.iconColor
-                )}>
-                  {item.label}
-                </span>
-                <span className="text-[9.5px] sm:text-[10px] font-bold text-muted-foreground/75 mt-0.5 whitespace-nowrap">
-                  {item.sublabel}
-                </span>
-              </button>
-            );
-          })}
-        </div>
       </section>
+
+      <div className="px-4 space-y-4">
+        {/* 2. Clean 1-Line Live Notice Ticker */}
+        <button
+          type="button"
+          onClick={() => latestNotice ? setSelectedNotice(latestNotice) : navigate('/notices')}
+          className={cn(
+            "w-full rounded-2xl px-3.5 py-2.5 flex items-center justify-between gap-2 text-left cursor-pointer border transition-colors",
+            isLight
+              ? "bg-amber-50 border-amber-200 text-amber-950 hover:bg-amber-100/70"
+              : "bg-amber-500/10 border-amber-400/30 text-amber-200 hover:bg-amber-500/15"
+          )}
+        >
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <span className="px-1.5 py-0.5 rounded bg-amber-500 text-white text-[10px] font-black shrink-0">
+              공지
+            </span>
+            <span className="text-xs font-extrabold truncate">
+              {latestNotice ? latestNotice.title : `${bannerText} • ${profile?.displayName || ''}님 안전작업 하세요`}
+            </span>
+          </div>
+          <ChevronRight className="w-4 h-4 shrink-0 opacity-60" />
+        </button>
+
+        {/* 3. Borderless 3D Clay Icon Launcher (Primary 6 + All Folder Modal) */}
+        <ServicesHub
+          activeCategory={activeCategory}
+          setActiveCategory={setActiveCategory}
+        />
+
+        {/* 4. Two Bottom Summary Feature Cards (Exact Match to Concept 1) */}
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          <button
+            type="button"
+            onClick={() => navigate('/attendance')}
+            className="bg-card border border-border/70 rounded-3xl p-4 text-left shadow-xs hover:border-primary/40 transition-all cursor-pointer"
+          >
+            <p className="text-[11px] font-black text-blue-600">이번 달 출근</p>
+            <p className="text-lg font-black text-foreground mt-1">{monthlyAttendanceDays}일 출근</p>
+            <p className="text-[11px] font-bold text-muted-foreground mt-0.5">급여·연차 보기 →</p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate('/ship-assembly')}
+            className="bg-card border border-border/70 rounded-3xl p-4 text-left shadow-xs hover:border-amber-400/50 transition-all cursor-pointer"
+          >
+            <p className="text-[11px] font-black text-amber-500 flex items-center gap-1">
+              <Sparkles className="w-3 h-3" />
+              선박·칭찬 포인트
+            </p>
+            {(() => {
+              const rawPoints = Number(profile?.points ?? 0);
+              const krwText = Math.round(rawPoints * 5000).toLocaleString();
+              return (
+                <>
+                  <p className="text-lg font-black text-foreground mt-1">
+                    {krwText}원
+                  </p>
+                  <p className="text-[11px] font-bold text-muted-foreground mt-0.5">선박·칭찬 보상 보기 →</p>
+                </>
+              );
+            })()}
+          </button>
+        </div>
 
       {/* 🛠️ QUICK ACTION SHORTCUTS CONFIGURATION MODAL (빠른 실행 커스텀 모달) */}
       <Dialog open={isShortcutConfigOpen} onOpenChange={setIsShortcutConfigOpen}>
@@ -1509,117 +1568,7 @@ export const Dashboard: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* 🌟 2. PROMINENT ATTENDANCE & TIMECARD HUB */}
-      <AttendanceHubCard
-        todayAttendance={todayAttendance}
-        weeklyAttendanceMap={weeklyAttendanceMap}
-        currentTimeStr={currentTimeStr}
-        isClockingIn={isClockingIn}
-        isClockingOut={isClockingOut}
-        handleClockIn={handleClockIn}
-        handleClockOut={handleClockOut}
-        pendingExitState={pendingExitState}
-        isGpsAttendanceEnabled={isGpsAttendanceEnabled}
-        showGpsControls={false}
-        isCEO={isCEO}
-      />
-
-      {/* 🛠️ 3. STREAMLINED ALL-SERVICES HUB (모든 서비스 4열 아이콘 런처) */}
-      <ServicesHub
-        activeCategory={activeCategory}
-        setActiveCategory={setActiveCategory}
-      />
-
-      {/* 👑 4. SPECIAL ADMIN FEATURES (Manager/Supervisor only) */}
-      {(isSupervisor || isManager || canManageMeal) && (
-        <section className="p-3.5 bg-card/70 backdrop-blur-md border border-border/70 rounded-3xl space-y-2.5 shadow-2xs">
-          <div className="flex items-center gap-1.5 px-0.5">
-            <Lock className="w-3.5 h-3.5 text-primary" />
-            <h4 className="text-xs font-black text-foreground tracking-tight">
-              현장 관리 지원 데스크
-            </h4>
-            <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-bold border-primary/30 text-primary bg-primary/5 ml-auto">
-              관리 권한 활성
-            </Badge>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {isSupervisor && (
-              <button 
-                type="button"
-                onClick={() => navigate('/work-instruction-mgmt')} 
-                className="flex items-center gap-2 p-2.5 bg-card border border-border/60 rounded-xl text-left hover:bg-muted/80 hover:border-primary/40 transition-all cursor-pointer shadow-2xs active:scale-95"
-              >
-                <div className="w-7 h-7 bg-rose-500/10 rounded-lg flex items-center justify-center text-rose-500 shrink-0">
-                  <ShieldCheck className="w-4 h-4" />
-                </div>
-                <span className="text-xs font-black text-foreground truncate">작업지시 관리</span>
-              </button>
-            )}
-            {isManager && (
-              <button 
-                type="button"
-                onClick={fetchTeamAttendance} 
-                className="flex items-center gap-2 p-2.5 bg-card border border-border/60 rounded-xl text-left hover:bg-muted/80 hover:border-primary/40 transition-all cursor-pointer shadow-2xs active:scale-95"
-              >
-                <div className="w-7 h-7 bg-blue-500/10 rounded-lg flex items-center justify-center text-blue-500 shrink-0">
-                  <Users className="w-4 h-4" />
-                </div>
-                <span className="text-xs font-black text-foreground truncate">팀 출근 현황</span>
-              </button>
-            )}
-            {isManager && (
-              <button 
-                type="button"
-                onClick={() => setIsNoticeDialogOpen(true)} 
-                className="flex items-center gap-2 p-2.5 bg-card border border-border/60 rounded-xl text-left hover:bg-muted/80 hover:border-primary/40 transition-all cursor-pointer shadow-2xs active:scale-95"
-              >
-                <div className="w-7 h-7 bg-emerald-500/10 rounded-lg flex items-center justify-center text-emerald-500 shrink-0">
-                  <Megaphone className="w-4 h-4" />
-                </div>
-                <span className="text-xs font-black text-foreground truncate">공지사항 등록</span>
-              </button>
-            )}
-            {canReportAccident && (
-              <button 
-                type="button"
-                onClick={() => navigate('/accidents')} 
-                className="flex items-center gap-2 p-2.5 bg-card border border-border/60 rounded-xl text-left hover:bg-muted/80 hover:border-primary/40 transition-all cursor-pointer shadow-2xs active:scale-95"
-              >
-                <div className="w-7 h-7 bg-amber-500/10 rounded-lg flex items-center justify-center text-amber-500 shrink-0">
-                  <AlertTriangle className="w-4 h-4" />
-                </div>
-                <span className="text-xs font-black text-foreground truncate">사고사례 등록</span>
-              </button>
-            )}
-            {canManageMeal && (
-              <button 
-                type="button"
-                onClick={() => navigate('/meal-mgmt')} 
-                className="col-span-2 flex items-center justify-between p-2.5 bg-card border border-border/60 rounded-xl hover:bg-muted/80 hover:border-primary/40 transition-all cursor-pointer shadow-2xs active:scale-95"
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 bg-orange-500/10 rounded-lg flex items-center justify-center text-orange-500 shrink-0">
-                    <Utensils className="w-4 h-4" />
-                  </div>
-                  <span className="text-xs font-black text-foreground">식사·간식 신청 내역 관리</span>
-                </div>
-                <ChevronRight className="w-4 h-4 text-muted-foreground/40" />
-              </button>
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* 📢 5. DAILY BRIEFING HUB (공지사항 / 사고사례 / 이달의 칭찬왕 통합 탭) */}
-      <DailyBriefingCard
-        briefingTab={briefingTab}
-        setBriefingTab={setBriefingTab}
-        recentNotices={recentNotices}
-        recentAccidents={recentAccidents}
-        praiseKings={praiseKings}
-        onSelectNotice={(notice) => setSelectedNotice(notice)}
-        onSelectAccident={(accident) => setSelectedDashboardAccident(accident)}
-      />
+      </div>
 
       {/* Dialogs */}
       <Dialog open={!!selectedNotice} onOpenChange={() => setSelectedNotice(null)}>
@@ -1642,19 +1591,8 @@ export const Dashboard: React.FC = () => {
               {selectedNotice?.content}
             </div>
           </div>
-          <DialogFooter className="p-8 pt-4 bg-muted/50 border-t border-border flex flex-col sm:flex-row gap-2">
-            <Button 
-              variant="outline"
-              className="flex-1 h-12 rounded-xl font-black border-primary/20 text-primary hover:bg-primary/5 flex items-center justify-center gap-1.5 cursor-pointer"
-              onClick={() => {
-                if (selectedNotice) {
-                  AlertSoundPlayer.trigger('notice', `${selectedNotice.title}. ${selectedNotice.content}`);
-                }
-              }}
-            >
-              <Volume2 className="w-4 h-4 animate-pulse" />
-              음성 방송 듣기
-            </Button>
+          <DialogFooter className="p-6 pt-4 bg-muted/50 border-t border-border flex flex-row gap-2">
+            <Button variant="outline" className="flex-1 h-12 rounded-xl font-black cursor-pointer" onClick={() => { setSelectedNotice(null); navigate('/notices'); }}>전체 공지 보기</Button>
             <Button className="flex-1 h-12 rounded-xl font-black bg-foreground text-background hover:bg-foreground/90 cursor-pointer" onClick={() => setSelectedNotice(null)}>확인</Button>
           </DialogFooter>
         </DialogContent>

@@ -87,101 +87,106 @@ const PCAdminDashboard: React.FC = () => {
 
   return (
     <PCAdminLayout title="통합 관제 센터">
-      <div className="max-w-[1600px] mx-auto space-y-10">
-        <header className="flex justify-between items-center">
+      <div className="max-w-[1600px] mx-auto space-y-8">
+        <header className="flex flex-wrap justify-between items-center gap-4">
           <div>
-            <h1 className="text-4xl font-black text-foreground tracking-tight mb-2">건명기업 통합 운영 총괄</h1>
-            <p className="text-muted-foreground text-lg font-medium">관리자님, 건명기업의 실시간 운영 현황입니다.</p>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-[11px] font-black tracking-wide mb-2">
+              <Radio className="w-3.5 h-3.5" /> SMART YARD CONTROL TOWER
+            </span>
+            <h1 className="text-3xl sm:text-4xl font-black text-foreground tracking-tight mb-1.5">건명기업 통합 운영 총괄</h1>
+            <p className="text-muted-foreground text-base font-medium">관리자님, 건명기업의 실시간 야드 운영 현황입니다.</p>
           </div>
           <div className="flex items-center gap-3">
             <button 
               onClick={handleExportStats}
-              className="px-6 py-3 bg-muted/50 border border-border rounded-2xl font-black text-sm shadow-sm hover:shadow-md hover:translate-y-[-2px] transition-all text-foreground"
+              className="px-5 py-2.5 bg-card border border-border rounded-2xl font-black text-sm shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all text-foreground"
             >
               전체 리포트 생성
             </button>
-            <button className="px-6 py-3 bg-primary text-white rounded-2xl font-black text-sm shadow-lg shadow-primary/10 hover:bg-primary/90 hover:translate-y-[-2px] transition-all flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-white" />
-              긴급 제어 모드
+            <button
+              onClick={() => navigate('/admin/pc/beacons')}
+              className="px-5 py-2.5 bg-primary text-primary-foreground rounded-2xl font-black text-sm shadow-lg shadow-primary/20 hover:opacity-95 hover:-translate-y-0.5 transition-all flex items-center gap-2"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              밀폐공간 관제
             </button>
           </div>
         </header>
 
         {/* KPI Stats Section */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 text-foreground">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 text-foreground">
           {[
-            { label: '활성 임직원', value: stats.totalEmployees, unit: '명', sub: '전체 인적 자원 내역', icon: Users, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-            { label: '밀폐공간 활성 비콘', value: stats.activeBeacons, unit: '개', sub: '잠수함 내 위치 추적 상태', icon: Radio, color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
+            { label: '활성 임직원', value: stats.totalEmployees, unit: '명', sub: '전체 인적 자원 내역', icon: Users, color: 'text-sky-500', bg: 'bg-sky-500/10' },
+            { label: '밀폐공간 활성 비콘', value: stats.activeBeacons, unit: '개', sub: '함내 위치 추적 상태', icon: Radio, color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
             { label: '미결재 서류', value: stats.pendingLeaves, unit: '건', sub: '연차/휴가 결재 대기 중', icon: CalendarDays, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-            { label: '종합 안전 지수', value: '96.8', unit: '점', sub: '무재해 365일 달성 중', icon: ShieldCheck, color: 'text-rose-500', bg: 'bg-rose-500/10' },
+            { label: '종합 안전 지수', value: '96.8', unit: '점', sub: '무재해 365일 달성 중', icon: ShieldCheck, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
           ].map((card, i) => (
-            <div key={i} className="bg-card p-8 rounded-[2.5rem] border border-border shadow-sm hover:shadow-xl transition-all group overflow-hidden relative">
-              <div className={`w-16 h-16 rounded-[1.5rem] ${card.bg} flex items-center justify-center mb-6 ${card.color} group-hover:scale-110 transition-transform`}>
-                <card.icon className="w-8 h-8" />
+            <div key={i} className="bg-card p-6 rounded-[26px] border border-border/70 shadow-sm hover:shadow-lg transition-all group overflow-hidden relative">
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-xs font-black text-muted-foreground uppercase tracking-wider">{card.label}</p>
+                <div className={`w-11 h-11 rounded-2xl ${card.bg} flex items-center justify-center ${card.color} group-hover:scale-105 transition-transform`}>
+                  <card.icon className="w-5 h-5" />
+                </div>
               </div>
-              <p className="text-sm font-black text-muted-foreground uppercase tracking-widest mb-2">{card.label}</p>
-              <div className="flex items-baseline gap-2">
-                <span className="text-5xl font-black text-foreground tracking-tighter">{card.value}</span>
-                <span className="text-muted-foreground font-black text-xl uppercase">{card.unit}</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-4xl font-black text-foreground tracking-tight">{card.value}</span>
+                <span className="text-muted-foreground font-black text-base">{card.unit}</span>
               </div>
-              <div className="mt-6 flex items-center gap-2 text-xs font-black text-muted-foreground bg-muted px-3 py-1.5 rounded-xl w-fit">
-                <TrendingUp className="w-3 h-3 text-emerald-500" />
+              <div className="mt-4 flex items-center gap-1.5 text-[11px] font-bold text-muted-foreground">
+                <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
                 {card.sub}
               </div>
-              <div className={`absolute top-0 right-0 w-24 h-24 ${card.bg} opacity-[0.03] rounded-bl-full`} />
             </div>
           ))}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-          <div className="lg:col-span-8 flex flex-col gap-10">
-            <div className="bg-card rounded-[3rem] border border-border shadow-sm overflow-hidden text-foreground">
-              <div className="px-10 py-8 border-b border-border flex items-center justify-between bg-muted/30">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-background rounded-2xl shadow-sm border border-border flex items-center justify-center">
-                    <LayoutDashboard className="w-5 h-5 text-primary" />
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-7">
+          <div className="lg:col-span-8 flex flex-col gap-7">
+            <div className="bg-card rounded-[28px] border border-border/70 shadow-sm overflow-hidden text-foreground">
+              <div className="px-7 py-5 border-b border-border/60 flex items-center justify-between bg-muted/20">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 bg-primary/10 rounded-xl flex items-center justify-center">
+                    <LayoutDashboard className="w-4 h-4 text-primary" />
                   </div>
-                  <h3 className="text-2xl font-black text-foreground tracking-tight">서비스 통합 제어관</h3>
+                  <h3 className="text-lg font-black text-foreground tracking-tight">서비스 통합 제어</h3>
                 </div>
-                <span className="text-xs font-black text-muted-foreground bg-background px-4 py-2 rounded-full border border-border">빠른 실행 패널</span>
+                <span className="text-[11px] font-black text-muted-foreground bg-background px-3 py-1.5 rounded-full border border-border/70">빠른 실행</span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 p-10">
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3.5 p-6">
                 {quickActions.map((item) => (
                   <button 
                     key={item.id}
                     onClick={() => navigate(item.to)}
-                    className="flex flex-col items-center justify-center p-8 rounded-[2rem] border border-border hover:border-primary hover:bg-muted/50 transition-all group"
+                    className="flex flex-col items-center justify-center p-4 rounded-2xl border border-border/60 bg-muted/20 hover:border-primary/60 hover:bg-primary/5 transition-all group text-center"
                   >
-                    <div className="w-16 h-16 rounded-2xl bg-background shadow-sm border border-border flex items-center justify-center mb-5 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
-                      <item.icon className="w-8 h-8 text-muted-foreground group-hover:text-primary transition-colors" />
+                    <div className="w-12 h-12 rounded-2xl bg-background shadow-sm border border-border/60 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+                      <item.icon className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
                     </div>
-                    <span className="text-sm font-black text-foreground group-hover:text-primary transition-colors">{item.label}</span>
+                    <span className="text-xs font-black text-foreground group-hover:text-primary transition-colors leading-snug">{item.label}</span>
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="bg-muted rounded-[3rem] p-12 text-foreground relative overflow-hidden shadow-2xl shadow-black/5 ring-1 ring-border">
+            <div className="bg-gradient-to-br from-slate-900 via-[#0d1c36] to-[#0a1529] rounded-[28px] p-8 text-white relative overflow-hidden shadow-xl border border-sky-400/15">
               <div className="relative z-10 max-w-2xl">
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 text-primary rounded-full text-[10px] font-black uppercase tracking-widest mb-6 border border-primary/20">
-                   AI 인텔리전스 가동 중
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-sky-400/15 text-sky-300 rounded-full text-[10px] font-black uppercase tracking-widest mb-4 border border-sky-400/20">
+                  SMART YARD ARCHITECTURE
                 </div>
-                <h2 className="text-4xl font-black mb-6 leading-tight tracking-tight text-foreground">모든 관리 도구가<br/>하나의 공간에 집약되었습니다.</h2>
-                <p className="text-muted-foreground text-lg font-medium mb-10 leading-relaxed">
-                  모바일 전용으로 구성된 모든 기능을 이제 대화면 PC에서도 자유롭게 통제하십시오. 
-                  실시간 동기화를 통해 현장의 모든 상황을 한눈에 파악할 수 있으며, 
-                  고효율 업무 처리를 위한 전용 단축 메뉴가 제공됩니다.
+                <h2 className="text-2xl sm:text-3xl font-black mb-3 leading-tight tracking-tight text-white">모든 현장·인사 도구가 하나의 마린 관제로 통합되었습니다.</h2>
+                <p className="text-slate-300 text-sm font-medium mb-6 leading-relaxed">
+                  근태 · 급여 · 밀폐공간 비콘 · 체감온도 관제를 실시간 동기화로 한눈에 확인하고 즉시 결재하세요.
                 </p>
-                <div className="flex items-center gap-4">
-                  <button className="px-8 py-4 bg-primary text-primary-foreground rounded-2xl font-black text-sm hover:scale-105 transition-all shadow-xl shadow-primary/20">
-                    데이터 센터 상세 분석
+                <div className="flex flex-wrap items-center gap-3">
+                  <button onClick={() => navigate('/admin/pc/attendance')} className="px-6 py-3 bg-sky-500 text-slate-950 rounded-2xl font-black text-xs hover:bg-sky-400 transition-all shadow-lg shadow-sky-500/20">
+                    근태 총괄 열기
                   </button>
-                  <button className="px-8 py-4 bg-muted border border-border text-foreground rounded-2xl font-black text-sm hover:bg-muted/80 transition-all">
-                    사용자 가이드 확인
+                  <button onClick={() => navigate('/admin/pc/worklog')} className="px-6 py-3 bg-white/10 border border-white/15 text-white rounded-2xl font-black text-xs hover:bg-white/15 transition-all">
+                    작업일지 검수
                   </button>
                 </div>
               </div>
-              <ShieldCheck className="absolute -right-20 -bottom-20 w-96 h-96 text-primary/[0.03] rotate-12" />
+              <ShieldCheck className="absolute -right-12 -bottom-12 w-64 h-64 text-sky-400/[0.06] rotate-12" />
             </div>
 
             {/* NEW ADDITION: Submarine Air Quality Environmental Safety Telemetry Desk */}

@@ -20,25 +20,24 @@ import {
   Clock, 
   User,
   Trash2,
-  Volume2,
+  AlertTriangle,
+  Heart,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { grantRandomShipPart } from '@/services/shipService';
-import { AlertSoundPlayer } from '@/lib/sound';
+import { useNavigate } from 'react-router-dom';
 
 export const Notices: React.FC = () => {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const [notices, setNotices] = useState<Notice[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [displayLimit, setDisplayLimit] = useState(5);
   const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [noticeToDelete, setNoticeToDelete] = useState<string | null>(null);
-  const [preferredNarrator, setPreferredNarrator] = useState<'standard-female' | 'deep-male' | 'cheerful-female'>(
-    AlertSoundPlayer.getNarrator()
-  );
 
   useEffect(() => {
     localStorage.setItem('lastViewedNoticesTime', new Date().toISOString());
@@ -92,65 +91,29 @@ export const Notices: React.FC = () => {
         />
       </div>
 
-      {/* 성우 설정 (Voice Selector Card) */}
-      <Card className="bg-card border-border rounded-2xl p-4 overflow-hidden shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-black text-foreground flex items-center gap-1.5">
-              <Volume2 className="w-4 h-4 text-primary" />
-              공지 음성 방송 성우 설정
-            </h3>
-            <p className="text-[11px] text-muted-foreground font-bold mt-0.5">공지사항을 낭독할 성우 목소리를 선택하세요.</p>
-          </div>
-          <div className="flex items-center gap-1 bg-muted p-1 rounded-xl shrink-0 self-start sm:self-center">
-            <Button
-              variant={preferredNarrator === 'standard-female' ? 'secondary' : 'ghost'}
-              size="sm"
-              className={cn(
-                "h-8 rounded-lg text-xs font-black px-2.5",
-                preferredNarrator === 'standard-female' ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-              )}
-              onClick={() => {
-                AlertSoundPlayer.setNarrator('standard-female');
-                setPreferredNarrator('standard-female');
-                AlertSoundPlayer.speak("차분한 아나운서 목소리로 설정되었습니다.");
-              }}
-            >
-              👩‍💼 아나운서
-            </Button>
-            <Button
-              variant={preferredNarrator === 'deep-male' ? 'secondary' : 'ghost'}
-              size="sm"
-              className={cn(
-                "h-8 rounded-lg text-xs font-black px-2.5",
-                preferredNarrator === 'deep-male' ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-              )}
-              onClick={() => {
-                AlertSoundPlayer.setNarrator('deep-male');
-                setPreferredNarrator('deep-male');
-                AlertSoundPlayer.speak("신뢰감 있는 남성 성우 목소리로 설정되었습니다.");
-              }}
-            >
-              👨‍💼 남성 성우
-            </Button>
-            <Button
-              variant={preferredNarrator === 'cheerful-female' ? 'secondary' : 'ghost'}
-              size="sm"
-              className={cn(
-                "h-8 rounded-lg text-xs font-black px-2.5",
-                preferredNarrator === 'cheerful-female' ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-              )}
-              onClick={() => {
-                AlertSoundPlayer.setNarrator('cheerful-female');
-                setPreferredNarrator('cheerful-female');
-                AlertSoundPlayer.speak("맑고 부드러운 가이드 목소리로 설정되었습니다.");
-              }}
-            >
-              👧 가이드
-            </Button>
-          </div>
+      {/* 현장 소식 · 사고사례 · 칭찬 바로가기 */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="h-10 rounded-2xl bg-primary text-primary-foreground font-black text-xs flex items-center justify-center gap-1.5 shadow-sm">
+          <Megaphone className="w-3.5 h-3.5" />
+          <span>공지사항</span>
         </div>
-      </Card>
+        <button
+          type="button"
+          onClick={() => navigate('/accidents')}
+          className="h-10 rounded-2xl bg-card border border-border text-foreground hover:border-amber-500/40 font-black text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+        >
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+          <span>사고사례</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate('/praise-feed')}
+          className="h-10 rounded-2xl bg-card border border-border text-foreground hover:border-pink-500/40 font-black text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+        >
+          <Heart className="w-3.5 h-3.5 text-pink-500" />
+          <span>칭찬피드</span>
+        </button>
+      </div>
 
       <div className="space-y-2">
         {filteredNotices.length > 0 ? (
@@ -196,18 +159,6 @@ export const Notices: React.FC = () => {
                   <p className="text-xs text-muted-foreground font-bold line-clamp-1">{notice.content}</p>
                 </div>
                 <div className="flex items-center gap-1.5 self-center shrink-0">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="w-8 h-8 rounded-full border-primary/20 text-primary hover:bg-primary/5 active:scale-90 transition-transform"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      AlertSoundPlayer.trigger('notice', `${notice.title}. ${notice.content}`);
-                    }}
-                    title="음성으로 듣기"
-                  >
-                    <Volume2 className="w-4 h-4" />
-                  </Button>
                   <ChevronRight className="w-5 h-5 text-muted-foreground/30" />
                 </div>
               </div>
@@ -246,19 +197,6 @@ export const Notices: React.FC = () => {
                   <div className="flex items-center justify-center gap-4 mt-2">
                      <span className="text-[10px] font-bold text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" /> {format(new Date(selectedNotice.createdAt), 'yyyy.MM.dd HH:mm')}</span>
                      <span className="text-[10px] font-bold text-muted-foreground flex items-center gap-1"><User className="w-3 h-3" /> {selectedNotice.authorName}</span>
-                  </div>
-                  <div className="mt-4 flex justify-center">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 rounded-full border-primary/20 text-primary hover:bg-primary/5 font-black text-xs px-3.5 flex items-center gap-1.5"
-                      onClick={() => {
-                        AlertSoundPlayer.trigger('notice', `${selectedNotice.title}. ${selectedNotice.content}`);
-                      }}
-                    >
-                      <Volume2 className="w-3.5 h-3.5 animate-pulse text-primary" />
-                      공지 음성 방송 듣기
-                    </Button>
                   </div>
                 </div>
               </div>

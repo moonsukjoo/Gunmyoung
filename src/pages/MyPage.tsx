@@ -70,6 +70,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { PinKeypad } from '@/components/PinKeypad';
 import { requestNotificationPermission } from '@/services/notificationService';
 import SignatureCanvas from 'react-signature-canvas';
+import { MarineSubpageHero } from '@/components/MarineSubpageHero';
+import { Icon3DShip } from '@/components/icons/Marine3DIcons';
 
 type MyPageTab = 'WORK_HR' | 'WELFARE' | 'SETTINGS' | 'ADMIN';
 
@@ -482,7 +484,7 @@ export const MyPage: React.FC = () => {
 
   const welfareItems = [
     { label: '식수 신청', desc: '중식·석식·간식 신청', icon: Utensils, to: '/meal-request', color: 'text-orange-500', bgColor: 'bg-orange-500/10', isPrimary: true },
-    { label: '동료 칭찬 피드', desc: '칭찬왕 투표 및 감사 전달', icon: ShieldCheck, to: '/praise', color: 'text-pink-500', bgColor: 'bg-pink-500/10', isPrimary: true },
+    { label: '동료 칭찬 피드', desc: '칭찬왕 투표 및 감사 전달', icon: ShieldCheck, to: '/praise-feed', color: 'text-pink-500', bgColor: 'bg-pink-500/10', isPrimary: true },
     { label: '복지 쿠폰함', desc: '발급받은 모바일 쿠폰', icon: Ticket, to: '/coupons', color: 'text-purple-500', bgColor: 'bg-purple-500/10', isPrimary: true },
     { label: '현물 보상 신청', desc: '포인트 교환 상품 신청', icon: Wallet, to: '/redemption', color: 'text-amber-500', bgColor: 'bg-amber-500/10', isPrimary: true },
     { label: '사내 공지사항', desc: '회사 소식 및 알림', icon: Bell, to: '/notices', color: 'text-blue-500', bgColor: 'bg-blue-500/10' },
@@ -517,134 +519,164 @@ export const MyPage: React.FC = () => {
     { label: '고급 관리자 설정', desc: '시스템 및 권한 마스터', icon: Lock, to: '/admin', color: 'text-red-500', bgColor: 'bg-red-500/10' },
   ].filter(item => !item.requiresCEO || isCEO);
 
+  const isHighContrast = !!profile?.highContrast;
+  const isLight = profile?.lightTheme !== false && !isHighContrast;
+
+  const getItemIconStyle = (bgColor?: string, color?: string) => {
+    if (!isLight) {
+      return {
+        bed: bgColor || 'bg-primary/15 border-primary/20',
+        icon: color || 'text-primary',
+      };
+    }
+    const key = `${bgColor || ''} ${color || ''}`;
+    if (key.includes('rose') || key.includes('red')) return { bed: 'bg-[#FFE4E6] border-rose-200/60', icon: 'text-rose-600' };
+    if (key.includes('amber') || key.includes('orange')) return { bed: 'bg-[#FFF3E6] border-amber-200/60', icon: 'text-amber-600' };
+    if (key.includes('emerald') || key.includes('teal')) return { bed: 'bg-[#E7F9F0] border-emerald-200/60', icon: 'text-emerald-600' };
+    if (key.includes('purple') || key.includes('indigo') || key.includes('violet')) return { bed: 'bg-[#EEF2FF] border-indigo-200/60', icon: 'text-indigo-600' };
+    if (key.includes('pink')) return { bed: 'bg-[#FCE7F3] border-pink-200/60', icon: 'text-pink-600' };
+    if (key.includes('cyan') || key.includes('sky')) return { bed: 'bg-[#E6F6FE] border-sky-200/60', icon: 'text-sky-600' };
+    return { bed: 'bg-[#EFF6FF] border-blue-200/60', icon: 'text-blue-600' };
+  };
+
+  const tileCardClass = cn(
+    "flex flex-col justify-between p-3.5 rounded-[22px] border active:scale-98 transition-all text-left group cursor-pointer h-24",
+    isHighContrast
+      ? "bg-card border-border hover:bg-muted/40"
+      : isLight
+        ? "bg-white border-slate-200/70 hover:border-blue-300 shadow-[0_8px_22px_rgba(15,23,42,0.05)]"
+        : "bg-[#111B2E]/92 border-white/10 hover:border-primary/40 hover:bg-[#162238] shadow-xs"
+  );
+
+  const rawPoints = Number(profile?.points ?? 0);
+  const ptsText = Number.isInteger(rawPoints) ? rawPoints.toLocaleString() : rawPoints.toFixed(1);
+  const krwText = Math.round(rawPoints * 5000).toLocaleString();
+
+  const roleLabel =
+    profile?.role === 'CEO' ? '대표' :
+    profile?.role === 'DIRECTOR' ? '직장' :
+    profile?.role === 'GENERAL_MANAGER' ? '부장' :
+    profile?.role === 'SAFETY_MANAGER' ? '안전관리자' :
+    profile?.role === 'TEAM_LEADER' ? '팀장' :
+    profile?.role === 'GROUP_LEADER' ? '조장' :
+    profile?.role === 'EMPLOYEE' ? '사원' : profile?.role || '사원';
+
   return (
-    <div className="w-full space-y-4 pb-28 px-3.5 sm:px-4 overflow-x-hidden bg-background">
-      {/* 1. Header with Compact Fast Actions */}
-      <header className="pt-4 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-black">
-            <Settings2 className="w-4 h-4" />
-          </div>
-          <div>
-            <h1 className="text-base font-black text-foreground tracking-tight leading-none">
-              마이페이지
-            </h1>
-            <p className="text-[10px] font-bold text-muted-foreground mt-0.5">
-              건명기업 개인 설정 & 스마트 허브
-            </p>
-          </div>
-        </div>
-
-        {/* Theme Mode Cycle & Logout Fast Buttons */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={async () => {
-              if (!profile) return;
-              try {
-                if (profile.highContrast) {
-                  await updateDoc(doc(db, 'users', profile.uid), { lightTheme: false, highContrast: false });
-                  toast.success('다크 모드가 적용되었습니다.');
-                } else if (profile.lightTheme) {
-                  await updateDoc(doc(db, 'users', profile.uid), { highContrast: true });
-                  toast.success('고대비 모드가 적용되었습니다.');
-                } else {
-                  await updateDoc(doc(db, 'users', profile.uid), { lightTheme: true, highContrast: false });
-                  toast.success('라이트 모드가 적용되었습니다.');
+    <div className="w-full space-y-4 pb-28 overflow-x-hidden bg-background">
+      {/* 1. Unified Marine 3D Hero Pass + Profile & Balance */}
+      <MarineSubpageHero
+        isLight={isLight}
+        highContrast={isHighContrast}
+        icon={<Icon3DShip className="w-8 h-8" />}
+        iconBedClass={isLight ? "bg-[#E6F6FE]" : "bg-sky-500/15"}
+        subtitle={`${profile?.departmentName || profile?.workplace || '건명기업 현장'} · ${roleLabel}${profile?.employeeId ? ` (${profile.employeeId})` : ''}`}
+        title={`${profile?.displayName || '사원'}님`}
+        rightAction={
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={async () => {
+                if (!profile) return;
+                try {
+                  if (profile.highContrast) {
+                    await updateDoc(doc(db, 'users', profile.uid), { lightTheme: false, highContrast: false });
+                    toast.success('야간 다크 모드가 적용되었습니다.');
+                  } else if (profile.lightTheme !== false) {
+                    await updateDoc(doc(db, 'users', profile.uid), { highContrast: true });
+                    toast.success('고대비 모드가 적용되었습니다.');
+                  } else {
+                    await updateDoc(doc(db, 'users', profile.uid), { lightTheme: true, highContrast: false });
+                    toast.success('주간 마린 모드가 적용되었습니다.');
+                  }
+                } catch {
+                  toast.error('테마 전환 실패');
                 }
-              } catch {
-                toast.error('테마 전환 실패');
-              }
-            }}
-            className="h-8 w-8 rounded-xl bg-card border border-border/60 hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
-            title="테마 전환 (다크/라이트/고대비)"
-          >
-            {profile?.highContrast ? (
-              <Contrast className="w-4 h-4 text-amber-500" />
-            ) : profile?.lightTheme ? (
-              <Moon className="w-4 h-4 text-blue-500" />
-            ) : (
-              <Sun className="w-4 h-4 text-amber-400" />
-            )}
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleLogout}
-            className="h-8 w-8 rounded-xl bg-card border border-border/60 hover:bg-rose-500/10 text-muted-foreground hover:text-rose-500 cursor-pointer"
-            title="로그아웃"
-          >
-            <LogOut className="w-4 h-4" />
-          </Button>
-        </div>
-      </header>
-
-      {/* Emergency Status Alert Banner (if active) */}
-      {evacuationStatus?.isActive && (
-        <motion.div
-           initial={{ opacity: 0, y: -8 }}
-           animate={{ opacity: 1, y: 0 }}
-           className={cn(
-             "p-3 rounded-2xl border flex items-center justify-between gap-3 shadow-sm",
-             hasConfirmed 
-               ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400" 
-               : "bg-rose-500/10 border-rose-500/30 text-rose-500"
-           )}
-        >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className={cn(
-              "w-8 h-8 rounded-xl flex items-center justify-center shrink-0",
-              hasConfirmed ? "bg-emerald-500/20" : "bg-rose-500/20 animate-pulse"
-            )}>
-              {hasConfirmed ? <ShieldCheck className="w-4.5 h-4.5" /> : <AlertCircle className="w-4.5 h-4.5" />}
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-black truncate">{hasConfirmed ? '비상 대피 완료 (확인됨)' : '🚨 비상 대피 확인 요망'}</p>
-              <p className="text-[10px] font-bold opacity-75 truncate">{evacuationStatus.reason || '비상 소집'}</p>
-            </div>
-          </div>
-          {!hasConfirmed && (
-            <Button size="sm" className="bg-rose-600 text-white rounded-xl h-7 px-3 text-[11px] font-black shrink-0 cursor-pointer" onClick={() => setIsEvacSignOpen(true)}>
-              서명 확인
+              }}
+              className={cn(
+                "h-8 w-8 rounded-xl border cursor-pointer",
+                isLight ? "bg-[#F8FAFC] border-slate-200/80 hover:bg-slate-100" : "bg-muted/60 border-border/60 hover:bg-muted"
+              )}
+              title="테마 전환 (주간/야간/고대비)"
+            >
+              {profile?.highContrast ? (
+                <Contrast className="w-4 h-4 text-amber-500" />
+              ) : profile?.lightTheme !== false ? (
+                <Sun className="w-4 h-4 text-amber-500" />
+              ) : (
+                <Moon className="w-4 h-4 text-blue-400" />
+              )}
             </Button>
-          )}
-        </motion.div>
-      )}
 
-      {/* 2. Sleek Profile & Balance Hero Card */}
-      <section className="bg-card/75 backdrop-blur-md border border-border/70 rounded-3xl p-3.5 sm:p-4 shadow-xs space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="relative shrink-0">
-              <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-lg font-black text-primary shadow-inner">
-                {profile?.displayName?.charAt(0) || '사'}
-              </div>
-              <div className="absolute -bottom-0.5 -right-0.5 w-4.5 h-4.5 bg-emerald-500 rounded-full border-2 border-card flex items-center justify-center">
-                <Check className="w-2.5 h-2.5 text-white" />
-              </div>
-            </div>
-
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <h2 className="text-sm font-black text-foreground truncate">{profile?.displayName}</h2>
-                <Badge variant="outline" className="text-[9px] font-black px-1.5 py-0 h-4 rounded-md border-primary/30 text-primary bg-primary/5 shrink-0">
-                  {profile?.role === 'CEO' ? '대표' : 
-                   profile?.role === 'DIRECTOR' ? '직장' :
-                   profile?.role === 'GENERAL_MANAGER' ? '부장' :
-                   profile?.role === 'SAFETY_MANAGER' ? '안전관리자' :
-                   profile?.role === 'TEAM_LEADER' ? '팀장' :
-                   profile?.role === 'GROUP_LEADER' ? '조장' :
-                   profile?.role === 'EMPLOYEE' ? '사원' : profile?.role || '사원'}
-                </Badge>
-              </div>
-              <p className="text-[11px] font-bold text-muted-foreground truncate mt-0.5">
-                {profile?.departmentName || profile?.workplace || '건명기업 현장'} {profile?.employeeId ? `(${profile.employeeId})` : ''}
-              </p>
-            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleLogout}
+              className={cn(
+                "h-8 w-8 rounded-xl border hover:bg-rose-500/10 hover:text-rose-500 cursor-pointer",
+                isLight ? "bg-[#F8FAFC] border-slate-200/80 text-slate-500" : "bg-muted/60 border-border/60 text-muted-foreground"
+              )}
+              title="로그아웃"
+            >
+              <LogOut className="w-4 h-4" />
+            </Button>
           </div>
+        }
+      >
+        {/* 2-Column Balance Metrics inside Floating Pass */}
+        <div className={cn("grid grid-cols-2 gap-2.5 pt-3 border-t", isLight ? "border-slate-100" : "border-border/40")}>
+          <button
+            type="button"
+            onClick={() => navigate('/redemption')}
+            className={cn(
+              "flex items-center justify-between p-2.5 rounded-2xl border transition-all text-left group cursor-pointer",
+              isLight
+                ? "bg-[#FFF8EB] hover:bg-[#FEF3C7]/70 border-amber-200/70"
+                : "bg-muted/40 hover:bg-muted/70 border-border/50"
+            )}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center shrink-0", isLight ? "bg-amber-500/15 text-amber-600" : "bg-amber-500/10 text-amber-500")}>
+                <Wallet className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold text-muted-foreground truncate">보유 포인트</p>
+                <p className="text-xs font-black text-foreground truncate tabular-nums">
+                  {ptsText} P · {krwText}원
+                </p>
+              </div>
+            </div>
+            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-amber-600 transition-colors shrink-0" />
+          </button>
 
+          <button
+            type="button"
+            onClick={() => navigate('/leave')}
+            className={cn(
+              "flex items-center justify-between p-2.5 rounded-2xl border transition-all text-left group cursor-pointer",
+              isLight
+                ? "bg-[#EFF6FF] hover:bg-blue-100/60 border-blue-200/70"
+                : "bg-muted/40 hover:bg-muted/70 border-border/50"
+            )}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center shrink-0", isLight ? "bg-blue-600/12 text-blue-600" : "bg-purple-500/10 text-purple-400")}>
+                <CalendarDays className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold text-muted-foreground truncate">잔여 연차</p>
+                <p className="text-xs font-black text-foreground truncate tabular-nums">{profile?.annualLeaveBalance || 0}일</p>
+              </div>
+            </div>
+            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-blue-600 transition-colors shrink-0" />
+          </button>
+        </div>
+
+        {/* Fast PIN Change Bar */}
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] font-bold text-muted-foreground">
+            보안 비밀번호 (6자리 PIN)
+          </span>
           <Button
             variant="outline"
             size="sm"
@@ -654,228 +686,255 @@ export const MyPage: React.FC = () => {
               setConfirmPin('');
               setIsPinModalOpen(true);
             }}
-            className="h-7 px-2 rounded-xl text-[10.5px] font-bold border-border/70 hover:bg-muted shrink-0 flex items-center gap-1 cursor-pointer whitespace-nowrap"
+            className={cn(
+              "h-8 px-3 rounded-xl text-xs font-black shrink-0 flex items-center gap-1 cursor-pointer whitespace-nowrap",
+              isLight
+                ? "bg-white border-slate-200 hover:bg-slate-50 text-slate-800"
+                : "border-border/70 hover:bg-muted"
+            )}
           >
-            <KeyRound className="w-3 h-3 text-primary" />
+            <KeyRound className="w-3.5 h-3.5 text-blue-600" />
             <span>PIN 변경</span>
           </Button>
         </div>
+      </MarineSubpageHero>
 
-        {/* 2-Pill Balance Metrics */}
-        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/40">
-          <button
-            type="button"
-            onClick={() => navigate('/redemption')}
-            className="flex items-center justify-between p-2 rounded-2xl bg-muted/40 hover:bg-muted/70 border border-border/50 transition-all text-left group cursor-pointer"
+      <div className="px-4 space-y-4">
+        {/* Emergency Status Alert Banner (if active) */}
+        {evacuationStatus?.isActive && (
+          <motion.div
+             initial={{ opacity: 0, y: -8 }}
+             animate={{ opacity: 1, y: 0 }}
+             className={cn(
+               "p-3 rounded-2xl border flex items-center justify-between gap-3 shadow-sm",
+               hasConfirmed 
+                 ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400" 
+                 : "bg-rose-500/10 border-rose-500/30 text-rose-500"
+             )}
           >
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-7 h-7 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
-                <Wallet className="w-3.5 h-3.5" />
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className={cn(
+                "w-8 h-8 rounded-xl flex items-center justify-center shrink-0",
+                hasConfirmed ? "bg-emerald-500/20" : "bg-rose-500/20 animate-pulse"
+              )}>
+                {hasConfirmed ? <ShieldCheck className="w-4.5 h-4.5" /> : <AlertCircle className="w-4.5 h-4.5" />}
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] font-bold text-muted-foreground truncate">보유 포인트</p>
-                <p className="text-xs font-black text-foreground truncate">{(profile?.points || 0).toLocaleString()}P</p>
+                <p className="text-xs font-black truncate">{hasConfirmed ? '비상 대피 완료 (확인됨)' : '🚨 비상 대피 확인 요망'}</p>
+                <p className="text-[10px] font-bold opacity-75 truncate">{evacuationStatus.reason || '비상 소집'}</p>
               </div>
             </div>
-            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-primary transition-colors shrink-0" />
-          </button>
+            {!hasConfirmed && (
+              <Button size="sm" className="bg-rose-600 text-white rounded-xl h-7 px-3 text-[11px] font-black shrink-0 cursor-pointer" onClick={() => setIsEvacSignOpen(true)}>
+                서명 확인
+              </Button>
+            )}
+          </motion.div>
+        )}
 
+        {/* 3. Folder Segment Navigation Tabs */}
+        <nav
+          className={cn(
+            "flex items-center p-1 rounded-2xl gap-1 border overflow-x-auto no-scrollbar",
+            isHighContrast
+              ? "bg-card border-border"
+              : isLight
+                ? "bg-white border-slate-200/80 shadow-[0_6px_18px_rgba(15,23,42,0.04)]"
+                : "bg-[#111B2E] border-white/10"
+          )}
+        >
           <button
             type="button"
-            onClick={() => navigate('/leave')}
-            className="flex items-center justify-between p-2 rounded-2xl bg-muted/40 hover:bg-muted/70 border border-border/50 transition-all text-left group cursor-pointer"
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-7 h-7 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center shrink-0">
-                <CalendarDays className="w-3.5 h-3.5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] font-bold text-muted-foreground truncate">잔여 연차</p>
-                <p className="text-xs font-black text-foreground truncate">{profile?.annualLeaveBalance || 0}일</p>
-              </div>
-            </div>
-            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-primary transition-colors shrink-0" />
-          </button>
-        </div>
-      </section>
-
-      {/* 3. Folder Segment Navigation Tabs */}
-      <nav className="flex items-center bg-muted/60 p-1 rounded-2xl gap-1 overflow-x-auto no-scrollbar">
-        <button
-          type="button"
-          onClick={() => setActiveTab('WORK_HR')}
-          className={cn(
-            "flex-1 py-1.5 px-2 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 whitespace-nowrap break-keep cursor-pointer",
-            activeTab === 'WORK_HR'
-              ? "bg-card text-foreground shadow-xs border border-border/60"
-              : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          <Briefcase className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-          <span>업무·인사</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('WELFARE')}
-          className={cn(
-            "flex-1 py-1.5 px-2 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 whitespace-nowrap break-keep cursor-pointer",
-            activeTab === 'WELFARE'
-              ? "bg-card text-foreground shadow-xs border border-border/60"
-              : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          <HeartHandshake className="w-3.5 h-3.5 text-pink-500 shrink-0" />
-          <span>복지·편의</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('SETTINGS')}
-          className={cn(
-            "flex-1 py-1.5 px-2 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 whitespace-nowrap break-keep cursor-pointer",
-            activeTab === 'SETTINGS'
-              ? "bg-card text-foreground shadow-xs border border-border/60"
-              : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          <Palette className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-          <span>설정·기기</span>
-        </button>
-
-        {isAdminRole && (
-          <button
-            type="button"
-            onClick={() => setActiveTab('ADMIN')}
+            onClick={() => setActiveTab('WORK_HR')}
             className={cn(
-              "py-1.5 px-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 whitespace-nowrap break-keep cursor-pointer",
-              activeTab === 'ADMIN'
-                ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 shadow-xs border border-rose-500/30"
-                : "text-rose-500/70 hover:text-rose-500"
+              "flex-1 py-2 px-2 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer",
+              activeTab === 'WORK_HR'
+                ? "bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] text-white shadow-sm shadow-blue-600/20"
+                : "text-muted-foreground hover:text-foreground"
             )}
           >
-            <Lock className="w-3.5 h-3.5 shrink-0" />
-            <span>관리자</span>
+            <Briefcase className="w-3.5 h-3.5 shrink-0" />
+            <span>업무·인사</span>
           </button>
-        )}
-      </nav>
 
-      {/* 4. Tab Content Sections */}
-      <main className="space-y-3">
-        {/* ================= TAB 1: 💼 업무 및 인사 (Work & HR) ================= */}
-        {activeTab === 'WORK_HR' && (
-          <div className="space-y-2.5">
-            <div className="grid grid-cols-2 gap-2">
-              {(showMoreWork ? workHrItems : workHrItems.filter(i => i.isPrimary)).map((item, idx) => {
-                const Icon = item.icon;
-                return (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => item.onClick ? item.onClick() : navigate(item.to!)}
-                    className="flex flex-col justify-between p-3 rounded-2xl bg-card/80 border border-border/60 hover:border-primary/40 hover:bg-muted/40 active:scale-98 transition-all text-left shadow-2xs group cursor-pointer h-24"
-                  >
-                    <div className="flex items-center justify-between w-full">
-                      <div className={cn("w-8 h-8 rounded-xl border flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform", item.bgColor)}>
-                        <Icon className={cn("w-4 h-4", item.color)} />
-                      </div>
-                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/30 group-hover:text-primary transition-colors" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-black text-foreground truncate group-hover:text-primary transition-colors">
-                        {item.label}
-                      </p>
-                      <p className="text-[9.5px] font-bold text-muted-foreground truncate mt-0.5">
-                        {item.desc}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Toggle More / Less */}
-            {workHrItems.length > 4 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowMoreWork(!showMoreWork)}
-                className="w-full h-8 rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground bg-muted/30 hover:bg-muted/60 flex items-center justify-center gap-1 cursor-pointer"
-              >
-                {showMoreWork ? (
-                  <>간단히 보기 <ChevronUp className="w-3.5 h-3.5" /></>
-                ) : (
-                  <>기능 {workHrItems.length - 4}개 더보기 <ChevronDown className="w-3.5 h-3.5" /></>
-                )}
-              </Button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('WELFARE')}
+            className={cn(
+              "flex-1 py-2 px-2 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer",
+              activeTab === 'WELFARE'
+                ? "bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] text-white shadow-sm shadow-blue-600/20"
+                : "text-muted-foreground hover:text-foreground"
             )}
-          </div>
-        )}
+          >
+            <HeartHandshake className="w-3.5 h-3.5 shrink-0" />
+            <span>복지·편의</span>
+          </button>
 
-        {/* ================= TAB 2: 🎁 복지 및 편의 (Welfare & Perks) ================= */}
-        {activeTab === 'WELFARE' && (
-          <div className="space-y-2.5">
-            <div className="grid grid-cols-2 gap-2">
-              {(showMoreWelfare ? welfareItems : welfareItems.filter(i => i.isPrimary)).map((item, idx) => {
-                const Icon = item.icon;
-                return (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => navigate(item.to)}
-                    className="flex flex-col justify-between p-3 rounded-2xl bg-card/80 border border-border/60 hover:border-primary/40 hover:bg-muted/40 active:scale-98 transition-all text-left shadow-2xs group cursor-pointer h-24"
-                  >
-                    <div className="flex items-center justify-between w-full">
-                      <div className={cn("w-8 h-8 rounded-xl border flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform", item.bgColor)}>
-                        <Icon className={cn("w-4 h-4", item.color)} />
-                      </div>
-                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/30 group-hover:text-primary transition-colors" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-black text-foreground truncate group-hover:text-primary transition-colors">
-                        {item.label}
-                      </p>
-                      <p className="text-[9.5px] font-bold text-muted-foreground truncate mt-0.5">
-                        {item.desc}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Toggle More / Less */}
-            {welfareItems.length > 4 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowMoreWelfare(!showMoreWelfare)}
-                className="w-full h-8 rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground bg-muted/30 hover:bg-muted/60 flex items-center justify-center gap-1 cursor-pointer"
-              >
-                {showMoreWelfare ? (
-                  <>간단히 보기 <ChevronUp className="w-3.5 h-3.5" /></>
-                ) : (
-                  <>기능 {welfareItems.length - 4}개 더보기 <ChevronDown className="w-3.5 h-3.5" /></>
-                )}
-              </Button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('SETTINGS')}
+            className={cn(
+              "flex-1 py-2 px-2 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer",
+              activeTab === 'SETTINGS'
+                ? "bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] text-white shadow-sm shadow-blue-600/20"
+                : "text-muted-foreground hover:text-foreground"
             )}
-          </div>
-        )}
+          >
+            <Palette className="w-3.5 h-3.5 shrink-0" />
+            <span>설정·기기</span>
+          </button>
 
-        {/* ================= TAB 3: ⚙️ 화면·기기·접근성 설정 (Settings) ================= */}
-        {activeTab === 'SETTINGS' && (
-          <div className="space-y-3">
-            {/* Display Theme Card */}
-            <Card className="bg-card/80 backdrop-blur-md border border-border/70 rounded-3xl p-3.5 shadow-2xs space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <Palette className="w-3.5 h-3.5 text-primary" />
-                  <h3 className="text-xs font-black text-foreground">화면 테마</h3>
-                </div>
-                <span className="text-[10px] font-bold text-muted-foreground">
-                  {profile?.highContrast ? '고대비' : profile?.lightTheme ? '라이트' : '다크'}
-                </span>
+          {isAdminRole && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('ADMIN')}
+              className={cn(
+                "py-2 px-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer",
+                activeTab === 'ADMIN'
+                  ? "bg-rose-600 text-white shadow-sm shadow-rose-600/20"
+                  : "text-rose-500/80 hover:text-rose-600"
+              )}
+            >
+              <Lock className="w-3.5 h-3.5 shrink-0" />
+              <span>관리자</span>
+            </button>
+          )}
+        </nav>
+
+        {/* 4. Tab Content Sections */}
+        <main className="space-y-3">
+          {/* ================= TAB 1: 💼 업무 및 인사 (Work & HR) ================= */}
+          {activeTab === 'WORK_HR' && (
+            <div className="space-y-2.5">
+              <div className="grid grid-cols-2 gap-2.5">
+                {(showMoreWork ? workHrItems : workHrItems.filter(i => i.isPrimary)).map((item, idx) => {
+                  const Icon = item.icon;
+                  const iconStyle = getItemIconStyle(item.bgColor, item.color);
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => item.onClick ? item.onClick() : navigate(item.to!)}
+                      className={tileCardClass}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <div className={cn("w-9 h-9 rounded-[12px] border flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform", iconStyle.bed)}>
+                          <Icon className={cn("w-4.5 h-4.5", iconStyle.icon)} />
+                        </div>
+                        <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-blue-600 transition-colors" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-black text-foreground truncate group-hover:text-blue-600 transition-colors">
+                          {item.label}
+                        </p>
+                        <p className="text-[10px] font-bold text-muted-foreground truncate mt-0.5">
+                          {item.desc}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
+
+              {/* Toggle More / Less */}
+              {workHrItems.length > 4 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowMoreWork(!showMoreWork)}
+                  className={cn(
+                    "w-full h-9 rounded-2xl text-xs font-bold text-muted-foreground hover:text-foreground flex items-center justify-center gap-1 cursor-pointer",
+                    isLight ? "bg-white border border-slate-200/70 hover:bg-slate-50" : "bg-muted/30 hover:bg-muted/60"
+                  )}
+                >
+                  {showMoreWork ? (
+                    <>간단히 보기 <ChevronUp className="w-3.5 h-3.5" /></>
+                  ) : (
+                    <>기능 {workHrItems.length - 4}개 더보기 <ChevronDown className="w-3.5 h-3.5" /></>
+                  )}
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* ================= TAB 2: 🎁 복지 및 편의 (Welfare & Perks) ================= */}
+          {activeTab === 'WELFARE' && (
+            <div className="space-y-2.5">
+              <div className="grid grid-cols-2 gap-2.5">
+                {(showMoreWelfare ? welfareItems : welfareItems.filter(i => i.isPrimary)).map((item, idx) => {
+                  const Icon = item.icon;
+                  const iconStyle = getItemIconStyle(item.bgColor, item.color);
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => navigate(item.to)}
+                      className={tileCardClass}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <div className={cn("w-9 h-9 rounded-[12px] border flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform", iconStyle.bed)}>
+                          <Icon className={cn("w-4.5 h-4.5", iconStyle.icon)} />
+                        </div>
+                        <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-blue-600 transition-colors" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-black text-foreground truncate group-hover:text-blue-600 transition-colors">
+                          {item.label}
+                        </p>
+                        <p className="text-[10px] font-bold text-muted-foreground truncate mt-0.5">
+                          {item.desc}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Toggle More / Less */}
+              {welfareItems.length > 4 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowMoreWelfare(!showMoreWelfare)}
+                  className={cn(
+                    "w-full h-9 rounded-2xl text-xs font-bold text-muted-foreground hover:text-foreground flex items-center justify-center gap-1 cursor-pointer",
+                    isLight ? "bg-white border border-slate-200/70 hover:bg-slate-50" : "bg-muted/30 hover:bg-muted/60"
+                  )}
+                >
+                  {showMoreWelfare ? (
+                    <>간단히 보기 <ChevronUp className="w-3.5 h-3.5" /></>
+                  ) : (
+                    <>기능 {welfareItems.length - 4}개 더보기 <ChevronDown className="w-3.5 h-3.5" /></>
+                  )}
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* ================= TAB 3: ⚙️ 화면·기기·접근성 설정 (Settings) ================= */}
+          {activeTab === 'SETTINGS' && (
+            <div className="space-y-3">
+              {/* Display Theme Card */}
+              <Card
+                className={cn(
+                  "rounded-[26px] p-4 space-y-3",
+                  isHighContrast
+                    ? "bg-card border border-border"
+                    : isLight
+                      ? "bg-white border border-white shadow-[0_12px_32px_rgba(15,23,42,0.06)]"
+                      : "bg-[#111B2E]/92 border border-white/12"
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Palette className="w-4 h-4 text-blue-600" />
+                    <h3 className="text-xs font-black text-foreground">화면 테마</h3>
+                  </div>
+                  <span className="text-[10px] font-bold text-muted-foreground">
+                    {profile?.highContrast ? '고대비' : profile?.lightTheme !== false ? '주간(기본)' : '야간 다크'}
+                  </span>
+                </div>
 
               <div className="grid grid-cols-3 gap-2">
                 <button
@@ -884,18 +943,18 @@ export const MyPage: React.FC = () => {
                     if (!profile) return;
                     try {
                       await updateDoc(doc(db, 'users', profile.uid), { lightTheme: false, highContrast: false });
-                      toast.success('다크 모드가 적용되었습니다.');
+                      toast.success('야간 다크 모드가 적용되었습니다.');
                     } catch { toast.error('변경 실패'); }
                   }}
                   className={cn(
                     "p-2 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1",
-                    !profile?.lightTheme && !profile?.highContrast
+                    profile?.lightTheme === false && !profile?.highContrast
                       ? "bg-primary/10 border-primary text-primary ring-1 ring-primary/30"
                       : "bg-card/60 border-border/40 text-muted-foreground hover:bg-muted"
                   )}
                 >
                   <Moon className="w-4 h-4" />
-                  <span className="text-[11px] font-black">다크 모드</span>
+                  <span className="text-[11px] font-black">야간 다크</span>
                 </button>
 
                 <button
@@ -904,18 +963,18 @@ export const MyPage: React.FC = () => {
                     if (!profile) return;
                     try {
                       await updateDoc(doc(db, 'users', profile.uid), { lightTheme: true, highContrast: false });
-                      toast.success('라이트 모드가 적용되었습니다.');
+                      toast.success('주간 마린 모드가 적용되었습니다.');
                     } catch { toast.error('변경 실패'); }
                   }}
                   className={cn(
                     "p-2 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1",
-                    profile?.lightTheme && !profile?.highContrast
+                    profile?.lightTheme !== false && !profile?.highContrast
                       ? "bg-primary/10 border-primary text-primary ring-1 ring-primary/30"
                       : "bg-card/60 border-border/40 text-muted-foreground hover:bg-muted"
                   )}
                 >
                   <Sun className="w-4 h-4 text-amber-500" />
-                  <span className="text-[11px] font-black">라이트 모드</span>
+                  <span className="text-[11px] font-black">주간 마린</span>
                 </button>
 
                 <button
@@ -1071,27 +1130,28 @@ export const MyPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2.5">
               {(showMoreAdmin ? adminItems : adminItems.filter(i => i.isPrimary)).map((item, idx) => {
                 const Icon = item.icon;
+                const iconStyle = getItemIconStyle(item.bgColor, item.color);
                 return (
                   <button
                     key={idx}
                     type="button"
                     onClick={() => (item.onClick ? item.onClick() : navigate(item.to!))}
-                    className="flex flex-col justify-between p-3 rounded-2xl bg-card/80 border border-border/60 hover:border-primary/40 hover:bg-muted/40 active:scale-98 transition-all text-left shadow-2xs group cursor-pointer h-24"
+                    className={tileCardClass}
                   >
                     <div className="flex items-center justify-between w-full">
-                      <div className={cn("w-8 h-8 rounded-xl border flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform", item.bgColor)}>
-                        <Icon className={cn("w-4 h-4", item.color)} />
+                      <div className={cn("w-9 h-9 rounded-[12px] border flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform", iconStyle.bed)}>
+                        <Icon className={cn("w-4.5 h-4.5", iconStyle.icon)} />
                       </div>
-                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/30 group-hover:text-primary transition-colors" />
+                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-blue-600 transition-colors" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-xs font-black text-foreground truncate group-hover:text-primary transition-colors">
+                      <p className="text-xs font-black text-foreground truncate group-hover:text-blue-600 transition-colors">
                         {item.label}
                       </p>
-                      <p className="text-[9.5px] font-bold text-muted-foreground truncate mt-0.5">
+                      <p className="text-[10px] font-bold text-muted-foreground truncate mt-0.5">
                         {item.desc}
                       </p>
                     </div>
@@ -1106,7 +1166,10 @@ export const MyPage: React.FC = () => {
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowMoreAdmin(!showMoreAdmin)}
-                className="w-full h-8 rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground bg-muted/30 hover:bg-muted/60 flex items-center justify-center gap-1 cursor-pointer"
+                className={cn(
+                  "w-full h-9 rounded-2xl text-xs font-bold text-muted-foreground hover:text-foreground flex items-center justify-center gap-1 cursor-pointer",
+                  isLight ? "bg-white border border-slate-200/70 hover:bg-slate-50" : "bg-muted/30 hover:bg-muted/60"
+                )}
               >
                 {showMoreAdmin ? (
                   <>간단히 보기 <ChevronUp className="w-3.5 h-3.5" /></>
@@ -1118,6 +1181,7 @@ export const MyPage: React.FC = () => {
           </div>
         )}
       </main>
+      </div>
 
       {/* 5. Modals & Dialogs */}
       {/* PIN Registration / Change Modal */}

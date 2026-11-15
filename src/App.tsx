@@ -117,6 +117,7 @@ const PCAdminPerceivedTemp = lazyWithRetry(() => import('./pages/PCAdminPerceive
 const RequestCenter = lazyWithRetry(() => import('./pages/RequestCenter').then(m => ({ default: m.RequestCenter })));
 const PCAdminFactoryDwell = lazyWithRetry(() => import('./pages/PCAdminFactoryDwell'));
 const FactoryDwellMonitoring = lazyWithRetry(() => import('./pages/FactoryDwellMonitoring'));
+const DesignPreview = lazyWithRetry(() => import('./pages/DesignPreview'));
 
 const ProtectedRoute = ({ children, roles, permission, permissions }: { children: React.ReactNode, roles?: string[], permission?: string, permissions?: string[] }) => {
   const { user, profile, loading } = useAuth();
@@ -221,7 +222,7 @@ function AppContent() {
   const { profile } = useAuth();
   
   useLayoutEffect(() => {
-    if (profile?.lightTheme) {
+    if (profile?.lightTheme !== false) {
       document.documentElement.classList.add('light-theme');
       document.documentElement.style.setProperty('color-scheme', 'light');
     } else {
@@ -257,6 +258,7 @@ function AppContent() {
         <Suspense fallback={<GlowLoading />}>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/design-preview" element={<DesignPreview />} />
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute permission="admin"><Admin /></ProtectedRoute>} />
             <Route path="/admin/evacuation-history" element={<ProtectedRoute permission="admin"><EvacuationHistory /></ProtectedRoute>} />
