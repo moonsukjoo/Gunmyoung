@@ -17,7 +17,7 @@ import {
   SheetTitle, 
   SheetTrigger 
 } from '@/components/ui/sheet';
-import { Gift, Trophy, Settings, MapPin, Search, ShieldCheck, Download, History, Check, ChevronsUpDown, User, ChevronRight, XCircle, FileText } from 'lucide-react';
+import { Gift, Trophy, Settings, MapPin, Search, ShieldCheck, Download, History, Check, ChevronsUpDown, User, ChevronRight, XCircle, FileText, Ticket } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
 import { exportToExcel, exportToPDF, exportPhotoCardPDF, ReportCardItem } from '@/lib/exportUtils';
@@ -240,14 +240,71 @@ export const Coupons: React.FC = () => {
     setRouletteSettings(prev => prev.map(s => s.id === id ? { ...s, probability: prob } : s));
   };
 
+  const myCoupons = React.useMemo(() => {
+    return couponHistory.filter(c => c.receiverUid === profile?.uid);
+  }, [couponHistory, profile?.uid]);
+
   if (!isAuthorizedToGive) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4 px-6 text-center">
-        <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mb-2">
-          <ShieldCheck className="w-10 h-10 text-muted-foreground/20" />
+      <div className="w-full min-h-screen py-6 px-4 pb-24 flex flex-col items-center">
+        <div className="w-full max-w-md mb-6 text-center flex flex-col items-center">
+          <div className="inline-flex items-center gap-3 bg-card px-6 py-2.5 rounded-full shadow-lg border border-border ring-4 ring-primary/5 mb-2">
+            <Ticket className="w-5 h-5 text-purple-500" />
+            <h2 className="text-xl font-black tracking-tight text-foreground">내 복지쿠폰함</h2>
+          </div>
+          <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-[0.4em] leading-none">Welfare Coupons & Rewards</p>
         </div>
-        <h2 className="text-xl font-black text-foreground tracking-tight">접근 권한이 없습니다.</h2>
-        <p className="text-sm text-muted-foreground font-medium">이 페이지는 관리자 전용 공간입니다.</p>
+
+        <div className="w-full max-w-md space-y-4">
+          <Card className="border-none shadow-xl bg-card rounded-[2.5rem] p-6 border border-border text-center">
+            <div className="w-16 h-16 bg-purple-500/10 rounded-full flex items-center justify-center mx-auto mb-3">
+              <Gift className="w-8 h-8 text-purple-500" />
+            </div>
+            <h3 className="text-lg font-black text-foreground">받은 칭찬쿠폰 내역</h3>
+            <p className="text-xs text-muted-foreground font-bold mt-1">동료와 관리자로부터 받은 칭찬쿠폰과 포인트 내역입니다.</p>
+            <div className="mt-4 pt-4 border-t border-border flex justify-around items-center">
+              <div>
+                <span className="text-[11px] text-muted-foreground block font-bold">보유 포인트</span>
+                <span className="text-2xl font-black text-emerald-500">{(profile?.points || 0).toLocaleString()}P</span>
+              </div>
+              <div className="h-8 w-px bg-border" />
+              <div>
+                <span className="text-[11px] text-muted-foreground block font-bold">총 쿠폰 수</span>
+                <span className="text-2xl font-black text-purple-500">{myCoupons.length}장</span>
+              </div>
+            </div>
+          </Card>
+
+          <div className="space-y-3">
+            {historyLoading ? (
+              <div className="py-20 text-center text-muted-foreground font-bold text-xs">내역을 불러오는 중...</div>
+            ) : myCoupons.length === 0 ? (
+              <div className="py-20 text-center bg-card rounded-[2rem] border border-border p-8 space-y-2">
+                <Gift className="w-10 h-10 text-muted-foreground/30 mx-auto" />
+                <p className="text-xs font-black text-muted-foreground">아직 받은 칭찬쿠폰이 없습니다.</p>
+                <p className="text-[11px] text-muted-foreground/60">현장에서 모범적인 활동으로 칭찬을 받아보세요!</p>
+              </div>
+            ) : (
+              myCoupons.map((c) => (
+                <Card key={c.id} className="border-none shadow-md bg-card rounded-2xl p-5 border border-border space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Badge className="bg-purple-500 text-white font-black text-[10px]">+{c.points}P ({(c.points * 5000).toLocaleString()}원)</Badge>
+                    <span className="text-[11px] font-bold text-muted-foreground">{c.date} {c.time}</span>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-black text-foreground">지급자: {c.senderName} ({c.location || '현장'})</p>
+                    <p className="text-xs font-bold text-muted-foreground bg-muted p-3 rounded-xl">{c.reason}</p>
+                  </div>
+                  {c.photoUrl && (
+                    <div className="w-full h-36 rounded-xl overflow-hidden border border-border">
+                      <img src={c.photoUrl} alt="coupon" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                </Card>
+              ))
+            )}
+          </div>
+        </div>
       </div>
     );
   }
