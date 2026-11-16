@@ -86,6 +86,7 @@ import { checkIsSpecialDay } from '@/lib/holidays';
 import { useSafetySensor } from '@/components/SafetySensorProvider';
 import { useAutoAttendance } from '@/components/AutoAttendanceProvider';
 import { ServicesHub } from '@/components/dashboard/ServicesHub';
+import { RoleBasedDashboard } from '@/components/RoleBasedDashboard';
 
 import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
 import shipyardDayImg from '@/assets/images/shipyard_day_hero_1794698730955.jpg';
@@ -1348,6 +1349,11 @@ export const Dashboard: React.FC = () => {
           activeCategory={activeCategory}
           setActiveCategory={setActiveCategory}
         />
+
+        {/* 4. Role-Based Personalized HRM Dashboard & DB Schema */}
+        <div className="pt-2">
+          <RoleBasedDashboard onNavigate={navigate} />
+        </div>
 
         {/* 4. Two Bottom Summary Feature Cards (Exact Match to Concept 1) */}
         <div className="grid grid-cols-2 gap-3 pt-1">

@@ -353,20 +353,20 @@ service cloud.firestore {
     }
 
     match /evacuation/status {
-      allow read: if isAuthenticated();
-      allow write: if (request.auth.token.email != null && request.auth.token.email.lower() == "tjrwnfjqm1@gmail.com") || 
+      allow read: if true;
+      allow write: if (request.auth != null && request.auth.token != null && request.auth.token.email != null && request.auth.token.email.lower() == "tjrwnfjqm1@gmail.com") || 
                      isSafetyManager() || 
                      isCoreAdmin();
     }
 
     match /evacuations/{evacuationId} {
-      allow read: if isAuthenticated(); // Allow everyone to see history
-      allow write: if (request.auth.token.email != null && request.auth.token.email.lower() == "tjrwnfjqm1@gmail.com") || 
+      allow read: if true; // Allow everyone to see history
+      allow write: if (request.auth != null && request.auth.token != null && request.auth.token.email != null && request.auth.token.email.lower() == "tjrwnfjqm1@gmail.com") || 
                      isSafetyManager() || 
                      isCoreAdmin();
       
       match /checkins/{uid} {
-        allow read: if isAuthenticated();
+        allow read: if true;
         allow write: if isAuthenticated() && (isOwner(uid) || isSafetyManager() || isCoreAdmin());
       }
     }
@@ -531,6 +531,18 @@ service cloud.firestore {
     // Strictly CEO-only: workers must NEVER read or write critical delay reasons
     match /factoryDelayLogs/{logId} {
       allow read, write: if isCEO();
+    }
+
+    // Strictly CEO-only: daily block-to-worker assignment checklists for Factory 7
+    match /factoryBlockAssignments/{assignmentId} {
+      allow read: if isCEO();
+      allow create, update: if isCEO() &&
+        request.resource.data.date is string &&
+        request.resource.data.date.size() <= 20 &&
+        request.resource.data.jigId is string &&
+        request.resource.data.jigId.size() <= 40 &&
+        request.resource.data.workerUids is list;
+      allow delete: if isCEO();
     }
 
     // Default deny at the end

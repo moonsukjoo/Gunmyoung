@@ -10,7 +10,9 @@ import {
   BlockDelayLog,
   DelayReasonCategory,
   DELAY_REASON_CATEGORIES,
-  FactoryBoundaryCalibration
+  FactoryBoundaryCalibration,
+  BlockAssignedWorker,
+  FactoryBlockAssignment
 } from '../types';
 import { 
   fetchFactoryJigs, 
@@ -30,11 +32,21 @@ import {
   getWindowForSlot,
   getHeatmapColors,
   fetchFactoryCalibration,
-  reconcileJigsWithCalibration
+  reconcileJigsWithCalibration,
+  fetchActiveWorkersRoster,
+  fetchBlockAssignmentsByDate,
+  saveBlockAssignment,
+  syncWorkerAssignedJigIfToday,
+  copyPreviousBlockAssignments,
+  reconcileRecordsWithAssignedJig,
+  computeWorkerDwellSummary,
+  saveFactoryJigsLayout
 } from '../services/factoryTrackingService';
 import PCAdminLayout from '../components/PCAdminLayout';
 import { FactoryBlueprintMap } from '../components/FactoryBlueprintMap';
 import { FactoryGpsCalibrationPanel } from '../components/FactoryGpsCalibrationPanel';
+import { FactoryBlockAssignmentPanel } from '../components/FactoryBlockAssignmentPanel';
+import { FactoryWorkerDetailPanel, InspectableWorkerRow } from '../components/FactoryWorkerDetailPanel';
 import { 
   Layers, 
   Calendar as CalendarIcon, 
@@ -63,7 +75,11 @@ import {
   BarChart3,
   Lock,
   Plus,
-  History
+  History,
+  CheckSquare,
+  UserCheck,
+  Eye,
+  Move
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -75,8 +91,10 @@ import { downloadFile } from '@/lib/downloadHelper';
 export const PCAdminFactoryDwell: React.FC = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const isLight = profile?.lightTheme !== false && !profile?.highContrast;
   const isCEO = profile?.role === 'CEO' || profile?.email?.toLowerCase() === 'tjrwnfjqm1@gmail.com';
 
+  const [workspaceTab, setWorkspaceTab] = useState<'OVERVIEW' | 'CHECKLIST' | 'INDIVIDUAL'>('OVERVIEW');
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [selectedSlot, setSelectedSlot] = useState<TrackingSlotTime>('08:20');
   const [jigs, setJigs] = useState<FactoryJig[]>(DEFAULT_FACTORY_JIGS);
@@ -84,11 +102,17 @@ export const PCAdminFactoryDwell: React.FC = () => {
   const [dwellSummaries, setDwellSummaries] = useState<WorkerDwellSummary[]>([]);
   const [delayLogs, setDelayLogs] = useState<BlockDelayLog[]>([]);
   const [calibration, setCalibration] = useState<FactoryBoundaryCalibration | null>(null);
+  const [assignments, setAssignments] = useState<FactoryBlockAssignment[]>([]);
+  const [activeRoster, setActiveRoster] = useState<BlockAssignedWorker[]>([]);
+  const [checklistJigId, setChecklistJigId] = useState<string>('jig-01');
+  const [isSavingAssignment, setIsSavingAssignment] = useState(false);
+  const [isCopyingPrevious, setIsCopyingPrevious] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isSeeding, setIsSeeding] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTeamFilter, setSelectedTeamFilter] = useState<string>('ALL');
   const [delayFilterJigId, setDelayFilterJigId] = useState<string>('ALL');
+  const [isEditingLayout, setIsEditingLayout] = useState(false);
   
   // Selection states
   const [selectedWorkerUid, setSelectedWorkerUid] = useState<string | null>(null);
@@ -119,9 +143,170 @@ export const PCAdminFactoryDwell: React.FC = () => {
     return Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1;
   }, [editStartDate, editEndDate]);
 
+  // Worker UID -> daily block assignment lookup for selectedDate
+  const assignedJigByWorkerUid = useMemo(() => {
+    const map = new Map<string, { jigId: string; jigName: string; blockName: string }>();
+    assignments.forEach(a => {
+      (a.workers || []).forEach(w => {
+        map.set(w.uid, { jigId: a.jigId, jigName: a.jigName, blockName: a.blockName });
+      });
+    });
+    return map;
+  }, [assignments]);
+
+  // Unified roster combining real registered workers + any detected/assigned/simulated workers
+  const mergedRosterWorkers = useMemo(() => {
+    const map = new Map<string, BlockAssignedWorker>();
+    activeRoster.forEach(w => map.set(w.uid, w));
+    assignments.forEach(a => {
+      (a.workers || []).forEach(w => {
+        if (!map.has(w.uid)) map.set(w.uid, w);
+      });
+    });
+    dwellSummaries.forEach(s => {
+      if (!map.has(s.workerUid)) {
+        map.set(s.workerUid, {
+          uid: s.workerUid,
+          displayName: s.workerName,
+          employeeId: s.employeeId,
+          teamName: s.teamName,
+          jobRole: s.jobRole
+        });
+      }
+    });
+    records.forEach(r => {
+      if (!map.has(r.workerUid)) {
+        map.set(r.workerUid, {
+          uid: r.workerUid,
+          displayName: r.workerName,
+          employeeId: r.employeeId,
+          teamName: r.teamName,
+          jobRole: r.jobRole
+        });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => {
+      const tCmp = a.teamName.localeCompare(b.teamName, 'ko');
+      if (tCmp !== 0) return tCmp;
+      return a.displayName.localeCompare(b.displayName, 'ko');
+    });
+  }, [activeRoster, assignments, dwellSummaries, records]);
+
+  // Apply daily checklist block assignments onto live GPS records & summaries
+  const effectiveRecords = useMemo(() => {
+    if (assignedJigByWorkerUid.size === 0) return records;
+    const byWorker = new Map<string, FactoryGpsRecord[]>();
+    records.forEach(r => {
+      if (!byWorker.has(r.workerUid)) byWorker.set(r.workerUid, []);
+      byWorker.get(r.workerUid)!.push(r);
+    });
+    const out: FactoryGpsRecord[] = [];
+    byWorker.forEach((wRecs, uid) => {
+      const assigned = assignedJigByWorkerUid.get(uid);
+      if (assigned) {
+        out.push(...reconcileRecordsWithAssignedJig(wRecs, assigned.jigId));
+      } else {
+        out.push(...wRecs);
+      }
+    });
+    return out;
+  }, [records, assignedJigByWorkerUid]);
+
+  const effectiveDwellSummaries = useMemo(() => {
+    const recordsByWorker = new Map<string, FactoryGpsRecord[]>();
+    effectiveRecords.forEach(r => {
+      if (!recordsByWorker.has(r.workerUid)) recordsByWorker.set(r.workerUid, []);
+      recordsByWorker.get(r.workerUid)!.push(r);
+    });
+
+    const summaryByUid = new Map<string, WorkerDwellSummary>();
+    dwellSummaries.forEach(s => {
+      const assigned = assignedJigByWorkerUid.get(s.workerUid);
+      const wRecs = recordsByWorker.get(s.workerUid);
+      if (assigned && wRecs && wRecs.length > 0) {
+        summaryByUid.set(
+          s.workerUid,
+          computeWorkerDwellSummary(
+            s.workerUid,
+            s.workerName,
+            s.employeeId,
+            s.teamName,
+            s.jobRole,
+            assigned.jigId,
+            selectedDate,
+            wRecs,
+            jigs
+          )
+        );
+      } else if (assigned) {
+        summaryByUid.set(s.workerUid, {
+          ...s,
+          assignedJigId: assigned.jigId,
+          assignedBlockName: assigned.blockName
+        });
+      } else {
+        summaryByUid.set(s.workerUid, s);
+      }
+    });
+
+    // If records exist for a worker without a stored summary doc yet, compute on the fly
+    recordsByWorker.forEach((wRecs, uid) => {
+      if (!summaryByUid.has(uid) && wRecs.length > 0) {
+        const sample = wRecs[0];
+        const assigned = assignedJigByWorkerUid.get(uid);
+        summaryByUid.set(
+          uid,
+          computeWorkerDwellSummary(
+            uid,
+            sample.workerName,
+            sample.employeeId,
+            sample.teamName,
+            sample.jobRole,
+            assigned?.jigId || wRecs.find(r => r.jigId)?.jigId || jigs[0]?.id || 'jig-01',
+            selectedDate,
+            wRecs,
+            jigs
+          )
+        );
+      }
+    });
+
+    return Array.from(summaryByUid.values());
+  }, [dwellSummaries, effectiveRecords, assignedJigByWorkerUid, selectedDate, jigs]);
+
+  const inspectableWorkers: InspectableWorkerRow[] = useMemo(() => {
+    const summaryMap = new Map<string, WorkerDwellSummary>();
+    effectiveDwellSummaries.forEach(s => summaryMap.set(s.workerUid, s));
+    const gpsUidSet = new Set(effectiveRecords.map(r => r.workerUid));
+
+    const list: InspectableWorkerRow[] = mergedRosterWorkers.map(w => {
+      const summary = summaryMap.get(w.uid);
+      const assigned = assignedJigByWorkerUid.get(w.uid);
+      return {
+        uid: w.uid,
+        workerName: w.displayName,
+        employeeId: w.employeeId,
+        teamName: w.teamName,
+        jobRole: w.jobRole,
+        assignedJigId: assigned?.jigId || summary?.assignedJigId,
+        assignedBlockName: assigned?.blockName || summary?.assignedBlockName,
+        summary,
+        hasGpsRecords: gpsUidSet.has(w.uid) || Boolean(summary)
+      };
+    });
+
+    return list.sort((a, b) => {
+      // Show GPS-recorded workers & checklist-assigned workers first
+      const scoreA = (a.hasGpsRecords ? 2 : 0) + (a.assignedJigId ? 1 : 0);
+      const scoreB = (b.hasGpsRecords ? 2 : 0) + (b.assignedJigId ? 1 : 0);
+      if (scoreA !== scoreB) return scoreB - scoreA;
+      return a.workerName.localeCompare(b.workerName, 'ko');
+    });
+  }, [mergedRosterWorkers, effectiveDwellSummaries, effectiveRecords, assignedJigByWorkerUid]);
+
   const blockStatsList = useMemo(() => {
-    return computeAllBlockStats(jigs, records);
-  }, [jigs, records]);
+    return computeAllBlockStats(jigs, effectiveRecords);
+  }, [jigs, effectiveRecords]);
 
   // 2-hour interval concentration summaries across all 4 windows
   const activeTwoHourWindow = useMemo(() => getWindowForSlot(selectedSlot), [selectedSlot]);
@@ -129,15 +314,16 @@ export const PCAdminFactoryDwell: React.FC = () => {
   const twoHourWindowMetrics = useMemo(() => {
     return TWO_HOUR_WINDOWS.map(w => ({
       window: w,
-      heatmap: computeZoneDwellHeatmap(jigs, records, '2H_WINDOW', w.slots[0], w.id)
+      heatmap: computeZoneDwellHeatmap(jigs, effectiveRecords, '2H_WINDOW', w.slots[0], w.id)
     }));
-  }, [jigs, records]);
+  }, [jigs, effectiveRecords]);
 
   const activeWindowHeatmap = useMemo(() => {
-    return computeZoneDwellHeatmap(jigs, records, '2H_WINDOW', selectedSlot, activeTwoHourWindow.id);
-  }, [jigs, records, selectedSlot, activeTwoHourWindow.id]);
+    return computeZoneDwellHeatmap(jigs, effectiveRecords, '2H_WINDOW', selectedSlot, activeTwoHourWindow.id);
+  }, [jigs, effectiveRecords, selectedSlot, activeTwoHourWindow.id]);
 
   const printRef = useRef<HTMLDivElement>(null);
+  const blueprintSectionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isCEO) {
@@ -151,12 +337,22 @@ export const PCAdminFactoryDwell: React.FC = () => {
     if (!isCEO) return;
     setLoading(true);
     try {
-      const [fetchedJigs, fetchedRecords, fetchedSummaries, fetchedDelayLogs, fetchedCalibration] = await Promise.all([
+      const [
+        fetchedJigs,
+        fetchedRecords,
+        fetchedSummaries,
+        fetchedDelayLogs,
+        fetchedCalibration,
+        fetchedAssignments,
+        fetchedRoster
+      ] = await Promise.all([
         fetchFactoryJigs(),
         fetchGpsRecordsByDate(selectedDate),
         fetchDwellSummariesByDate(selectedDate),
         fetchDelayLogs(),
-        fetchFactoryCalibration()
+        fetchFactoryCalibration(),
+        fetchBlockAssignmentsByDate(selectedDate),
+        fetchActiveWorkersRoster()
       ]);
 
       const baseJigs = fetchedJigs.length > 0 ? fetchedJigs : DEFAULT_FACTORY_JIGS;
@@ -165,12 +361,164 @@ export const PCAdminFactoryDwell: React.FC = () => {
       setDwellSummaries(fetchedSummaries);
       setDelayLogs(fetchedDelayLogs);
       setCalibration(fetchedCalibration);
+      setAssignments(fetchedAssignments);
+      setActiveRoster(fetchedRoster);
     } catch (error) {
       console.error('Error loading factory tracking data:', error);
       toast.error('공장 관제 데이터를 불러오지 못했습니다.');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Toggle check-in / check-out of a worker on a JIG checklist for selectedDate
+  const handleToggleBlockWorker = async (
+    targetJig: FactoryJig,
+    worker: BlockAssignedWorker,
+    assign: boolean
+  ) => {
+    if (!profile) return;
+    setIsSavingAssignment(true);
+    try {
+      const editorUid = profile.uid;
+      const editorName = profile.displayName || '대표이사';
+      const updatedMap = new Map<string, FactoryBlockAssignment>();
+      assignments.forEach(a => updatedMap.set(a.jigId, a));
+
+      if (assign) {
+        // Remove from any previous block on selectedDate first so assignment is unambiguous
+        for (const existing of assignments) {
+          if (existing.jigId !== targetJig.id && existing.workerUids?.includes(worker.uid)) {
+            const nextWorkers = (existing.workers || []).filter(w => w.uid !== worker.uid);
+            const savedOld = await saveBlockAssignment({
+              date: selectedDate,
+              jigId: existing.jigId,
+              jigName: existing.jigName,
+              blockName: existing.blockName,
+              workers: nextWorkers,
+              workerUids: nextWorkers.map(w => w.uid),
+              updatedByUid: editorUid,
+              updatedByName: editorName
+            });
+            updatedMap.set(existing.jigId, savedOld);
+          }
+        }
+
+        const currentTarget = updatedMap.get(targetJig.id);
+        const currentWorkers = currentTarget?.workers || [];
+        const nextWorkers = currentWorkers.some(w => w.uid === worker.uid)
+          ? currentWorkers
+          : [...currentWorkers, worker];
+
+        const savedTarget = await saveBlockAssignment({
+          date: selectedDate,
+          jigId: targetJig.id,
+          jigName: targetJig.jigName,
+          blockName: targetJig.blockName,
+          workers: nextWorkers,
+          workerUids: nextWorkers.map(w => w.uid),
+          updatedByUid: editorUid,
+          updatedByName: editorName
+        });
+        updatedMap.set(targetJig.id, savedTarget);
+        await syncWorkerAssignedJigIfToday(worker.uid, targetJig.id, selectedDate);
+        toast.success(`${worker.displayName} → [${targetJig.blockName}] 투입 체크 완료`);
+      } else {
+        const currentTarget = updatedMap.get(targetJig.id);
+        const nextWorkers = (currentTarget?.workers || []).filter(w => w.uid !== worker.uid);
+        const savedTarget = await saveBlockAssignment({
+          date: selectedDate,
+          jigId: targetJig.id,
+          jigName: targetJig.jigName,
+          blockName: targetJig.blockName,
+          workers: nextWorkers,
+          workerUids: nextWorkers.map(w => w.uid),
+          updatedByUid: editorUid,
+          updatedByName: editorName
+        });
+        updatedMap.set(targetJig.id, savedTarget);
+        await syncWorkerAssignedJigIfToday(worker.uid, '', selectedDate);
+        toast.info(`${worker.displayName} → [${targetJig.blockName}] 투입 명단에서 제외됨`);
+      }
+
+      setAssignments(Array.from(updatedMap.values()));
+    } catch (err) {
+      toast.error('블럭 투입 명단 저장 중 오류가 발생했습니다.');
+    } finally {
+      setIsSavingAssignment(false);
+    }
+  };
+
+  const handleRemoveWorkerFromAssignment = async (workerUid: string) => {
+    const existing = assignments.find(a => a.workerUids?.includes(workerUid));
+    if (!existing) return;
+    const jig = jigs.find(j => j.id === existing.jigId);
+    const worker = existing.workers.find(w => w.uid === workerUid);
+    if (jig && worker) {
+      await handleToggleBlockWorker(jig, worker, false);
+    }
+  };
+
+  const handleClearBlockAssignment = async (targetJig: FactoryJig) => {
+    if (!profile) return;
+    setIsSavingAssignment(true);
+    try {
+      const existing = assignments.find(a => a.jigId === targetJig.id);
+      const saved = await saveBlockAssignment({
+        date: selectedDate,
+        jigId: targetJig.id,
+        jigName: targetJig.jigName,
+        blockName: targetJig.blockName,
+        workers: [],
+        workerUids: [],
+        updatedByUid: profile.uid,
+        updatedByName: profile.displayName || '대표이사'
+      });
+
+      if (existing) {
+        for (const w of existing.workers || []) {
+          await syncWorkerAssignedJigIfToday(w.uid, '', selectedDate);
+        }
+      }
+
+      setAssignments(prev => {
+        const others = prev.filter(a => a.jigId !== targetJig.id);
+        return [...others, saved];
+      });
+      toast.info(`[${targetJig.blockName}] ${selectedDate} 투입 명단이 초기화되었습니다.`);
+    } catch {
+      toast.error('블럭 명단 초기화에 실패했습니다.');
+    } finally {
+      setIsSavingAssignment(false);
+    }
+  };
+
+  const handleCopyPreviousAssignments = async () => {
+    if (!profile) return;
+    setIsCopyingPrevious(true);
+    try {
+      const res = await copyPreviousBlockAssignments(selectedDate, jigs, {
+        uid: profile.uid,
+        name: profile.displayName || '대표이사'
+      });
+      if (!res.sourceDate || res.assignments.length === 0) {
+        toast.info(`${selectedDate} 이전에 저장된 블럭 투입 명단이 없습니다.`);
+        return;
+      }
+      setAssignments(res.assignments);
+      const totalCount = res.assignments.reduce((acc, a) => acc + (a.workers?.length || 0), 0);
+      toast.success(`${res.sourceDate}일자 투입 명단(${totalCount}명)을 불러왔습니다.`);
+    } catch {
+      toast.error('전일 투입 명단을 불러오지 못했습니다.');
+    } finally {
+      setIsCopyingPrevious(false);
+    }
+  };
+
+  const handleInspectWorker = (uid: string) => {
+    setSelectedWorkerUid(uid);
+    setWorkspaceTab('INDIVIDUAL');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Seed sample data for testing
@@ -188,6 +536,23 @@ export const PCAdminFactoryDwell: React.FC = () => {
       toast.error('데이터 생성에 실패했습니다.');
     } finally {
       setIsSeeding(false);
+    }
+  };
+
+  const handleSaveBlueprintLayout = async (updatedJigs: FactoryJig[], deletedIds: string[]) => {
+    const savedJigs = await saveFactoryJigsLayout(updatedJigs, deletedIds, calibration);
+    setJigs(savedJigs);
+    await loadData();
+  };
+
+  const handleEnterBlueprintDragMode = () => {
+    const nextEditing = !isEditingLayout;
+    setWorkspaceTab('OVERVIEW');
+    setIsEditingLayout(nextEditing);
+    if (nextEditing) {
+      setTimeout(() => {
+        blueprintSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 60);
     }
   };
 
@@ -313,7 +678,7 @@ export const PCAdminFactoryDwell: React.FC = () => {
 
   // Filtered workers list
   const filteredSummaries = useMemo(() => {
-    return dwellSummaries.filter(s => {
+    return effectiveDwellSummaries.filter(s => {
       const matchSearch = 
         !searchQuery.trim() ||
         s.workerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -326,32 +691,32 @@ export const PCAdminFactoryDwell: React.FC = () => {
 
       return matchSearch && matchTeam;
     });
-  }, [dwellSummaries, searchQuery, selectedTeamFilter]);
+  }, [effectiveDwellSummaries, searchQuery, selectedTeamFilter]);
 
   // Overall KPI statistics
   const kpis = useMemo(() => {
-    const totalWorkers = dwellSummaries.length;
+    const totalWorkers = effectiveDwellSummaries.length;
     if (totalWorkers === 0) {
       return { totalWorkers: 0, avgCompliance: 0, awayCount: 0, activeBlocks: 0 };
     }
 
     const avgCompliance = Math.round(
-      dwellSummaries.reduce((acc, cur) => acc + cur.complianceRate, 0) / totalWorkers
+      effectiveDwellSummaries.reduce((acc, cur) => acc + cur.complianceRate, 0) / totalWorkers
     );
-    const awayCount = dwellSummaries.filter(s => s.verdict === 'WARNING' || s.verdict === 'CRITICAL_AWAY').length;
-    const activeBlocks = new Set(dwellSummaries.map(s => s.assignedBlockName)).size;
+    const awayCount = effectiveDwellSummaries.filter(s => s.verdict === 'WARNING' || s.verdict === 'CRITICAL_AWAY').length;
+    const activeBlocks = new Set(effectiveDwellSummaries.map(s => s.assignedBlockName)).size;
 
     return { totalWorkers, avgCompliance, awayCount, activeBlocks };
-  }, [dwellSummaries]);
+  }, [effectiveDwellSummaries]);
 
   // Unique teams list
   const uniqueTeams = useMemo(() => {
     const set = new Set<string>();
-    dwellSummaries.forEach(s => {
+    effectiveDwellSummaries.forEach(s => {
       if (s.teamName) set.add(s.teamName);
     });
     return Array.from(set);
-  }, [dwellSummaries]);
+  }, [effectiveDwellSummaries]);
 
   const filteredDelayLogs = useMemo(() => {
     return delayLogs.filter(l => delayFilterJigId === 'ALL' || l.jigId === delayFilterJigId);
@@ -450,6 +815,20 @@ export const PCAdminFactoryDwell: React.FC = () => {
               <Printer className="w-4 h-4" />
               인쇄
             </Button>
+
+            {/* Visual Drag-and-Drop Block Creator & Layout Mode Button */}
+            <Button
+              variant={isEditingLayout ? 'default' : 'outline'}
+              onClick={handleEnterBlueprintDragMode}
+              className={`font-black text-xs h-11 px-4 rounded-2xl gap-2 cursor-pointer whitespace-nowrap shrink-0 ${
+                isEditingLayout
+                  ? 'bg-amber-400 hover:bg-amber-500 text-slate-950 border-amber-300 shadow-lg shadow-amber-500/20'
+                  : 'border-border hover:bg-muted'
+              }`}
+            >
+              <Move className={`w-4 h-4 ${isEditingLayout ? 'text-slate-950' : 'text-amber-400'}`} />
+              <span>{isEditingLayout ? '마우스 위치 편집 중' : '블럭 생성 · 마우스 배치'}</span>
+            </Button>
           </div>
         </div>
 
@@ -509,6 +888,105 @@ export const PCAdminFactoryDwell: React.FC = () => {
           </div>
         </div>
 
+        {/* Workspace Mode Tabs (전체 관제 / 블럭별 투입 체크리스트 / 작업자 개인별 상세 기록) */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card border border-border p-2.5 rounded-2xl">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setWorkspaceTab('OVERVIEW')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                workspaceTab === 'OVERVIEW'
+                  ? isLight
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-blue-500 text-slate-950 shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+              }`}
+            >
+              <Layers className="w-4 h-4" />
+              <span>전체 통합 관제</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setWorkspaceTab('CHECKLIST')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                workspaceTab === 'CHECKLIST'
+                  ? isLight
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-blue-500 text-slate-950 shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+              }`}
+            >
+              <CheckSquare className="w-4 h-4" />
+              <span>블럭별 투입 체크리스트 ({assignedJigByWorkerUid.size}명 배정)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (!selectedWorkerUid && inspectableWorkers.length > 0) {
+                  setSelectedWorkerUid(inspectableWorkers[0].uid);
+                }
+                setWorkspaceTab('INDIVIDUAL');
+              }}
+              className={`px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                workspaceTab === 'INDIVIDUAL'
+                  ? isLight
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-blue-500 text-slate-950 shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+              }`}
+            >
+              <UserCheck className="w-4 h-4" />
+              <span>작업자 개인별 상세 기록 ({inspectableWorkers.length}명)</span>
+            </button>
+          </div>
+
+          <span className="text-xs font-bold text-muted-foreground px-2">
+            기준일자 <strong className="font-mono tabular-nums text-foreground">{selectedDate}</strong>
+          </span>
+        </div>
+
+        {/* Dedicated Tab 2: Block-by-Block Daily Checklist */}
+        {workspaceTab === 'CHECKLIST' && (
+          <FactoryBlockAssignmentPanel
+            selectedDate={selectedDate}
+            jigs={jigs}
+            assignments={assignments}
+            rosterWorkers={mergedRosterWorkers}
+            records={effectiveRecords}
+            selectedJigId={checklistJigId}
+            onSelectJigId={setChecklistJigId}
+            onToggleWorker={handleToggleBlockWorker}
+            onClearBlock={handleClearBlockAssignment}
+            onCopyPreviousDay={handleCopyPreviousAssignments}
+            onInspectWorker={handleInspectWorker}
+            isSaving={isSavingAssignment}
+            isCopying={isCopyingPrevious}
+            isLight={isLight}
+          />
+        )}
+
+        {/* Dedicated Tab 3: Individual Worker Dossier */}
+        {workspaceTab === 'INDIVIDUAL' && (
+          <FactoryWorkerDetailPanel
+            selectedDate={selectedDate}
+            onChangeDate={setSelectedDate}
+            selectedWorkerUid={selectedWorkerUid}
+            onSelectWorker={setSelectedWorkerUid}
+            workers={inspectableWorkers}
+            jigs={jigs}
+            records={effectiveRecords}
+            onAssignWorkerToJig={(jig, w) => handleToggleBlockWorker(jig, w, true)}
+            onRemoveWorkerFromAssignment={handleRemoveWorkerFromAssignment}
+            onClose={() => setWorkspaceTab('OVERVIEW')}
+            isLight={isLight}
+          />
+        )}
+
+        {/* Tab 1: Overview Content */}
+        {workspaceTab === 'OVERVIEW' && (
+          <>
         {/* 2-Hour Interval Workforce Concentration Matrix */}
         <div className="bg-card border border-border p-4 sm:p-5 rounded-2xl space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/60 pb-3">
@@ -587,7 +1065,7 @@ export const PCAdminFactoryDwell: React.FC = () => {
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
             {TRACKING_TIME_SLOTS.map((slot, idx) => {
               const isSelected = selectedSlot === slot;
-              const slotWorkers = records.filter(r => r.slot === slot);
+              const slotWorkers = effectiveRecords.filter(r => r.slot === slot);
               const awayCount = slotWorkers.filter(r => r.status === 'AWAY').length;
 
               const slotDescriptions: Record<string, string> = {
@@ -632,30 +1110,36 @@ export const PCAdminFactoryDwell: React.FC = () => {
           </div>
 
           {/* Printable / Viewable A3 Factory Blueprint Map Area */}
-          <div ref={printRef} className="space-y-4">
-            <FactoryBlueprintMap
-              jigs={jigs}
-              records={records}
-              delayLogs={delayLogs}
-              calibration={calibration}
-              selectedSlot={selectedSlot}
-              onSelectSlot={setSelectedSlot}
-              selectedWorkerUid={selectedWorkerUid}
-              onSelectWorker={setSelectedWorkerUid}
-              onSelectJig={(jig) => {
-                setSelectedJig(jig);
-                handleOpenEditJig(jig);
-              }}
-              selectedJigId={selectedJig?.id}
-            />
+          <div ref={blueprintSectionRef} className="scroll-mt-6">
+            <div ref={printRef} className="space-y-4">
+              <FactoryBlueprintMap
+                jigs={jigs}
+                records={effectiveRecords}
+                delayLogs={delayLogs}
+                calibration={calibration}
+                selectedSlot={selectedSlot}
+                onSelectSlot={setSelectedSlot}
+                selectedWorkerUid={selectedWorkerUid}
+                onSelectWorker={setSelectedWorkerUid}
+                onSelectJig={(jig) => {
+                  setSelectedJig(jig);
+                  handleOpenEditJig(jig);
+                }}
+                selectedJigId={selectedJig?.id}
+                allowLayoutEdit={true}
+                isLayoutEditMode={isEditingLayout}
+                onToggleLayoutEditMode={setIsEditingLayout}
+                onSaveLayout={handleSaveBlueprintLayout}
+              />
+            </div>
           </div>
 
         {/* Selected Worker History Ribbon (if worker is clicked) */}
         {selectedWorkerUid && (
           <div className="bg-card border border-blue-500/40 p-6 rounded-[2rem] shadow-lg space-y-4 animate-in fade-in duration-200">
             {(() => {
-              const summary = dwellSummaries.find(s => s.workerUid === selectedWorkerUid);
-              const workerRecords = records.filter(r => r.workerUid === selectedWorkerUid).sort((a,b) => a.slotIndex - b.slotIndex);
+              const summary = effectiveDwellSummaries.find(s => s.workerUid === selectedWorkerUid);
+              const workerRecords = effectiveRecords.filter(r => r.workerUid === selectedWorkerUid).sort((a,b) => a.slotIndex - b.slotIndex);
               if (!summary) return null;
 
               return (
@@ -673,18 +1157,28 @@ export const PCAdminFactoryDwell: React.FC = () => {
                           </span>
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          배정 블럭: <strong className="text-blue-500">{summary.assignedBlockName}</strong> | 공정 체류 준수율: <strong className={summary.complianceRate >= 80 ? 'text-emerald-400' : 'text-rose-400'}>{summary.complianceRate}%</strong>
+                          배정 블럭: <strong className="text-blue-500">{summary.assignedBlockName}</strong> | 공정 체류 준수율: <strong className={summary.complianceRate >= 80 ? 'text-emerald-500' : 'text-rose-500'}>{summary.complianceRate}%</strong>
                         </p>
                       </div>
                     </div>
 
-                    <Button
-                      variant="outline"
-                      onClick={() => setSelectedWorkerUid(null)}
-                      className="rounded-xl text-xs font-bold self-start sm:self-center"
-                    >
-                      전체 작업자 보기로 복귀
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
+                      <Button
+                        type="button"
+                        onClick={() => handleInspectWorker(summary.workerUid)}
+                        className="rounded-xl text-xs font-black gap-1.5 cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>개인별 전체 기록 / 7일 이력 보기</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setSelectedWorkerUid(null)}
+                        className="rounded-xl text-xs font-bold cursor-pointer"
+                      >
+                        전체 작업자 보기로 복귀
+                      </Button>
+                    </div>
                   </div>
 
                   {/* 8-Slot Timeline History */}
@@ -740,7 +1234,7 @@ export const PCAdminFactoryDwell: React.FC = () => {
                   공정 일정 캘린더 & 투입 인원 집계
                 </span>
                 <span className="text-xs font-bold text-muted-foreground">
-                  총 10개 지그/블럭 공정 현황
+                  총 {jigs.length}개 지그/블럭 공정 현황
                 </span>
               </div>
               <h3 className="text-xl font-black text-foreground flex items-center gap-2">
@@ -1093,18 +1587,19 @@ export const PCAdminFactoryDwell: React.FC = () => {
                   <th className="py-4 px-6">작업자 (사번)</th>
                   <th className="py-4 px-4">소속팀 / 직종</th>
                   <th className="py-4 px-4">배정 블럭명</th>
-                  <th className="py-4 px-5 text-emerald-400 font-extrabold">배정 블럭 체류 시간</th>
-                  <th className="py-4 px-4 text-amber-400 font-extrabold">휴게실 체류</th>
-                  <th className="py-4 px-4 text-rose-400 font-extrabold">자리비움 / 이탈</th>
+                  <th className="py-4 px-5 text-emerald-500 font-extrabold">배정 블럭 체류 시간</th>
+                  <th className="py-4 px-4 text-amber-500 font-extrabold">휴게실 체류</th>
+                  <th className="py-4 px-4 text-rose-500 font-extrabold">자리비움 / 이탈</th>
                   <th className="py-4 px-4">체류 준수율</th>
                   <th className="py-4 px-6 text-center">8개 슬롯 위치 전개</th>
                   <th className="py-4 px-4 text-center">성실도 판정</th>
+                  <th className="py-4 px-4 text-center">개인 기록</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {filteredSummaries.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-16 text-center text-muted-foreground font-bold">
+                    <td colSpan={10} className="py-16 text-center text-muted-foreground font-bold">
                       {loading ? '체류 기록을 불러오는 중입니다...' : '해당 일자의 체류 기록이 없습니다. 상단 [모의 데이터 생성]을 눌러보세요.'}
                     </td>
                   </tr>
@@ -1117,7 +1612,7 @@ export const PCAdminFactoryDwell: React.FC = () => {
                         key={s.id}
                         onClick={() => setSelectedWorkerUid(isSelected ? null : s.workerUid)}
                         className={`hover:bg-muted/30 transition-colors cursor-pointer ${
-                          isSelected ? 'bg-blue-500/10 border-l-4 border-l-blue-500' : ''
+                          isSelected ? 'bg-blue-500/10' : ''
                         }`}
                       >
                         {/* Worker Name & ID */}
@@ -1229,6 +1724,23 @@ export const PCAdminFactoryDwell: React.FC = () => {
                           </span>
                         )}
                       </td>
+
+                      {/* Individual Record Action */}
+                      <td className="py-4 px-4 text-center">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleInspectWorker(s.workerUid);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border border-border inline-flex items-center gap-1 cursor-pointer whitespace-nowrap ${
+                            isLight ? 'bg-white text-blue-600 hover:bg-blue-50' : 'bg-muted/60 text-blue-400 hover:bg-blue-500/15'
+                          }`}
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>상세</span>
+                        </button>
+                      </td>
                       </tr>
                     );
                   })
@@ -1237,6 +1749,26 @@ export const PCAdminFactoryDwell: React.FC = () => {
             </table>
           </div>
         </div>
+
+        {/* Inline Block Daily Checklist Quick Access right on Overview too */}
+        <FactoryBlockAssignmentPanel
+          selectedDate={selectedDate}
+          jigs={jigs}
+          assignments={assignments}
+          rosterWorkers={mergedRosterWorkers}
+          records={effectiveRecords}
+          selectedJigId={checklistJigId}
+          onSelectJigId={setChecklistJigId}
+          onToggleWorker={handleToggleBlockWorker}
+          onClearBlock={handleClearBlockAssignment}
+          onCopyPreviousDay={handleCopyPreviousAssignments}
+          onInspectWorker={handleInspectWorker}
+          isSaving={isSavingAssignment}
+          isCopying={isCopyingPrevious}
+          isLight={isLight}
+        />
+          </>
+        )}
 
         {/* Edit Jig Modal with Calendar Pickers & Cumulative Critical Delay Log */}
         {editingJig && (
@@ -1354,6 +1886,21 @@ export const PCAdminFactoryDwell: React.FC = () => {
                   className="flex-1 rounded-xl font-black text-xs"
                 >
                   닫기
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    const targetId = editingJig.id;
+                    setEditingJig(null);
+                    setChecklistJigId(targetId);
+                    setWorkspaceTab('CHECKLIST');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="rounded-xl font-black text-xs gap-1.5 whitespace-nowrap cursor-pointer"
+                >
+                  <CheckSquare className="w-3.5 h-3.5" />
+                  <span>투입 명단 체크</span>
                 </Button>
                 <Button
                   onClick={handleSaveJig}

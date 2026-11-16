@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { 
   FactoryJig, 
   FactoryGpsRecord, 
@@ -37,9 +37,26 @@ import {
   ShieldAlert,
   Flame,
   Eye,
-  EyeOff
+  EyeOff,
+  Move,
+  Plus,
+  Trash2,
+  Save,
+  RotateCcw,
+  Grid,
+  Copy,
+  GripVertical,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { toast } from 'sonner';
+
+const BLOCK_SIZE_PRESETS = [
+  { id: 'SM', label: '소형', w: 150, h: 170 },
+  { id: 'MD', label: '표준', w: 190, h: 220 },
+  { id: 'WIDE', label: '가로형', w: 260, h: 190 },
+  { id: 'LG', label: '대형', w: 250, h: 250 }
+] as const;
 
 interface FactoryBlueprintMapProps {
   jigs: FactoryJig[];
@@ -53,6 +70,10 @@ interface FactoryBlueprintMapProps {
   onSelectJig?: (jig: FactoryJig) => void;
   selectedJigId?: string | null;
   isPrintMode?: boolean;
+  allowLayoutEdit?: boolean;
+  isLayoutEditMode?: boolean;
+  onToggleLayoutEditMode?: (editing: boolean) => void;
+  onSaveLayout?: (updatedJigs: FactoryJig[], deletedIds: string[]) => Promise<void>;
 }
 
 export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
@@ -66,7 +87,11 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
   onSelectWorker,
   onSelectJig,
   selectedJigId,
-  isPrintMode = false
+  isPrintMode = false,
+  allowLayoutEdit = false,
+  isLayoutEditMode,
+  onToggleLayoutEditMode,
+  onSaveLayout
 }) => {
   const calibratedBasis = useMemo(
     () => (calibration ? computeCalibrationBasis(calibration) : null),
@@ -86,6 +111,363 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
     return 'BLUEPRINT_A3';
   });
 
+  // Interactive Drag-and-Drop Blueprint Layout Studio state
+  const [internalEditMode, setInternalEditMode] = useState(false);
+  const editingLayout = isLayoutEditMode !== undefined ? isLayoutEditMode : internalEditMode;
+  const setEditingLayout = (next: boolean) => {
+    if (onToggleLayoutEditMode) onToggleLayoutEditMode(next);
+    else setInternalEditMode(next);
+  };
+
+  const [draftJigs, setDraftJigs] = useState<FactoryJig[]>(jigs);
+  const [deletedJigIds, setDeletedJigIds] = useState<string[]>([]);
+  const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
+  const [snapToGrid, setSnapToGrid] = useState(true);
+  const [isSavingLayout, setIsSavingLayout] = useState(false);
+  const [newBlockName, setNewBlockName] = useState('');
+  const [newBlockType, setNewBlockType] = useState('선체 조립 블럭');
+  const [newBlockTeam, setNewBlockTeam] = useState('현장취부반');
+  const [newBlockPresetId, setNewBlockPresetId] = useState<'SM' | 'MD' | 'WIDE' | 'LG'>('MD');
+  const [isDragHoveringCanvas, setIsDragHoveringCanvas] = useState(false);
+  const [alignGuides, setAlignGuides] = useState<{ x?: number; y?: number }>({});
+  const [activeDragJigId, setActiveDragJigId] = useState<string | null>(null);
+
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const dragSessionRef = useRef<{
+    mode: 'MOVE' | 'RESIZE';
+    jigId: string;
+    startSvgX: number;
+    startSvgY: number;
+    origX: number;
+    origY: number;
+    origW: number;
+    origH: number;
+  } | null>(null);
+
+  // Sync draft copy whenever entering edit mode or underlying jigs reload while not editing
+  useEffect(() => {
+    if (!editingLayout) {
+      setDraftJigs(jigs);
+      setDeletedJigIds([]);
+      setEditingBlockId(null);
+      setActiveDragJigId(null);
+      setAlignGuides({});
+    } else {
+      setViewMode('BLUEPRINT_A3');
+      setDraftJigs(prev => (prev.length > 0 ? prev : jigs));
+      setEditingBlockId(prev => prev || jigs[0]?.id || null);
+    }
+  }, [editingLayout, jigs]);
+
+  const activeJigs = editingLayout ? draftJigs : jigs;
+  const selectedDraftJig = useMemo(
+    () => (editingLayout ? draftJigs.find(j => j.id === editingBlockId) || null : null),
+    [editingLayout, draftJigs, editingBlockId]
+  );
+
+  const hasUnsavedLayoutChanges = useMemo(() => {
+    if (!editingLayout) return false;
+    if (deletedJigIds.length > 0 || draftJigs.length !== jigs.length) return true;
+    return JSON.stringify(draftJigs) !== JSON.stringify(jigs);
+  }, [editingLayout, draftJigs, jigs, deletedJigIds]);
+
+  const clientToSvgPoint = (clientX: number, clientY: number) => {
+    const svg = svgRef.current;
+    if (!svg) return { x: 707, y: 500 };
+    const rect = svg.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return { x: 707, y: 500 };
+    return {
+      x: ((clientX - rect.left) / rect.width) * 1414,
+      y: ((clientY - rect.top) / rect.height) * 1000
+    };
+  };
+
+  const snapValue = (v: number, enabled: boolean, step = 20) =>
+    enabled ? Math.round(v / step) * step : Math.round(v);
+
+  const findOpenBlueprintSlot = (w: number, h: number, existing: FactoryJig[]): { x: number; y: number } => {
+    const candidateYs = [160, 610, 380, 120, 680];
+    const candidateXs = [170, 400, 630, 860, 1090, 280, 520, 760, 990];
+    for (const cy of candidateYs) {
+      for (const cx of candidateXs) {
+        const clampedX = Math.min(1360 - w, Math.max(50, cx));
+        const clampedY = Math.min(940 - h, Math.max(60, cy));
+        const overlaps = existing.some(
+          j =>
+            clampedX < j.x + j.width - 15 &&
+            clampedX + w > j.x + 15 &&
+            clampedY < j.y + j.height - 15 &&
+            clampedY + h > j.y + 15
+        );
+        if (!overlaps) return { x: clampedX, y: clampedY };
+      }
+    }
+    const offset = (existing.length % 5) * 35;
+    return { x: Math.min(1360 - w, 200 + offset), y: Math.min(940 - h, 180 + offset) };
+  };
+
+  const createAndPlaceBlock = (dropPos?: { x: number; y: number }) => {
+    const cleanName = newBlockName.trim() || `신규 블럭 ${draftJigs.length + 1}`;
+    const preset = BLOCK_SIZE_PRESETS.find(p => p.id === newBlockPresetId) || BLOCK_SIZE_PRESETS[1];
+    const maxNum = draftJigs.reduce((m, j) => Math.max(m, j.jigNumber || 0), 0);
+    const nextNum = maxNum + 1;
+    const uniqueId = `jig-${Date.now().toString(36).slice(-4)}-${nextNum}`;
+
+    let targetX: number;
+    let targetY: number;
+    if (dropPos) {
+      targetX = snapValue(Math.max(50, Math.min(1360 - preset.w, dropPos.x - preset.w / 2)), snapToGrid);
+      targetY = snapValue(Math.max(60, Math.min(940 - preset.h, dropPos.y - preset.h / 2)), snapToGrid);
+    } else {
+      const slot = findOpenBlueprintSlot(preset.w, preset.h, draftJigs);
+      targetX = slot.x;
+      targetY = slot.y;
+    }
+
+    const newJig: FactoryJig = {
+      id: uniqueId,
+      jigNumber: nextNum,
+      jigName: `JIG-${String(nextNum).padStart(2, '0')}`,
+      blockName: cleanName,
+      blockType: newBlockType.trim() || '선체 조립 블럭',
+      assignedTeam: newBlockTeam.trim() || '현장취부반',
+      currentProgress: 0,
+      startDate: new Date().toISOString().slice(0, 10),
+      endDate: new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10),
+      targetDays: 10,
+      x: targetX,
+      y: targetY,
+      width: preset.w,
+      height: preset.h,
+      bay: targetY + preset.h / 2 < 500 ? 'BAY_SOUTH' : 'BAY_NORTH',
+      status: 'ACTIVE'
+    };
+
+    setDraftJigs(prev => [...prev, newJig]);
+    setEditingBlockId(newJig.id);
+    setNewBlockName('');
+    toast.success(`[${cleanName}] 블럭이 도면에 배치되었습니다. 마우스로 끌어 위치를 조정하세요!`);
+  };
+
+  const handleDuplicateDraftJig = (source: FactoryJig) => {
+    const maxNum = draftJigs.reduce((m, j) => Math.max(m, j.jigNumber || 0), 0);
+    const nextNum = maxNum + 1;
+    const targetX = Math.min(1360 - source.width, source.x + 30);
+    const targetY = Math.min(940 - source.height, source.y + 30);
+    const copyJig: FactoryJig = {
+      ...source,
+      id: `jig-${Date.now().toString(36).slice(-4)}-${nextNum}`,
+      jigNumber: nextNum,
+      jigName: `JIG-${String(nextNum).padStart(2, '0')}`,
+      blockName: `${source.blockName} (복제)`,
+      x: targetX,
+      y: targetY,
+      bay: targetY + source.height / 2 < 500 ? 'BAY_SOUTH' : 'BAY_NORTH'
+    };
+    setDraftJigs(prev => [...prev, copyJig]);
+    setEditingBlockId(copyJig.id);
+    toast.success(`[${copyJig.blockName}] 복제 완료 — 도면에서 끌어 위치를 잡아주세요.`);
+  };
+
+  const handleDeleteDraftJig = (id: string) => {
+    if (draftJigs.length <= 1) {
+      toast.error('최소 1개 이상의 블럭은 도면에 남아있어야 합니다.');
+      return;
+    }
+    const target = draftJigs.find(j => j.id === id);
+    setDraftJigs(prev => prev.filter(j => j.id !== id));
+    if (jigs.some(orig => orig.id === id)) {
+      setDeletedJigIds(prev => (prev.includes(id) ? prev : [...prev, id]));
+    }
+    setEditingBlockId(prev => {
+      if (prev !== id) return prev;
+      const remaining = draftJigs.filter(j => j.id !== id);
+      return remaining[0]?.id || null;
+    });
+    if (target) {
+      toast.info(`[${target.blockName}] 도면에서 제거됨 ([저장] 시 최종 반영)`);
+    }
+  };
+
+  const handleUpdateDraftField = (id: string, patch: Partial<FactoryJig>) => {
+    setDraftJigs(prev =>
+      prev.map(j => {
+        if (j.id !== id) return j;
+        const merged = { ...j, ...patch };
+        return {
+          ...merged,
+          bay: merged.y + merged.height / 2 < 500 ? 'BAY_SOUTH' : 'BAY_NORTH'
+        };
+      })
+    );
+  };
+
+  const handleAutoArrangeCols = (cols: 3 | 4) => {
+    const startX = 160;
+    const totalAvailW = 1090;
+    const gapX = 24;
+    const cellW = Math.floor((totalAvailW - gapX * (cols - 1)) / cols);
+    const cellH = 215;
+
+    setDraftJigs(prev =>
+      prev.map((j, idx) => {
+        const col = idx % cols;
+        const row = Math.floor(idx / cols);
+        const x = startX + col * (cellW + gapX);
+        const y = row === 0 ? 160 : row === 1 ? 610 : Math.min(720, 160 + row * 235);
+        return {
+          ...j,
+          x: Math.round(x),
+          y: Math.round(y),
+          width: cellW,
+          height: cellH,
+          bay: y + cellH / 2 < 500 ? 'BAY_SOUTH' : 'BAY_NORTH'
+        };
+      })
+    );
+    toast.success(`${cols}열 그리드로 깔끔하게 자동 정렬되었습니다.`);
+  };
+
+  const handleDiscardLayout = () => {
+    setDraftJigs(jigs);
+    setDeletedJigIds([]);
+    setEditingBlockId(jigs[0]?.id || null);
+    toast.info('변경사항을 되돌렸습니다.');
+  };
+
+  const handleCommitLayout = async () => {
+    if (!onSaveLayout) {
+      setEditingLayout(false);
+      return;
+    }
+    setIsSavingLayout(true);
+    try {
+      await onSaveLayout(draftJigs, deletedJigIds);
+      setDeletedJigIds([]);
+      setEditingLayout(false);
+      toast.success('7공장 블럭 명칭 및 마우스 배치가 저장되었습니다!');
+    } catch {
+      toast.error('블럭 배치 저장 중 오류가 발생했습니다.');
+    } finally {
+      setIsSavingLayout(false);
+    }
+  };
+
+  const handleJigPointerDown = (e: React.PointerEvent, jig: FactoryJig, mode: 'MOVE' | 'RESIZE') => {
+    if (!editingLayout) return;
+    e.stopPropagation();
+    const pt = clientToSvgPoint(e.clientX, e.clientY);
+    dragSessionRef.current = {
+      mode,
+      jigId: jig.id,
+      startSvgX: pt.x,
+      startSvgY: pt.y,
+      origX: jig.x,
+      origY: jig.y,
+      origW: jig.width,
+      origH: jig.height
+    };
+    setEditingBlockId(jig.id);
+    setActiveDragJigId(jig.id);
+    try {
+      svgRef.current?.setPointerCapture(e.pointerId);
+    } catch {
+      // ignore on virtual pointer events
+    }
+  };
+
+  const handleSvgPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    const session = dragSessionRef.current;
+    if (!session || !editingLayout) return;
+    const pt = clientToSvgPoint(e.clientX, e.clientY);
+    const dx = pt.x - session.startSvgX;
+    const dy = pt.y - session.startSvgY;
+    const useSnap = snapToGrid && !e.altKey;
+
+    if (session.mode === 'MOVE') {
+      let nextX = Math.max(45, Math.min(1369 - session.origW, session.origX + dx));
+      let nextY = Math.max(55, Math.min(945 - session.origH, session.origY + dy));
+
+      if (useSnap) {
+        nextX = snapValue(nextX, true, 10);
+        nextY = snapValue(nextY, true, 10);
+      }
+
+      // Smart magnetic edge alignment with other blocks
+      let guideX: number | undefined;
+      let guideY: number | undefined;
+      const SNAP_TOL = 10;
+      for (const other of draftJigs) {
+        if (other.id === session.jigId) continue;
+        if (Math.abs(nextX - other.x) <= SNAP_TOL) {
+          nextX = other.x;
+          guideX = other.x;
+        } else if (Math.abs(nextX + session.origW - (other.x + other.width)) <= SNAP_TOL) {
+          nextX = other.x + other.width - session.origW;
+          guideX = other.x + other.width;
+        }
+        if (Math.abs(nextY - other.y) <= SNAP_TOL) {
+          nextY = other.y;
+          guideY = other.y;
+        } else if (Math.abs(nextY + session.origH - (other.y + other.height)) <= SNAP_TOL) {
+          nextY = other.y + other.height - session.origH;
+          guideY = other.y + other.height;
+        }
+      }
+
+      nextX = Math.max(45, Math.min(1369 - session.origW, Math.round(nextX)));
+      nextY = Math.max(55, Math.min(945 - session.origH, Math.round(nextY)));
+      setAlignGuides({ x: guideX, y: guideY });
+
+      setDraftJigs(prev =>
+        prev.map(j =>
+          j.id === session.jigId
+            ? {
+                ...j,
+                x: nextX,
+                y: nextY,
+                bay: nextY + j.height / 2 < 500 ? 'BAY_SOUTH' : 'BAY_NORTH'
+              }
+            : j
+        )
+      );
+    } else {
+      let nextW = Math.max(120, Math.min(460, session.origW + dx));
+      let nextH = Math.max(120, Math.min(360, session.origH + dy));
+      if (useSnap) {
+        nextW = snapValue(nextW, true, 10);
+        nextH = snapValue(nextH, true, 10);
+      }
+      nextW = Math.min(1369 - session.origX, Math.round(nextW));
+      nextH = Math.min(945 - session.origY, Math.round(nextH));
+
+      setDraftJigs(prev =>
+        prev.map(j =>
+          j.id === session.jigId
+            ? {
+                ...j,
+                width: nextW,
+                height: nextH,
+                bay: j.y + nextH / 2 < 500 ? 'BAY_SOUTH' : 'BAY_NORTH'
+              }
+            : j
+        )
+      );
+    }
+  };
+
+  const handleSvgPointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!dragSessionRef.current) return;
+    dragSessionRef.current = null;
+    setActiveDragJigId(null);
+    setAlignGuides({});
+    try {
+      svgRef.current?.releasePointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+  };
+
   // Sync active 2-hour window when selectedSlot changes from parent slot bar
   useEffect(() => {
     setActiveWindowId(getWindowForSlot(selectedSlot).id);
@@ -93,8 +475,8 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
 
   // Compute heatmap concentration metrics
   const heatmap = useMemo(
-    () => computeZoneDwellHeatmap(jigs, records, heatmapMode, selectedSlot, activeWindowId),
-    [jigs, records, heatmapMode, selectedSlot, activeWindowId]
+    () => computeZoneDwellHeatmap(activeJigs, records, heatmapMode, selectedSlot, activeWindowId),
+    [activeJigs, records, heatmapMode, selectedSlot, activeWindowId]
   );
 
   // Filter records for the currently active slot
@@ -126,10 +508,14 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
     delayLogsByJig[l.jigId].push(l);
   });
 
-  const southJigs = jigs.filter(j => j.bay === 'BAY_SOUTH').sort((a, b) => a.jigNumber - b.jigNumber);
-  const northJigs = jigs.filter(j => j.bay === 'BAY_NORTH').sort((a, b) => a.jigNumber - b.jigNumber);
+  const southJigs = activeJigs
+    .filter(j => j.bay === 'BAY_SOUTH')
+    .sort((a, b) => (Math.round(a.y / 120) - Math.round(b.y / 120)) || (a.x - b.x) || a.jigNumber - b.jigNumber);
+  const northJigs = activeJigs
+    .filter(j => j.bay === 'BAY_NORTH')
+    .sort((a, b) => (Math.round(a.y / 120) - Math.round(b.y / 120)) || (a.x - b.x) || a.jigNumber - b.jigNumber);
 
-  const effectiveViewMode = isPrintMode ? 'BLUEPRINT_A3' : viewMode;
+  const effectiveViewMode = isPrintMode || editingLayout ? 'BLUEPRINT_A3' : viewMode;
 
   return (
     <div className={`relative w-full overflow-hidden bg-slate-950 text-slate-100 rounded-[2rem] border border-slate-800 shadow-2xl select-none ${isPrintMode ? 'rounded-none border-0 shadow-none' : ''}`}>
@@ -156,54 +542,291 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
             </div>
           </div>
 
-          {/* Mobile/CAD Layout Mode Switcher */}
+          {/* Mobile/CAD Layout Mode Switcher + Drag Layout Studio Toggle */}
           {!isPrintMode && (
-            <div className="flex items-center bg-slate-800/90 p-1 rounded-xl border border-slate-700 shrink-0">
-              <button
-                type="button"
-                onClick={() => setViewMode('MOBILE_GRID')}
-                className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-black flex items-center gap-1 transition-all cursor-pointer ${
-                  effectiveViewMode === 'MOBILE_GRID'
-                    ? 'bg-cyan-500 text-slate-950 shadow-sm'
-                    : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                <Smartphone className="w-3 h-3" />
-                <span>모바일뷰</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('BLUEPRINT_A3')}
-                className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-black flex items-center gap-1 transition-all cursor-pointer ${
-                  effectiveViewMode === 'BLUEPRINT_A3'
-                    ? 'bg-blue-500 text-white shadow-sm'
-                    : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                <MapIcon className="w-3 h-3" />
-                <span>A3 도면</span>
-              </button>
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              {allowLayoutEdit && (
+                <button
+                  type="button"
+                  onClick={() => setEditingLayout(!editingLayout)}
+                  className={`px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-black flex items-center gap-1.5 border transition-all cursor-pointer whitespace-nowrap ${
+                    editingLayout
+                      ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-lg shadow-amber-500/20'
+                      : 'bg-blue-600/20 text-blue-300 border-blue-500/40 hover:bg-blue-600/30'
+                  }`}
+                >
+                  <Move className="w-3.5 h-3.5" />
+                  <span>{editingLayout ? '드래그 배치 편집 중' : '블럭 생성·마우스 배치'}</span>
+                </button>
+              )}
+
+              {!editingLayout && (
+                <div className="flex items-center bg-slate-800/90 p-1 rounded-xl border border-slate-700 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('MOBILE_GRID')}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-black flex items-center gap-1 transition-all cursor-pointer ${
+                      effectiveViewMode === 'MOBILE_GRID'
+                        ? 'bg-cyan-500 text-slate-950 shadow-sm'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    <Smartphone className="w-3 h-3" />
+                    <span>모바일뷰</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('BLUEPRINT_A3')}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-black flex items-center gap-1 transition-all cursor-pointer ${
+                      effectiveViewMode === 'BLUEPRINT_A3'
+                        ? 'bg-blue-500 text-white shadow-sm'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    <MapIcon className="w-3 h-3" />
+                    <span>A3 도면</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        {/* Compass & Directional Indicator Badge */}
-        <div className="flex items-center justify-center gap-2 bg-slate-800/80 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border border-slate-700/80 overflow-x-auto no-scrollbar">
-          <Compass className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400 shrink-0" />
-          <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs font-black whitespace-nowrap">
-            <span className="text-amber-400">← 동(E)</span>
-            <span className="text-slate-600">|</span>
-            <span className="text-amber-400">서(W) →</span>
-            <span className="text-slate-600">|</span>
-            <span className="text-cyan-400">↑ 남(S)</span>
-            <span className="text-slate-600">|</span>
-            <span className="text-cyan-400">↓ 북(N)</span>
+        {/* Compass & Directional Indicator Bar */}
+        <div className="flex items-center justify-center gap-3 sm:gap-4 bg-slate-950/90 px-4 sm:px-5 py-2 rounded-xl border border-slate-700 overflow-x-auto no-scrollbar shrink-0">
+          <Compass className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400 shrink-0" />
+          <div className="flex items-center gap-3 sm:gap-4 text-xs sm:text-sm font-black whitespace-nowrap tracking-wide">
+            <span className="text-amber-300">◀ 동 (E)</span>
+            <span aria-hidden="true" className="text-slate-600">/</span>
+            <span className="text-amber-300">서 (W) ▶</span>
+            <span aria-hidden="true" className="text-slate-600">/</span>
+            <span className="text-cyan-300">▲ 남 (S)</span>
+            <span aria-hidden="true" className="text-slate-600">/</span>
+            <span className="text-blue-300">▼ 북 (N)</span>
           </div>
         </div>
       </div>
 
-      {/* Heatmap Overlay Control Bar & Top Concentrated Zones Strip */}
-      {!isPrintMode && (
+      {/* Visual Drag-and-Drop Block Creation & Placement Toolbar (Active when editingLayout === true) */}
+      {!isPrintMode && editingLayout && (
+        <div className="bg-slate-900/95 border-b border-amber-500/40 px-4 sm:px-6 py-4 space-y-3.5">
+          {/* Top Row: Quick Block Creation + Drag-onto-Map Chip */}
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2.5 flex-1">
+              <div className="flex items-center gap-2 text-amber-400 text-xs font-black shrink-0">
+                <Plus className="w-4 h-4" />
+                <span>새 블럭 만들기</span>
+              </div>
+
+              <input
+                type="text"
+                value={newBlockName}
+                onChange={e => setNewBlockName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    createAndPlaceBlock();
+                  }
+                }}
+                placeholder="블럭명 입력 (예: 4307 E11'C' 또는 2111 블럭)"
+                className="w-60 sm:w-72 px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 focus:border-amber-400 text-xs font-black text-white placeholder:text-slate-500 outline-none"
+              />
+
+              <input
+                type="text"
+                value={newBlockTeam}
+                onChange={e => setNewBlockTeam(e.target.value)}
+                placeholder="담당 물량팀"
+                className="w-36 px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 focus:border-cyan-400 text-xs font-bold text-slate-200 placeholder:text-slate-500 outline-none"
+              />
+
+              {/* Block Size Presets */}
+              <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
+                {BLOCK_SIZE_PRESETS.map(preset => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => setNewBlockPresetId(preset.id)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                      newBlockPresetId === preset.id
+                        ? 'bg-cyan-500 text-slate-950 font-black'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Draggable Creation Chip */}
+              <div
+                draggable
+                onDragStart={e => {
+                  e.dataTransfer.setData('application/x-new-factory-block', '1');
+                  e.dataTransfer.effectAllowed = 'copy';
+                }}
+                title="이 블럭 칩을 마우스로 끌어 아래 7공장 도면 원하는 위치에 놓으세요"
+                className="px-3 py-2 rounded-xl bg-amber-500/15 border border-dashed border-amber-400 text-amber-300 text-xs font-black flex items-center gap-1.5 cursor-grab active:cursor-grabbing hover:bg-amber-500/25 transition-colors whitespace-nowrap"
+              >
+                <GripVertical className="w-3.5 h-3.5" />
+                <span>[{newBlockName.trim() || '새 블럭'}] 도면으로 끌어서 놓기</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => createAndPlaceBlock()}
+                className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>도면에 추가</span>
+              </button>
+            </div>
+
+            {/* Save / Revert Controls */}
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setSnapToGrid(s => !s)}
+                className={`px-3 py-2 rounded-xl text-[11px] font-bold border flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  snapToGrid
+                    ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300'
+                    : 'bg-slate-800 border-slate-700 text-slate-400'
+                }`}
+              >
+                <Grid className="w-3.5 h-3.5" />
+                <span>격자 스냅 {snapToGrid ? 'ON' : 'OFF'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleAutoArrangeCols(3)}
+                className="px-2.5 py-2 rounded-xl text-[11px] font-bold bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 cursor-pointer whitespace-nowrap"
+              >
+                3열 자동정렬
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleAutoArrangeCols(4)}
+                className="px-2.5 py-2 rounded-xl text-[11px] font-bold bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 cursor-pointer whitespace-nowrap"
+              >
+                4열 자동정렬
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDiscardLayout}
+                disabled={!hasUnsavedLayoutChanges || isSavingLayout}
+                className="px-3 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 disabled:opacity-40 border border-slate-700 text-slate-300 flex items-center gap-1 cursor-pointer whitespace-nowrap"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>되돌리기</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setEditingLayout(false)}
+                className="px-3 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 cursor-pointer whitespace-nowrap"
+              >
+                닫기
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCommitLayout}
+                disabled={isSavingLayout}
+                className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-500 hover:bg-emerald-600 text-slate-950 flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-lg shadow-emerald-500/20"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>{isSavingLayout ? '저장 중...' : hasUnsavedLayoutChanges ? '배치 저장하기 *' : '배치 저장'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Second Row: Selected Block Quick Rename & Delete Bar */}
+          {selectedDraftJig ? (
+            <div className="pt-3 border-t border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 bg-slate-950/70 p-3 rounded-2xl border border-slate-800">
+              <div className="flex flex-wrap items-center gap-2.5 flex-1">
+                <span className="text-[11px] font-black text-cyan-400 whitespace-nowrap">
+                  선택 블럭 편집:
+                </span>
+
+                <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400">
+                  <span>정반</span>
+                  <input
+                    type="text"
+                    value={selectedDraftJig.jigName}
+                    onChange={e => handleUpdateDraftField(selectedDraftJig.id, { jigName: e.target.value })}
+                    className="w-24 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-black text-white outline-none focus:border-cyan-400"
+                  />
+                </label>
+
+                <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400">
+                  <span>블럭명</span>
+                  <input
+                    type="text"
+                    value={selectedDraftJig.blockName}
+                    onChange={e => handleUpdateDraftField(selectedDraftJig.id, { blockName: e.target.value })}
+                    className="w-40 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-black text-cyan-300 outline-none focus:border-cyan-400"
+                  />
+                </label>
+
+                <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400">
+                  <span>공정</span>
+                  <input
+                    type="text"
+                    value={selectedDraftJig.blockType}
+                    onChange={e => handleUpdateDraftField(selectedDraftJig.id, { blockType: e.target.value })}
+                    className="w-44 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-bold text-slate-200 outline-none focus:border-cyan-400"
+                  />
+                </label>
+
+                <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400">
+                  <span>담당팀</span>
+                  <input
+                    type="text"
+                    value={selectedDraftJig.assignedTeam}
+                    onChange={e => handleUpdateDraftField(selectedDraftJig.id, { assignedTeam: e.target.value })}
+                    className="w-36 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-bold text-slate-200 outline-none focus:border-cyan-400"
+                  />
+                </label>
+
+                <span className="text-[11px] font-bold text-amber-300 font-mono tabular-nums">
+                  {selectedDraftJig.bay === 'BAY_SOUTH' ? '남측 (BAY A)' : '북측 (BAY B)'}
+                  {' · '}
+                  {selectedDraftJig.x < 450 ? '동측' : selectedDraftJig.x > 880 ? '서측' : '중앙'}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleDuplicateDraftJig(selectedDraftJig)}
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold text-slate-200 flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                >
+                  <Copy className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>복제</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteDraftJig(selectedDraftJig.id)}
+                  className="px-2.5 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-xs font-bold text-rose-300 flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>삭제</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400 font-medium">
+              도면 위 블럭을 마우스로 클릭하고 끌어 이동하거나, 우측 하단 모서리(↘)를 끌어 크기를 조절하세요.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Heatmap Overlay Control Bar & Top Concentrated Zones Strip (hidden during layout drag edit mode) */}
+      {!isPrintMode && !editingLayout && (
         <div className="bg-slate-900/75 border-b border-slate-800 px-4 sm:px-6 py-3 space-y-3">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
             {/* Left controls: Heatmap toggle + 2H Window aggregation */}
@@ -408,8 +1031,8 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
         <div className="p-3 sm:p-5 bg-[#080d1a] space-y-3.5">
           {/* South Perimeter & Top Facilities */}
           <div className="flex flex-col gap-2">
-            <div className="text-center py-1 px-3 rounded-lg bg-slate-900 border border-cyan-500/40 text-[10px] font-black text-cyan-300 tracking-wider">
-              ▲ 위쪽: 남쪽 (SOUTH) • BAY A 라인 / 안벽 방면 ▲
+            <div className="text-center py-2 px-4 rounded-xl bg-slate-900 border border-cyan-500/50 text-sm sm:text-base font-black text-cyan-300 tracking-wide">
+              ▲ 남 (SOUTH) · BAY A / 안벽 방면 ▲
             </div>
             <div className="grid grid-cols-2 gap-2 text-[10px]">
               <div className="bg-sky-950/40 border border-sky-500/30 rounded-xl p-2 flex items-center justify-between">
@@ -433,13 +1056,13 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
             </div>
           </div>
 
-          {/* BAY A (남측 지그 1~5) */}
+          {/* BAY A (남측 라인) */}
           <div className="space-y-2">
             <div className="flex items-center justify-between px-1">
-              <span className="text-[11px] font-black text-cyan-400 tracking-tight">
+              <span className="text-xs font-black text-cyan-400 tracking-tight">
                 [ BAY A - 남측 대조립 지그 ]
               </span>
-              <span className="text-[10px] text-slate-400 font-bold">동(←) ~ 서(→)</span>
+              <span className="text-xs sm:text-sm text-amber-300 font-black">◀ 동(E) · 서(W) ▶</span>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
@@ -569,67 +1192,46 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
             </div>
           </div>
 
-          {/* Central Crane Transporter Walkway */}
-          {(() => {
-            const aisleHeat = heatmap.zoneMap['central_aisle'];
-            const hasAisleHeat = showHeatmap && aisleHeat && aisleHeat.totalMinutes > 0;
-            const aisleColors = hasAisleHeat ? getHeatmapColors(aisleHeat.level) : null;
-            return (
-              <div
-                style={
-                  hasAisleHeat && aisleColors
-                    ? { backgroundColor: aisleColors.tintBg, borderColor: aisleColors.border }
-                    : undefined
-                }
-                className="bg-amber-500/10 border border-dashed border-amber-500/40 rounded-2xl p-2.5 space-y-1.5"
-              >
-                <div className="flex items-center justify-between text-[10px] font-black text-amber-300">
-                  <span>◀ 동측 반입문</span>
-                  <span>
-                    ══ 중앙 크레인 통로
-                    {hasAisleHeat ? ` · ${formatMinutesToKorean(aisleHeat.totalMinutes)} (${aisleHeat.workerCount}명)` : ' ══'}
-                  </span>
-                  <span>서측 반출문 ▶</span>
-                </div>
-                {awayOrFacilityWorkers.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {awayOrFacilityWorkers.map(w => {
-                      const isWSelected = selectedWorkerUid === w.workerUid;
-                      return (
-                        <button
-                          key={w.id}
-                          type="button"
-                          onClick={() => onSelectWorker && onSelectWorker(isWSelected ? null : w.workerUid)}
-                          className={`px-2 py-1 rounded-lg text-[10px] font-black border flex items-center gap-1 cursor-pointer ${
-                            isWSelected
-                              ? 'bg-cyan-500 text-slate-950 border-white'
-                              : w.status === 'RESTING'
-                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                              : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                          }`}
-                        >
-                          <span>{w.workerName}</span>
-                          <span className="text-[8.5px] opacity-80">({w.status === 'RESTING' ? '휴게' : '이탈'})</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-[10px] text-center text-slate-400 font-bold">
-                    현재 슬롯({selectedSlot}) 통로 이동 및 구역 이탈 인원 없음
-                  </p>
-                )}
+          {/* Non-block / Away Workers Strip (Only shown if workers exist outside blocks) */}
+          {awayOrFacilityWorkers.length > 0 && (
+            <div className="bg-slate-900/70 border border-slate-700/80 rounded-2xl p-3 space-y-2">
+              <div className="flex items-center justify-between text-xs font-black text-slate-300">
+                <span>◀ 동측 반입문</span>
+                <span>블럭 외 체류 · 이동 인원 ({selectedSlot})</span>
+                <span>서측 반출문 ▶</span>
               </div>
-            );
-          })()}
+              <div className="flex flex-wrap gap-1.5">
+                {awayOrFacilityWorkers.map(w => {
+                  const isWSelected = selectedWorkerUid === w.workerUid;
+                  return (
+                    <button
+                      key={w.id}
+                      type="button"
+                      onClick={() => onSelectWorker && onSelectWorker(isWSelected ? null : w.workerUid)}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-black border flex items-center gap-1 cursor-pointer ${
+                        isWSelected
+                          ? 'bg-cyan-500 text-slate-950 border-white'
+                          : w.status === 'RESTING'
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                          : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                      }`}
+                    >
+                      <span>{w.workerName}</span>
+                      <span className="text-[8.5px] opacity-80">({w.status === 'RESTING' ? '휴게' : '이탈'})</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
-          {/* BAY B (북측 지그 6~10) */}
+          {/* BAY B (북측 라인) */}
           <div className="space-y-2">
             <div className="flex items-center justify-between px-1">
-              <span className="text-[11px] font-black text-blue-400 tracking-tight">
+              <span className="text-xs font-black text-blue-400 tracking-tight">
                 [ BAY B - 북측 특수/의장 지그 ]
               </span>
-              <span className="text-[10px] text-slate-400 font-bold">동(←) ~ 서(→)</span>
+              <span className="text-xs sm:text-sm text-amber-300 font-black">◀ 동(E) · 서(W) ▶</span>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
@@ -766,18 +1368,45 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
                 📦 완성 블럭 검사대기장
               </div>
             </div>
-            <div className="text-center py-1 px-3 rounded-full bg-slate-900 border border-slate-700 text-[10px] font-black text-slate-300 tracking-wider">
-              ▼ 아래쪽: 북쪽 (NORTH) • BAY B 라인 / 원자재 반입 방면 ▼
+            <div className="text-center py-2 px-4 rounded-xl bg-slate-900 border border-blue-500/50 text-sm sm:text-base font-black text-blue-300 tracking-wide">
+              ▼ 북 (NORTH) · BAY B / 원자재 반입 방면 ▼
             </div>
           </div>
         </div>
       ) : (
         /* ================= MODE 2: A3 LANDSCAPE CAD BLUEPRINT SVG ================= */
-        <div className="overflow-x-auto bg-[#0a0f1d]">
+        <div
+          className={`overflow-x-auto bg-[#0a0f1d] ${
+            editingLayout && isDragHoveringCanvas ? 'ring-2 ring-inset ring-amber-400 bg-slate-900/60' : ''
+          }`}
+          onDragOver={e => {
+            if (!editingLayout) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+            setIsDragHoveringCanvas(true);
+          }}
+          onDragLeave={() => setIsDragHoveringCanvas(false)}
+          onDrop={e => {
+            if (!editingLayout) return;
+            e.preventDefault();
+            setIsDragHoveringCanvas(false);
+            const pt = clientToSvgPoint(e.clientX, e.clientY);
+            createAndPlaceBlock(pt);
+          }}
+        >
           <div className="relative min-w-[760px] w-full aspect-[1414/1000] p-4 sm:p-6 bg-[#0a0f1d] overflow-hidden">
+            {editingLayout && (
+              <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20 pointer-events-none px-3.5 py-1 rounded-full bg-amber-400/95 text-slate-950 text-[11px] font-black shadow-lg">
+                마우스로 블럭을 끌어 이동 · 우측하단 모서리(↘) 드래그로 크기 조절 · 상단 [배치 저장하기] 필수
+              </div>
+            )}
             <svg
+              ref={svgRef}
               viewBox="0 0 1414 1000"
-              className="w-full h-full drop-shadow-2xl"
+              onPointerMove={handleSvgPointerMove}
+              onPointerUp={handleSvgPointerUp}
+              onPointerCancel={handleSvgPointerUp}
+              className={`w-full h-full drop-shadow-2xl ${editingLayout ? 'touch-none' : ''}`}
               style={{ shapeRendering: 'geometricPrecision' }}
             >
           <defs>
@@ -785,13 +1414,14 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
             <pattern id="gridPattern" width="40" height="40" patternUnits="userSpaceOnUse">
               <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255, 255, 255, 0.03)" strokeWidth="1" />
             </pattern>
+            {/* Edit mode snap grid */}
+            <pattern id="editSnapGrid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(56, 189, 248, 0.14)" strokeWidth="1" strokeDasharray="2 2" />
+              <circle cx="0" cy="0" r="1.5" fill="rgba(56, 189, 248, 0.35)" />
+            </pattern>
             {/* Steel Jig Grid */}
             <pattern id="jigGrid" width="20" height="20" patternUnits="userSpaceOnUse">
               <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(56, 189, 248, 0.08)" strokeWidth="1" />
-            </pattern>
-            {/* Caution stripes for Crane walkway */}
-            <pattern id="craneStripes" width="20" height="20" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
-              <line x1="0" y1="0" x2="0" y2="20" stroke="rgba(234, 179, 8, 0.06)" strokeWidth="10" />
             </pattern>
             {/* Glow filters */}
             <filter id="glowGreen" x="-20%" y="-20%" width="140%" height="140%">
@@ -831,7 +1461,7 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
 
           {/* Background Grid */}
           <rect width="1414" height="1000" fill="#060913" />
-          <rect width="1414" height="1000" fill="url(#gridPattern)" />
+          <rect width="1414" height="1000" fill={editingLayout ? 'url(#editSnapGrid)' : 'url(#gridPattern)'} />
 
           {/* Outer Workshop Perimeter Walls */}
           <rect
@@ -845,102 +1475,105 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
             rx="16"
           />
 
-          {/* Compass Graphic in Background (South Top, North Bottom, East Left, West Right) */}
-          <g transform="translate(1300, 110)" opacity="0.35">
-            <circle r="44" fill="#0f172a" stroke="#334155" strokeWidth="2" />
-            <path d="M 0 -35 L 8 0 L 0 35 L -8 0 Z" fill="#0284c7" />
-            <path d="M -35 0 L 0 8 L 35 0 L 0 -8 Z" fill="#f59e0b" />
-            <text x="0" y="-38" textAnchor="middle" fill="#38bdf8" fontSize="11" fontWeight="900">↑ 남 (S)</text>
-            <text x="0" y="48" textAnchor="middle" fill="#94a3b8" fontSize="10" fontWeight="900">↓ 북 (N)</text>
-            <text x="-42" y="4" textAnchor="end" fill="#f59e0b" fontSize="10" fontWeight="900">← 동(E)</text>
-            <text x="42" y="4" textAnchor="start" fill="#f59e0b" fontSize="10" fontWeight="900">서(W) →</text>
-          </g>
-
-          {/* Factory Boundary Directional Labels */}
-          {/* Top: South */}
-          <g transform="translate(707, 34)">
-            <rect x="-250" y="-12" width="500" height="24" fill="#0f172a" rx="12" stroke="#38bdf8" strokeWidth="1.5" />
-            <text x="0" y="4" textAnchor="middle" fill="#38bdf8" fontSize="11" fontWeight="900" letterSpacing="1.5">
-              {calibration?.south?.lat
-                ? `▲ 남쪽(S): ${calibration.south.lat.toFixed(5)}, ${calibration.south.lng.toFixed(5)} ▲`
-                : '▲ 위쪽: 남쪽 (SOUTH) • 조업 BAY A 라인 / 안벽 방면 ▲'}
+          {/* Factory Cardinal Direction Signboards (High-Contrast Upright Plates) */}
+          {/* Top: South (남) */}
+          <g transform="translate(707, 36)" pointerEvents="none">
+            <rect
+              x="-270"
+              y="-22"
+              width="540"
+              height="44"
+              fill="#0b182e"
+              fillOpacity="0.96"
+              rx="10"
+              stroke="#38bdf8"
+              strokeWidth="2.2"
+            />
+            <text x="0" y="7" textAnchor="middle" fontWeight="900">
+              <tspan fill="#38bdf8" fontSize="22">▲ 남 (SOUTH)</tspan>
+              <tspan fill="#475569" fontSize="16">  ·  </tspan>
+              <tspan fill="#e0f2fe" fontSize="14" fontWeight="700">
+                {calibration?.south?.lat
+                  ? `${calibration.south.lat.toFixed(5)}, ${calibration.south.lng.toFixed(5)}`
+                  : 'BAY A · 안벽 방면'}
+              </tspan>
             </text>
           </g>
 
-          {/* Bottom: North */}
-          <g transform="translate(707, 970)">
-            <rect x="-250" y="-12" width="500" height="24" fill="#0f172a" rx="12" stroke="#64748b" strokeWidth="1.5" />
-            <text x="0" y="4" textAnchor="middle" fill="#cbd5e1" fontSize="11" fontWeight="900" letterSpacing="1.5">
-              {calibration?.north?.lat
-                ? `▼ 북쪽(N): ${calibration.north.lat.toFixed(5)}, ${calibration.north.lng.toFixed(5)} ▼`
-                : '▼ 아래쪽: 북쪽 (NORTH) • 조업 BAY B 라인 / 원자재 반입 방면 ▼'}
+          {/* Bottom: North (북) */}
+          <g transform="translate(707, 964)" pointerEvents="none">
+            <rect
+              x="-270"
+              y="-22"
+              width="540"
+              height="44"
+              fill="#0f172a"
+              fillOpacity="0.96"
+              rx="10"
+              stroke="#60a5fa"
+              strokeWidth="2.2"
+            />
+            <text x="0" y="7" textAnchor="middle" fontWeight="900">
+              <tspan fill="#93c5fd" fontSize="22">▼ 북 (NORTH)</tspan>
+              <tspan fill="#475569" fontSize="16">  ·  </tspan>
+              <tspan fill="#e2e8f0" fontSize="14" fontWeight="700">
+                {calibration?.north?.lat
+                  ? `${calibration.north.lat.toFixed(5)}, ${calibration.north.lng.toFixed(5)}`
+                  : 'BAY B · 원자재 반입 방면'}
+              </tspan>
             </text>
           </g>
 
-          {/* Left: East */}
-          <g transform="translate(30, 500) rotate(-90)">
-            <rect x="-200" y="-12" width="400" height="24" fill="#0f172a" rx="12" stroke="#f59e0b" strokeWidth="1.5" />
-            <text x="0" y="4" textAnchor="middle" fill="#f59e0b" fontSize="11" fontWeight="900" letterSpacing="1.5">
-              {calibration?.east?.lat
-                ? `◀ 동쪽(E): ${calibration.east.lat.toFixed(5)}, ${calibration.east.lng.toFixed(5)}`
-                : '◀ 왼쪽: 동쪽 (EAST) • 제6공장 연결 & 자재 반입문'}
+          {/* Left: East (동) - Upright Architectural Plaque */}
+          <g transform="translate(18, 442)" pointerEvents="none">
+            <rect
+              x="0"
+              y="0"
+              width="108"
+              height="116"
+              fill="#0f172a"
+              fillOpacity="0.96"
+              rx="12"
+              stroke="#f59e0b"
+              strokeWidth="2.5"
+            />
+            <rect x="0" y="18" width="6" height="80" fill="#f59e0b" rx="3" />
+            <text x="56" y="44" textAnchor="middle" fill="#fbbf24" fontSize="28" fontWeight="900">
+              ◀ 동
+            </text>
+            <text x="56" y="68" textAnchor="middle" fill="#fde68a" fontSize="13.5" fontWeight="900" letterSpacing="2">
+              EAST
+            </text>
+            <line x1="18" y1="80" x2="90" y2="80" stroke="#334155" strokeWidth="1" />
+            <text x="56" y="100" textAnchor="middle" fill="#cbd5e1" fontSize="11" fontWeight="800">
+              {calibration?.east?.lat ? calibration.east.lat.toFixed(4) : '반입문 (E)'}
             </text>
           </g>
 
-          {/* Right: West */}
-          <g transform="translate(1384, 500) rotate(90)">
-            <rect x="-200" y="-12" width="400" height="24" fill="#0f172a" rx="12" stroke="#f59e0b" strokeWidth="1.5" />
-            <text x="0" y="4" textAnchor="middle" fill="#f59e0b" fontSize="11" fontWeight="900" letterSpacing="1.5">
-              {calibration?.west?.lat
-                ? `서쪽(W): ${calibration.west.lat.toFixed(5)}, ${calibration.west.lng.toFixed(5)} ▶`
-                : '오른쪽: 서쪽 (WEST) • 완성 블럭 반출문 & 도크 방면 ▶'}
+          {/* Right: West (서) - Upright Architectural Plaque */}
+          <g transform="translate(1288, 442)" pointerEvents="none">
+            <rect
+              x="0"
+              y="0"
+              width="108"
+              height="116"
+              fill="#0f172a"
+              fillOpacity="0.96"
+              rx="12"
+              stroke="#f59e0b"
+              strokeWidth="2.5"
+            />
+            <rect x="102" y="18" width="6" height="80" fill="#10b981" rx="3" />
+            <text x="52" y="44" textAnchor="middle" fill="#fbbf24" fontSize="28" fontWeight="900">
+              서 ▶
             </text>
-          </g>
-
-          {/* Central Transporter Highway (중앙 주통로 / 대차 레일, Y: 430 ~ 570) */}
-          {(() => {
-            const aisleHeat = heatmap.zoneMap['central_aisle'];
-            const hasAisleHeat = showHeatmap && aisleHeat && aisleHeat.totalMinutes > 0;
-            const aisleColors = hasAisleHeat ? getHeatmapColors(aisleHeat.level) : null;
-            return (
-              <>
-                <rect
-                  x="50"
-                  y="430"
-                  width="1314"
-                  height="140"
-                  fill={hasAisleHeat && aisleColors ? aisleColors.tintBg : 'url(#craneStripes)'}
-                  stroke={hasAisleHeat && aisleColors ? aisleColors.border : '#334155'}
-                  strokeWidth={hasAisleHeat ? '2' : '1.5'}
-                  strokeDasharray="6 4"
-                  rx="8"
-                />
-
-                {/* Double Crane Rails spanning East to West */}
-                <line x1="50" y1="450" x2="1364" y2="450" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="12 6" opacity="0.6" />
-                <line x1="50" y1="550" x2="1364" y2="550" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="12 6" opacity="0.6" />
-
-                <g transform="translate(707, 505)">
-                  <text x="0" y="0" textAnchor="middle" fill={hasAisleHeat && aisleColors ? aisleColors.border : '#94a3b8'} fontSize="12" fontWeight="900" letterSpacing="2">
-                    {hasAisleHeat
-                      ? `중앙 트랜스포터 주통로 · 비작업 통로 체류 ${formatMinutesToKorean(aisleHeat.totalMinutes)} (${aisleHeat.workerCount}명)`
-                      : '═══ 중앙 트랜스포터 주통로 (50T / 30T 오버헤드 천장 크레인 주행로) ═══'}
-                  </text>
-                </g>
-              </>
-            );
-          })()}
-
-          {/* East Main Door */}
-          <g transform="translate(20, 460)">
-            <rect x="0" y="0" width="8" height="80" fill="#f59e0b" rx="2" />
-            <text x="14" y="44" fill="#f59e0b" fontSize="10" fontWeight="900" transform="rotate(-90 14 44)">동측 반입문 (GATE E)</text>
-          </g>
-
-          {/* West Main Door */}
-          <g transform="translate(1386, 460)">
-            <rect x="0" y="0" width="8" height="80" fill="#10b981" rx="2" />
-            <text x="14" y="44" fill="#10b981" fontSize="10" fontWeight="900" transform="rotate(90 14 44)">서측 반출문 (GATE W)</text>
+            <text x="52" y="68" textAnchor="middle" fill="#fde68a" fontSize="13.5" fontWeight="900" letterSpacing="2">
+              WEST
+            </text>
+            <line x1="18" y1="80" x2="90" y2="80" stroke="#334155" strokeWidth="1" />
+            <text x="52" y="100" textAnchor="middle" fill="#cbd5e1" fontSize="11" fontWeight="800">
+              {calibration?.west?.lat ? calibration.west.lat.toFixed(4) : '반출문 (W)'}
+            </text>
           </g>
 
           {/* Facilities (휴게실, 공구실, 안전관리실, 검사장) */}
@@ -1016,33 +1649,90 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
             </text>
           </g>
 
-          {/* JIGS (지그 및 블럭 + 히트맵 존 틴트) */}
-          {jigs.map(jig => {
-            const isSelected = selectedJigId === jig.id;
+          {/* Smart Magnetic Alignment Guides (Visible while dragging) */}
+          {editingLayout && alignGuides.x !== undefined && (
+            <line
+              x1={alignGuides.x}
+              y1="40"
+              x2={alignGuides.x}
+              y2="960"
+              stroke="#22d3ee"
+              strokeWidth="1.5"
+              strokeDasharray="6 4"
+              pointerEvents="none"
+            />
+          )}
+          {editingLayout && alignGuides.y !== undefined && (
+            <line
+              x1="40"
+              y1={alignGuides.y}
+              x2="1374"
+              y2={alignGuides.y}
+              stroke="#22d3ee"
+              strokeWidth="1.5"
+              strokeDasharray="6 4"
+              pointerEvents="none"
+            />
+          )}
+
+          {/* JIGS (지그 및 블럭 + 히트맵 존 틴트 + 드래그 배치 편집) */}
+          {activeJigs.map(jig => {
+            const isSelected = editingLayout ? editingBlockId === jig.id : selectedJigId === jig.id;
+            const isDraggingThis = editingLayout && activeDragJigId === jig.id;
             const isHovered = hoveredJig?.id === jig.id;
             const workerCount = workerCountByJig[jig.id] || 0;
             const jigDelayCount = (delayLogsByJig[jig.id] || []).length || jig.delayLogCount || 0;
             const heatMetric = heatmap.zoneMap[jig.id];
             const heatColors = heatMetric ? getHeatmapColors(heatMetric.level) : null;
-            const hasHeat = showHeatmap && heatMetric && heatMetric.totalMinutes > 0;
+            const hasHeat = !editingLayout && showHeatmap && heatMetric && heatMetric.totalMinutes > 0;
             const isTopHotspot = heatmap.topZone?.zoneId === jig.id && hasHeat;
+            const pillW = Math.min(140, Math.max(84, jig.width - 24));
+            const compactHeight = jig.height < 165;
 
             return (
               <g
                 key={jig.id}
                 transform={`translate(${jig.x}, ${jig.y})`}
-                className="cursor-pointer transition-all duration-200"
-                onClick={() => onSelectJig && onSelectJig(jig)}
-                onMouseEnter={() => setHoveredJig(jig)}
-                onMouseLeave={() => setHoveredJig(null)}
+                className={
+                  editingLayout
+                    ? isDraggingThis
+                      ? 'cursor-grabbing'
+                      : 'cursor-grab'
+                    : 'cursor-pointer transition-all duration-200'
+                }
+                onPointerDown={e => editingLayout && handleJigPointerDown(e, jig, 'MOVE')}
+                onClick={() => {
+                  if (editingLayout) {
+                    setEditingBlockId(jig.id);
+                  } else if (onSelectJig) {
+                    onSelectJig(jig);
+                  }
+                }}
+                onMouseEnter={() => !editingLayout && setHoveredJig(jig)}
+                onMouseLeave={() => !editingLayout && setHoveredJig(null)}
               >
                 {/* JIG Base Plate */}
                 <rect
                   width={jig.width}
                   height={jig.height}
                   fill={isSelected ? '#1e293b' : hasHeat && heatColors ? heatColors.tintBg : jigDelayCount > 0 ? '#180d16' : '#0c1322'}
-                  stroke={isSelected ? '#38bdf8' : hasHeat && heatColors ? heatColors.border : jigDelayCount > 0 ? '#f43f5e' : isHovered ? '#60a5fa' : '#1e3a5f'}
-                  strokeWidth={isSelected ? '3.5' : isTopHotspot ? '3' : isHovered ? '2.5' : '1.5'}
+                  stroke={
+                    isDraggingThis
+                      ? '#fbbf24'
+                      : isSelected
+                      ? '#38bdf8'
+                      : editingLayout
+                      ? '#3b82f6'
+                      : hasHeat && heatColors
+                      ? heatColors.border
+                      : jigDelayCount > 0
+                      ? '#f43f5e'
+                      : isHovered
+                      ? '#60a5fa'
+                      : '#1e3a5f'
+                  }
+                  strokeWidth={isSelected ? '3.5' : isTopHotspot ? '3' : isHovered || editingLayout ? '2.5' : '1.5'}
+                  strokeDasharray={editingLayout && isSelected ? '6 3' : undefined}
                   rx="12"
                 />
 
@@ -1050,18 +1740,18 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
                 <rect
                   x="8"
                   y="8"
-                  width={jig.width - 16}
-                  height={jig.height - 16}
+                  width={Math.max(20, jig.width - 16)}
+                  height={Math.max(20, jig.height - 16)}
                   fill="url(#jigGrid)"
                   rx="8"
                 />
 
                 {/* Ship Block Silhouette Representation */}
                 <rect
-                  x="18"
-                  y="46"
-                  width={jig.width - 36}
-                  height={jig.height - 84}
+                  x="16"
+                  y="42"
+                  width={Math.max(20, jig.width - 32)}
+                  height={Math.max(30, jig.height - 76)}
                   fill={hasHeat && heatColors ? heatColors.tintBg : '#172554'}
                   stroke={hasHeat && heatColors ? heatColors.border : '#2563eb'}
                   strokeWidth="1.5"
@@ -1074,27 +1764,29 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
                 <rect
                   x="10"
                   y="10"
-                  width={jig.width - 20}
+                  width={Math.max(20, jig.width - 20)}
                   height="26"
                   fill={isSelected ? '#0284c7' : jigDelayCount > 0 ? '#881337' : '#1e293b'}
                   rx="6"
                 />
                 <text
-                  x="20"
+                  x="18"
                   y="27"
                   fill="#ffffff"
                   fontSize="11"
                   fontWeight="900"
                   letterSpacing="0.5"
                 >
-                  {jig.jigName}{jigDelayCount > 0 ? ` · 지연${jigDelayCount}` : ''}
+                  {jig.jigName}{!editingLayout && jigDelayCount > 0 ? ` · 지연${jigDelayCount}` : ''}
                 </text>
                 <text
-                  x={jig.width - 20}
+                  x={jig.width - 18}
                   y="27"
                   textAnchor="end"
                   fill={
-                    hasHeat && heatColors
+                    editingLayout
+                      ? '#fbbf24'
+                      : hasHeat && heatColors
                       ? '#ffffff'
                       : workerCount > 0
                       ? '#4ade80'
@@ -1103,7 +1795,9 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
                   fontSize="10"
                   fontWeight="900"
                 >
-                  {hasHeat
+                  {editingLayout
+                    ? '⠿ 이동'
+                    : hasHeat
                     ? `${formatMinutesToKorean(heatMetric.totalMinutes)} (${heatMetric.workerCount}명)`
                     : workerCount > 0
                     ? `● ${workerCount}명 작업 중`
@@ -1111,14 +1805,14 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
                 </text>
 
                 {/* PROMINENT SHIP BLOCK CODE */}
-                <g transform={`translate(${jig.width / 2}, ${jig.height / 2 - 4})`}>
+                <g transform={`translate(${jig.width / 2}, ${jig.height / 2 - (compactHeight ? 0 : 6)})`}>
                   <rect
-                    x="-65"
-                    y="-20"
-                    width="130"
-                    height="40"
+                    x={-pillW / 2}
+                    y="-19"
+                    width={pillW}
+                    height="38"
                     fill="#0f172a"
-                    stroke={hasHeat && heatColors ? heatColors.border : '#38bdf8'}
+                    stroke={isDraggingThis ? '#fbbf24' : hasHeat && heatColors ? heatColors.border : '#38bdf8'}
                     strokeWidth="2"
                     rx="8"
                   />
@@ -1127,45 +1821,49 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
                     y="5"
                     textAnchor="middle"
                     fill="#38bdf8"
-                    fontSize="16"
+                    fontSize={jig.blockName.length > 9 ? '12.5' : '15'}
                     fontWeight="900"
-                    letterSpacing="1"
+                    letterSpacing="0.5"
                   >
                     {jig.blockName}
                   </text>
                 </g>
 
                 {/* Block Type / Heatmap Dwell Status Subtitle */}
-                <text
-                  x={jig.width / 2}
-                  y={jig.height / 2 + 28}
-                  textAnchor="middle"
-                  fill={hasHeat && heatColors ? heatColors.border : '#cbd5e1'}
-                  fontSize="9.5"
-                  fontWeight="800"
-                >
-                  {hasHeat
-                    ? `${heatMetric.levelLabel} · 점유 ${heatMetric.sharePercent}%`
-                    : jig.blockType}
-                </text>
-
-                {/* Schedule Dates & Target Days */}
-                <text
-                  x={jig.width / 2}
-                  y={jig.height / 2 + 42}
-                  textAnchor="middle"
-                  fill="#f59e0b"
-                  fontSize="8.5"
-                  fontWeight="900"
-                >
-                  {jig.startDate ? jig.startDate.slice(5) : '11.03'}~{jig.endDate ? jig.endDate.slice(5) : '11.12'} ({jig.targetDays || 10}일 공정)
-                </text>
-
-                {/* Auto-Calibrated GPS Center Coordinates (when registered) */}
-                {jig.centerLat && jig.centerLng && (
+                {!compactHeight && (
                   <text
                     x={jig.width / 2}
-                    y={jig.height / 2 + 54}
+                    y={jig.height / 2 + 26}
+                    textAnchor="middle"
+                    fill={hasHeat && heatColors ? heatColors.border : '#cbd5e1'}
+                    fontSize="9.5"
+                    fontWeight="800"
+                  >
+                    {hasHeat
+                      ? `${heatMetric.levelLabel} · 점유 ${heatMetric.sharePercent}%`
+                      : jig.blockType}
+                  </text>
+                )}
+
+                {/* Schedule Dates & Target Days */}
+                {!compactHeight && (
+                  <text
+                    x={jig.width / 2}
+                    y={jig.height / 2 + 40}
+                    textAnchor="middle"
+                    fill="#f59e0b"
+                    fontSize="8.5"
+                    fontWeight="900"
+                  >
+                    {jig.startDate ? jig.startDate.slice(5) : '11.03'}~{jig.endDate ? jig.endDate.slice(5) : '11.12'} ({jig.targetDays || 10}일 공정)
+                  </text>
+                )}
+
+                {/* Auto-Calibrated GPS Center Coordinates (when registered & not editing) */}
+                {!editingLayout && !compactHeight && jig.centerLat && jig.centerLng && (
+                  <text
+                    x={jig.width / 2}
+                    y={jig.height / 2 + 53}
                     textAnchor="middle"
                     fill="#34d399"
                     fontSize="8"
@@ -1177,8 +1875,8 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
 
                 {/* Assigned Team & Progress Bar */}
                 <text
-                  x="18"
-                  y={jig.height - 24}
+                  x="16"
+                  y={jig.height - 23}
                   fill="#94a3b8"
                   fontSize="9"
                   fontWeight="700"
@@ -1188,27 +1886,56 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
                 
                 {/* Mini Progress track */}
                 <rect
-                  x="18"
-                  y={jig.height - 18}
-                  width={jig.width - 36}
+                  x="16"
+                  y={jig.height - 16}
+                  width={Math.max(20, jig.width - 32)}
                   height="6"
                   fill="#1e293b"
                   rx="3"
                 />
                 <rect
-                  x="18"
-                  y={jig.height - 18}
-                  width={((jig.width - 36) * (jig.currentProgress ?? jig.progressPercent ?? 0)) / 100}
+                  x="16"
+                  y={jig.height - 16}
+                  width={(Math.max(20, jig.width - 32) * (jig.currentProgress ?? jig.progressPercent ?? 0)) / 100}
                   height="6"
                   fill={jigDelayCount > 0 ? '#f43f5e' : '#38bdf8'}
                   rx="3"
                 />
+
+                {/* Interactive Corner Resize Handle & Delete Button in Edit Mode */}
+                {editingLayout && isSelected && (
+                  <>
+                    {/* Bottom-Right Resize Grip */}
+                    <g
+                      transform={`translate(${jig.width - 20}, ${jig.height - 20})`}
+                      className="cursor-nwse-resize"
+                      onPointerDown={e => handleJigPointerDown(e, jig, 'RESIZE')}
+                    >
+                      <rect x="0" y="0" width="20" height="20" fill="#fbbf24" rx="5" />
+                      <path d="M 6 14 L 14 14 L 14 6 M 10 14 L 14 10" fill="none" stroke="#0f172a" strokeWidth="2.2" strokeLinecap="round" />
+                    </g>
+
+                    {/* Top-Right Quick Delete Handle */}
+                    <g
+                      transform={`translate(${jig.width - 6}, -6)`}
+                      className="cursor-pointer"
+                      onPointerDown={e => e.stopPropagation()}
+                      onClick={e => {
+                        e.stopPropagation();
+                        handleDeleteDraftJig(jig.id);
+                      }}
+                    >
+                      <circle r="11" fill="#e11d48" stroke="#ffffff" strokeWidth="1.5" />
+                      <path d="M -4 -4 L 4 4 M 4 -4 L -4 4" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" />
+                    </g>
+                  </>
+                )}
               </g>
             );
           })}
 
           {/* Spatial Thermal Gaussian Heatmap Overlay Layer */}
-          {showHeatmap && heatmap.filteredRecords.length > 0 && (
+          {!editingLayout && showHeatmap && heatmap.filteredRecords.length > 0 && (
             <g pointerEvents="none">
               {/* Zone cluster glow cores */}
               {heatmap.zones
@@ -1266,7 +1993,7 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
           )}
 
           {/* Historical Path Trail for Selected Worker */}
-          {showPath && selectedWorkerHistory.length > 1 && (
+          {!editingLayout && showPath && selectedWorkerHistory.length > 1 && (
             <g>
               {/* Path line */}
               <polyline
@@ -1293,7 +2020,7 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
           )}
 
           {/* Worker Location Pins for the Active Slot (08:20, 09:45, ...) */}
-          {showPins && currentSlotRecords.map(worker => {
+          {!editingLayout && showPins && currentSlotRecords.map(worker => {
             const isSelected = selectedWorkerUid === worker.workerUid;
             const isHovered = hoveredWorker?.id === worker.id;
             const isNormal = worker.status === 'NORMAL';
@@ -1427,8 +2154,8 @@ export const FactoryBlueprintMap: React.FC<FactoryBlueprintMapProps> = ({
               선택 해제 (전체 보기)
             </button>
           )}
-          <span className="text-[11px] text-slate-400">
-            총 지그 10기 (블럭 10개) • 현재 슬롯 검출 {currentSlotRecords.length}명
+          <span className="text-[11px] text-slate-400 font-mono tabular-nums">
+            총 정반/블럭 {activeJigs.length}기 (남측 {southJigs.length} · 북측 {northJigs.length}) · 현재 슬롯 검출 {currentSlotRecords.length}명
           </span>
         </div>
       </div>

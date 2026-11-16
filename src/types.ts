@@ -786,4 +786,23 @@ export interface WorkerDwellSummary {
   updatedAt: string;
 }
 
+export interface BlockAssignedWorker {
+  uid: string;
+  displayName: string;
+  employeeId: string;
+  teamName: string;
+  jobRole: string;
+}
 
+export interface FactoryBlockAssignment {
+  id: string; // `${date}_${jigId}`
+  date: string; // YYYY-MM-DD
+  jigId: string;
+  jigName: string;
+  blockName: string;
+  workers: BlockAssignedWorker[];
+  workerUids: string[];
+  updatedAt: string;
+  updatedByUid: string;
+  updatedByName?: string;
+}

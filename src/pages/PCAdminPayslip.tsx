@@ -630,39 +630,39 @@ const PCAdminPayslip: React.FC = () => {
       <div className="max-w-[1600px] mx-auto space-y-10 text-foreground">
         {/* Management Summary */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-           <div className="bg-card p-10 rounded-[3rem] border border-border shadow-sm flex items-center gap-8">
-              <div className="w-20 h-20 bg-blue-500/10 rounded-[2rem] flex items-center justify-center text-blue-500 shadow-inner">
-                 <FileSpreadsheet className="w-10 h-10" />
+           <div className="bg-card p-8 rounded-3xl border border-border shadow-xs flex items-center gap-6">
+              <div className="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-600 dark:text-blue-400">
+                 <FileSpreadsheet className="w-8 h-8" />
               </div>
               <div>
                 <h3 className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-1">금월 발행 결과</h3>
                 <div className="flex items-baseline gap-2">
-                   <span className="text-4xl font-black text-foreground">{payslips.length}</span>
+                   <span className="text-3xl font-black text-foreground">{payslips.length}</span>
                    <span className="text-muted-foreground font-bold text-sm">건 완료</span>
                 </div>
               </div>
            </div>
 
-           <div className="bg-slate-900 border border-slate-800 p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden group">
+           <div className="bg-card border border-primary/25 p-8 rounded-3xl text-foreground shadow-xs relative overflow-hidden group">
               <div className="relative z-10">
-                <h3 className="text-xs font-black text-blue-400 uppercase tracking-widest mb-4">보안 대응 엑셀 자동 연동</h3>
-                <p className="text-2xl font-black mb-6 tracking-tight leading-none">급여 데이터 대량 등록</p>
-                <div className="flex flex-wrap gap-3">
+                <h3 className="text-xs font-black text-primary uppercase tracking-widest mb-3">보안 대응 엑셀 자동 연동</h3>
+                <p className="text-xl font-black mb-5 tracking-tight leading-none text-foreground">급여 데이터 대량 등록</p>
+                <div className="flex flex-wrap gap-2.5">
                    <button 
                      onClick={() => setIsPasteModalOpen(true)}
-                     className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-black text-xs hover:bg-blue-500 transition-all flex items-center gap-2 shadow-lg shadow-blue-600/30 cursor-pointer"
+                     className="px-4 py-2.5 bg-primary text-primary-foreground rounded-xl font-black text-xs hover:opacity-90 transition-all flex items-center gap-2 shadow-sm cursor-pointer"
                    >
-                     <ClipboardPaste className="w-4 h-4" /> 📋 엑셀 내용 붙여넣기 / 등록
+                     <ClipboardPaste className="w-4 h-4" /> 엑셀 내용 붙여넣기 / 등록
                    </button>
                    <button 
                      onClick={downloadTemplate}
-                     className="px-4 py-2.5 bg-white/10 text-white rounded-xl font-black text-xs hover:bg-white/20 transition-all border border-white/10 cursor-pointer"
+                     className="px-4 py-2.5 bg-muted text-foreground rounded-xl font-black text-xs hover:bg-muted/80 transition-all border border-border cursor-pointer"
                    >
                      서식 다운
                    </button>
                 </div>
               </div>
-              <FileSpreadsheet className="absolute -right-8 -bottom-8 w-48 h-48 text-white/5 rotate-12 transition-transform group-hover:scale-110" />
+              <FileSpreadsheet className="absolute -right-6 -bottom-6 w-36 h-36 text-primary/5 rotate-12 transition-transform group-hover:scale-110" />
            </div>
 
            <div className="bg-emerald-600/25 border border-emerald-500/30 p-10 rounded-[3rem] text-foreground shadow-2xl flex flex-col justify-between">

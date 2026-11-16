@@ -920,6 +920,10 @@
     "/factoryCalibration/{factoryId}": {
       "schema": "FactoryCalibration",
       "description": "Factory 7 East/West/South/North GPS boundary calibration and measured dimensions (CEO writes; authenticated devices read)"
+    },
+    "/factoryBlockAssignments/{assignmentId}": {
+      "schema": "object",
+      "description": "Daily block-to-worker checklist assignments for Factory 7 JIGs (CEO-only)"
     }
   }
 }

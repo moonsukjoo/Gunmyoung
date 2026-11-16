@@ -307,16 +307,16 @@ const PCAdminWorkLog: React.FC = () => {
       {selectedLog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setSelectedLog(null)}>
           <div className="bg-card border border-border rounded-[2.5rem] w-full max-w-4xl overflow-hidden shadow-2xl text-foreground flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
-            <div className="p-8 border-b border-border bg-slate-900 text-white flex justify-between items-center shrink-0">
+            <div className="p-6 sm:p-8 border-b border-border bg-muted/50 text-foreground flex justify-between items-center shrink-0">
               <div>
-                <DialogTitle className="text-2xl font-black">{selectedLog.teamName} 상세 작업일지</DialogTitle>
-                <p className="text-slate-400 font-medium mt-1">{selectedLog.date} 일자 보고서</p>
+                <DialogTitle className="text-xl font-black text-foreground">{selectedLog.teamName} 상세 작업일지</DialogTitle>
+                <p className="text-muted-foreground text-xs font-bold mt-1">{selectedLog.date} 일자 보고서</p>
               </div>
               <button 
                 onClick={() => setSelectedLog(null)}
-                className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-all cursor-pointer border border-white/5"
+                className="w-9 h-9 bg-card hover:bg-muted rounded-full flex items-center justify-center transition-all cursor-pointer border border-border text-muted-foreground hover:text-foreground"
               >
-                <X className="w-4 h-4 text-white" />
+                <X className="w-4 h-4" />
               </button>
             </div>
             

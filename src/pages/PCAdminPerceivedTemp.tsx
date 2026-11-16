@@ -570,7 +570,7 @@ const PCAdminPerceivedTemp: React.FC = () => {
             </button>
             <button
               onClick={handleExportPDF}
-              className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 border border-border hover:bg-slate-800 transition-colors text-white rounded-xl text-xs font-black shadow-sm"
+              className="flex items-center gap-2 px-4 py-2.5 bg-primary hover:opacity-90 transition-opacity text-primary-foreground rounded-xl text-xs font-black shadow-sm cursor-pointer"
             >
               <FileText className="w-4 h-4" />
               PDF 리포트 출력

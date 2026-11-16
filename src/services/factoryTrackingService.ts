@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, getDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, orderBy, getDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { 
   FactoryJig, 
@@ -9,7 +9,10 @@ import {
   BlockDeploymentStats,
   BlockDelayLog,
   CardinalGpsPoint,
-  FactoryBoundaryCalibration
+  FactoryBoundaryCalibration,
+  BlockAssignedWorker,
+  FactoryBlockAssignment,
+  UserProfile
 } from '../types';
 
 // ========================================================
@@ -333,11 +336,11 @@ export const identifyLocationFromCoords = (
     };
   }
 
-  // Central highway or walkways
+  // Open factory floor / non-jig space
   if (mapY >= 440 && mapY <= 560) {
     return {
       locationType: 'OUT_OF_BOUNDS',
-      locationLabel: '중앙 크레인 주통로 (이동 중)',
+      locationLabel: '공장 중앙 구역 (이동 중)',
       isAtAssignedJig: false,
       status: 'AWAY'
     };
@@ -488,6 +491,68 @@ export const updateFactoryJig = async (jigId: string, updates: Partial<FactoryJi
     handleFirestoreError(err, OperationType.UPDATE, `factoryJigs/${jigId}`);
     throw err;
   }
+};
+
+// Delete a JIG block from Firestore
+export const deleteFactoryJig = async (jigId: string): Promise<void> => {
+  try {
+    await deleteDoc(doc(db, 'factoryJigs', jigId));
+  } catch (err) {
+    console.error('Error deleting jig:', err);
+    handleFirestoreError(err, OperationType.DELETE, `factoryJigs/${jigId}`);
+    throw err;
+  }
+};
+
+// Save full visual drag-and-drop block layout (create/update active jigs + delete removed jigs + auto-recalculate GPS centers)
+export const saveFactoryJigsLayout = async (
+  jigs: FactoryJig[],
+  deletedJigIds: string[] = [],
+  calibration?: FactoryBoundaryCalibration | null
+): Promise<FactoryJig[]> => {
+  const normalized: FactoryJig[] = jigs.map((j, idx) => {
+    const x = Math.round(j.x);
+    const y = Math.round(j.y);
+    const width = Math.max(100, Math.round(j.width));
+    const height = Math.max(100, Math.round(j.height));
+    const centerY = y + height / 2;
+    return {
+      ...j,
+      jigNumber: idx + 1,
+      x,
+      y,
+      width,
+      height,
+      bay: centerY < 500 ? 'BAY_SOUTH' : 'BAY_NORTH'
+    };
+  });
+
+  const finalJigs = calibration
+    ? generateCalibratedJigGps(normalized, calibration).calibratedJigs
+    : normalized;
+
+  // 1. Delete removed jigs first
+  for (const delId of deletedJigIds) {
+    if (!finalJigs.some(j => j.id === delId)) {
+      await deleteFactoryJig(delId);
+    }
+  }
+
+  // 2. Upsert active jigs (strip undefined keys for Firestore safety)
+  for (const jig of finalJigs) {
+    const cleanPayload = Object.fromEntries(
+      Object.entries(jig).filter(([, v]) => v !== undefined)
+    );
+    try {
+      await setDoc(doc(db, 'factoryJigs', jig.id), cleanPayload);
+    } catch (err) {
+      console.error('Error saving jig layout:', err);
+      handleFirestoreError(err, OperationType.WRITE, `factoryJigs/${jig.id}`);
+      throw err;
+    }
+  }
+
+  return finalJigs;
 };
 
 // Fetch GPS logs for a specific date and optional slot
@@ -1000,8 +1065,8 @@ export const computeZoneDwellHeatmap = (
 
   buckets['central_aisle'] = {
     zoneId: 'central_aisle',
-    zoneName: '중앙 크레인 통로',
-    subLabel: '통로 배회/이탈 구역',
+    zoneName: '블럭 외 구역',
+    subLabel: '작업구역 외 이동/체류',
     zoneType: 'AISLE',
     x: 50,
     y: 430,
@@ -1991,4 +2056,224 @@ export const recordWorkerScheduledSlotGps = async (params: {
   return record;
 };
 
+// ========================================================
+// 일자별 블럭 투입 인원 체크리스트 & 개인별 이력 조회 엔진
+// ========================================================
 
+export const fetchActiveWorkersRoster = async (): Promise<BlockAssignedWorker[]> => {
+  try {
+    const snap = await getDocs(collection(db, 'users'));
+    const list: BlockAssignedWorker[] = [];
+    snap.docs.forEach(d => {
+      const u = d.data() as Partial<UserProfile>;
+      if (u.isActive === false || u.status === 'RETIRED') return;
+      if (u.role === 'CEO' || u.email?.toLowerCase() === 'tjrwnfjqm1@gmail.com') return;
+      const uid = u.uid || d.id;
+      if (!uid || !u.displayName) return;
+      list.push({
+        uid,
+        displayName: u.displayName,
+        employeeId: u.employeeId || d.id.slice(0, 6),
+        teamName: u.departmentName || '미지정팀',
+        jobRole: u.jobRole || u.position || '작업자'
+      });
+    });
+    return list.sort((a, b) => {
+      const teamCmp = a.teamName.localeCompare(b.teamName, 'ko');
+      if (teamCmp !== 0) return teamCmp;
+      return a.displayName.localeCompare(b.displayName, 'ko');
+    });
+  } catch (err) {
+    console.error('Error fetching active workers roster:', err);
+    return [];
+  }
+};
+
+export const fetchBlockAssignmentsByDate = async (date: string): Promise<FactoryBlockAssignment[]> => {
+  try {
+    const q = query(
+      collection(db, 'factoryBlockAssignments'),
+      where('date', '==', date)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as FactoryBlockAssignment));
+  } catch (err) {
+    console.error('Error fetching block assignments:', err);
+    return [];
+  }
+};
+
+export const saveBlockAssignment = async (
+  assignment: Omit<FactoryBlockAssignment, 'id' | 'updatedAt'> & { id?: string; updatedAt?: string }
+): Promise<FactoryBlockAssignment> => {
+  const id = assignment.id || `${assignment.date}_${assignment.jigId}`;
+  const updatedAt = new Date().toISOString();
+  const dedupMap = new Map<string, BlockAssignedWorker>();
+  assignment.workers.forEach(w => {
+    if (w && w.uid) dedupMap.set(w.uid, w);
+  });
+  const workers = Array.from(dedupMap.values());
+  const payload: FactoryBlockAssignment = {
+    id,
+    date: assignment.date,
+    jigId: assignment.jigId,
+    jigName: assignment.jigName,
+    blockName: assignment.blockName,
+    workers,
+    workerUids: workers.map(w => w.uid),
+    updatedAt,
+    updatedByUid: assignment.updatedByUid,
+    updatedByName: assignment.updatedByName || '대표이사'
+  };
+
+  try {
+    await setDoc(doc(db, 'factoryBlockAssignments', id), payload);
+    return payload;
+  } catch (err) {
+    console.error('Error saving block assignment:', err);
+    handleFirestoreError(err, OperationType.WRITE, `factoryBlockAssignments/${id}`);
+    throw err;
+  }
+};
+
+export const syncWorkerAssignedJigIfToday = async (
+  workerUid: string,
+  jigId: string,
+  targetDate: string
+): Promise<void> => {
+  if (targetDate !== getLocalDateString()) return;
+  try {
+    const userRef = doc(db, 'users', workerUid);
+    const snap = await getDoc(userRef);
+    if (snap.exists()) {
+      await updateDoc(userRef, { assignedJigId: jigId });
+    }
+  } catch {
+    // Best-effort sync for live workers; ignore mock worker IDs or transient errors
+  }
+};
+
+export const copyPreviousBlockAssignments = async (
+  targetDate: string,
+  jigs: FactoryJig[],
+  editor: { uid: string; name: string }
+): Promise<{ sourceDate: string | null; assignments: FactoryBlockAssignment[] }> => {
+  try {
+    const q = query(
+      collection(db, 'factoryBlockAssignments'),
+      where('date', '<', targetDate)
+    );
+    const snap = await getDocs(q);
+    if (snap.empty) {
+      return { sourceDate: null, assignments: [] };
+    }
+
+    const allPast = snap.docs
+      .map(d => ({ id: d.id, ...d.data() } as FactoryBlockAssignment))
+      .filter(a => (a.workers?.length || 0) > 0);
+
+    if (allPast.length === 0) {
+      return { sourceDate: null, assignments: [] };
+    }
+
+    const latestDate = allPast.reduce(
+      (maxD, cur) => (cur.date > maxD ? cur.date : maxD),
+      allPast[0].date
+    );
+
+    const sourceList = allPast.filter(a => a.date === latestDate);
+    const savedList: FactoryBlockAssignment[] = [];
+
+    for (const src of sourceList) {
+      const matchedJig = jigs.find(j => j.id === src.jigId);
+      const saved = await saveBlockAssignment({
+        date: targetDate,
+        jigId: src.jigId,
+        jigName: matchedJig?.jigName || src.jigName,
+        blockName: matchedJig?.blockName || src.blockName,
+        workers: src.workers,
+        workerUids: src.workers.map(w => w.uid),
+        updatedByUid: editor.uid,
+        updatedByName: editor.name
+      });
+      savedList.push(saved);
+
+      if (targetDate === getLocalDateString()) {
+        for (const w of saved.workers) {
+          await syncWorkerAssignedJigIfToday(w.uid, saved.jigId, targetDate);
+        }
+      }
+    }
+
+    return { sourceDate: latestDate, assignments: savedList };
+  } catch (err) {
+    console.error('Error copying previous block assignments:', err);
+    handleFirestoreError(err, OperationType.WRITE, 'factoryBlockAssignments');
+    throw err;
+  }
+};
+
+export const reconcileRecordsWithAssignedJig = (
+  workerRecords: FactoryGpsRecord[],
+  assignedJigId: string
+): FactoryGpsRecord[] => {
+  return workerRecords.map(r => {
+    if (r.locationType === 'JIG') {
+      const atAssigned = r.jigId === assignedJigId;
+      return {
+        ...r,
+        isAtAssignedJig: atAssigned,
+        status: atAssigned ? 'NORMAL' : 'AWAY'
+      };
+    }
+    return r;
+  });
+};
+
+export const fetchWorkerHistoryBundle = async (
+  workerUid: string,
+  anchorDate: string,
+  days: number = 7
+): Promise<{
+  records: FactoryGpsRecord[];
+  summaries: WorkerDwellSummary[];
+  recentDates: string[];
+}> => {
+  const anchor = new Date(`${anchorDate}T00:00:00`);
+  const minDate = new Date(anchor);
+  minDate.setDate(anchor.getDate() - Math.max(1, days - 1));
+  const minDateStr = getLocalDateString(minDate);
+
+  try {
+    const [recSnap, sumSnap] = await Promise.all([
+      getDocs(query(collection(db, 'factoryGpsRecords'), where('workerUid', '==', workerUid))),
+      getDocs(query(collection(db, 'workerDwellSummaries'), where('workerUid', '==', workerUid)))
+    ]);
+
+    const records = recSnap.docs
+      .map(d => ({ id: d.id, ...d.data() } as FactoryGpsRecord))
+      .filter(r => r.date >= minDateStr && r.date <= anchorDate)
+      .sort((a, b) => {
+        if (a.date !== b.date) return b.date.localeCompare(a.date);
+        return a.slotIndex - b.slotIndex;
+      });
+
+    const summaries = sumSnap.docs
+      .map(d => ({ id: d.id, ...d.data() } as WorkerDwellSummary))
+      .filter(s => s.date >= minDateStr && s.date <= anchorDate)
+      .sort((a, b) => b.date.localeCompare(a.date));
+
+    const dateSet = new Set<string>();
+    records.forEach(r => dateSet.add(r.date));
+    summaries.forEach(s => dateSet.add(s.date));
+
+    return {
+      records,
+      summaries,
+      recentDates: Array.from(dateSet).sort((a, b) => b.localeCompare(a))
+    };
+  } catch (err) {
+    console.error('Error fetching individual worker history:', err);
+    return { records: [], summaries: [], recentDates: [] };
+  }
+};

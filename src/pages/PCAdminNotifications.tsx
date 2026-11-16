@@ -296,23 +296,22 @@ const PCAdminNotifications: React.FC = () => {
                  </div>
               </div>
 
-              <div className="bg-slate-900 border border-slate-800 rounded-[3rem] p-10 text-white relative overflow-hidden shadow-2xl">
+              <div className="bg-card border border-border rounded-3xl p-8 text-foreground relative overflow-hidden shadow-xs">
                  <div className="relative z-10 flex flex-col items-center text-center">
-                    <div className="w-20 h-20 bg-white/10 rounded-3xl flex items-center justify-center mb-6 backdrop-blur-md border border-white/10 text-blue-400 font-bold">
-                       <MessageSquare className="w-10 h-10 text-blue-400" />
+                    <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-5 border border-primary/20 text-primary font-bold">
+                       <MessageSquare className="w-8 h-8 text-primary" />
                     </div>
-                    <h4 className="text-xl font-black mb-4 tracking-tight leading-tight">자동 인원 계측 시스템</h4>
-                    <p className="text-slate-400 text-sm font-medium mb-8">
+                    <h4 className="text-lg font-black mb-3 tracking-tight leading-tight">자동 인원 계측 시스템</h4>
+                    <p className="text-muted-foreground text-xs font-medium mb-6 leading-relaxed">
                        각 직무별(사원, 조장, 안전관리자) 계정 분류에 따라 실시간 알림 전송 대상 인원수가 자동 확인 처리됩니다.
                     </p>
                     <button 
                       onClick={() => { resetForm(); setIsModalOpen(true); }}
-                      className="w-full py-4 bg-white hover:bg-slate-100 text-slate-900 rounded-2xl font-black text-xs transition-all cursor-pointer"
+                      className="w-full py-3.5 bg-primary hover:opacity-90 text-primary-foreground rounded-2xl font-black text-xs transition-all cursor-pointer shadow-sm"
                     >
                        대상자 즉시 필터링 도구 기동
                     </button>
                  </div>
-                 <div className="absolute -left-10 -bottom-10 w-48 h-48 bg-blue-500/20 rounded-full blur-[80px]" />
               </div>
            </div>
 
@@ -402,21 +401,21 @@ const PCAdminNotifications: React.FC = () => {
                 exit={{ opacity: 0, scale: 0.95 }}
                 className="bg-card w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden flex flex-col border border-border max-h-[90vh]"
               >
-                <div className="px-12 py-8 bg-slate-900 text-white flex justify-between items-center shrink-0">
-                  <div className="flex items-center gap-5">
-                     <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-white/10">
-                        <Bell className="w-8 h-8 text-blue-400 fill-blue-400/40" />
+                <div className="px-8 py-6 bg-muted/50 border-b border-border text-foreground flex justify-between items-center shrink-0">
+                  <div className="flex items-center gap-4">
+                     <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center border border-primary/20">
+                        <Bell className="w-6 h-6 text-primary" />
                      </div>
                      <div>
-                        <h3 className="text-2xl font-black tracking-tight leading-none mb-1">New Broadcast</h3>
-                        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">실시간 전사 알림 메신저</p>
+                        <h3 className="text-xl font-black tracking-tight leading-none mb-1">새 알림 발송</h3>
+                        <p className="text-muted-foreground text-xs font-bold uppercase tracking-widest">실시간 전사 알림 메신저</p>
                      </div>
                   </div>
                   <button 
                     onClick={() => setIsModalOpen(false)} 
-                    className="p-2 hover:bg-white/10 rounded-xl transition-colors border border-transparent hover:border-white/10 cursor-pointer text-white/80"
+                    className="p-2 hover:bg-muted rounded-xl transition-colors border border-border cursor-pointer text-muted-foreground hover:text-foreground"
                   >
-                    <Plus className="w-6 h-6 rotate-45 text-white" />
+                    <Plus className="w-5 h-5 rotate-45" />
                   </button>
                 </div>
                 
