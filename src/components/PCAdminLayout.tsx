@@ -27,7 +27,10 @@ import {
   Sun,
   Moon,
   Smartphone,
-  ShieldAlert
+  ShieldAlert,
+  CheckSquare,
+  UserCheck,
+  FileSpreadsheet
 } from 'lucide-react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthProvider';
@@ -94,15 +97,27 @@ export const PC_ADMIN_NAV_CATEGORIES: NavCategory[] = [
     description: '야드 내 구역별 인력 체류, 밀폐·고소작업, 보건 및 비상 대피 현황을 실시간으로 관제합니다.',
     subGroups: [
       {
-        id: 'field_dwell',
-        label: '7공장 체류 · GPS 관제',
+        id: 'field_dwell_ops',
+        label: '7공장 블럭체류 · 인원관제',
         items: [
-          { id: 'factory_dwell', label: '7공장 체류시간 관제 (A3)', desc: '구역·블럭별 현장 체류 현황', icon: Layers, to: '/admin/pc/factory-dwell', requiresCEO: true },
+          { id: 'factory_dwell_blueprint', label: '블럭체류현황 · A3 도면', desc: '중형선 7공장 블럭별 체류 및 마우스 도면 배치', icon: Layers, to: '/admin/pc/factory-dwell', requiresCEO: true },
+          { id: 'factory_dwell_checklist', label: '블럭별 투입 인원 체크리스트', desc: '매일 블럭별 투입 인원 넣기 / 빼기 체크', icon: CheckSquare, to: '/admin/pc/factory-dwell?tab=CHECKLIST', requiresCEO: true },
+          { id: 'factory_dwell_log', label: '체류시간 감리 집계표', desc: '누가 어디 블록에 몇 시간 몇 분 체류했는가', icon: FileSpreadsheet, to: '/admin/pc/factory-dwell?tab=DWELL_LOG', requiresCEO: true },
+          { id: 'factory_dwell_individual', label: '작업자 개인별 상세 기록', desc: '개인별 타임슬롯 이동 경로 및 일별 이력', icon: UserCheck, to: '/admin/pc/factory-dwell?tab=INDIVIDUAL', requiresCEO: true },
+        ]
+      },
+      {
+        id: 'field_dwell_plan_gps',
+        label: '7공장 공정 · 지연 · GPS 설정',
+        items: [
+          { id: 'factory_dwell_schedule', label: '블럭별 계획기간 · 공수 통계', desc: '시작~마감일 일정 및 투입 인원·공수 집계', icon: CalendarDays, to: '/admin/pc/factory-dwell?tab=SCHEDULE', requiresCEO: true },
+          { id: 'factory_dwell_delay', label: '공정 지연 크리티컬 기록지', desc: '공정 지연 핵심 사유 및 만회 대책 누적 기록', icon: ShieldAlert, to: '/admin/pc/factory-dwell?tab=DELAY', requiresCEO: true },
+          { id: 'factory_dwell_gps_setup', label: '동서남북 GPS 기준 · 좌표 산출', desc: '7공장 4방위 기준점 등록 및 정반 블럭 좌표 산출', icon: Compass, to: '/admin/pc/factory-dwell?tab=GPS_SETUP', requiresCEO: true },
           {
             id: 'gps_debug',
             label: '실시간 GPS 좌표 점검',
             desc: '현장 GPS 수신 상태 및 경계 디버깅',
-            icon: Compass,
+            icon: Activity,
             onClick: () => window.dispatchEvent(new CustomEvent('secret-gps-debug-control', { detail: { mode: 'EXPANDED' } })),
             requiresCEO: true
           },
@@ -518,9 +533,10 @@ const PCAdminLayout: React.FC<PCAdminLayoutProps> = ({ children, title, heroSect
                     const itemQuery = (item.to || '').split('?')[1] || '';
                     const searchParams = new URLSearchParams(location.search);
                     const hasTabParam = itemQuery.includes('tab=');
+                    const currentTab = searchParams.get('tab');
                     const isTabActive = hasTabParam
-                      ? searchParams.get('tab') === new URLSearchParams(itemQuery).get('tab')
-                      : !searchParams.get('tab');
+                      ? currentTab === new URLSearchParams(itemQuery).get('tab')
+                      : !currentTab || currentTab === 'BLUEPRINT';
                     const isItemActive = Boolean(item.to) && location.pathname === itemPath && isTabActive;
 
                     if (item.onClick) {

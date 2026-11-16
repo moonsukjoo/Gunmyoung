@@ -495,7 +495,7 @@ export const FactoryGpsCalibrationPanel: React.FC<FactoryGpsCalibrationPanelProp
                 className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs gap-2 cursor-pointer whitespace-nowrap"
               >
                 <Save className="w-4 h-4 shrink-0" />
-                <span>{isSaving ? '재정립 및 저장 중...' : '10개 정반 GPS 재정립 · 저장'}</span>
+                <span>{isSaving ? '재정립 및 저장 중...' : `${jigs.length}개 정반 GPS 재정립 · 저장`}</span>
               </Button>
 
               <Button
@@ -571,12 +571,12 @@ export const FactoryGpsCalibrationPanel: React.FC<FactoryGpsCalibrationPanelProp
           <div>
             <h4 className="text-sm font-black text-foreground flex items-center gap-2">
               <MapPin className="w-4 h-4 text-emerald-400" />
-              정반 위 10개 블럭 자동 산출 GPS 기준 좌표
+              정반 위 {jigs.length}개 블럭 자동 산출 GPS 기준 좌표
             </h4>
             <p className="text-[11px] text-muted-foreground">
               {preview.basis
                 ? `입력한 실측 크기(${draft.eastWestLengthMeters}m × ${draft.northSouthLengthMeters}m)와 기준점 좌표를 바탕으로 자동 계산됩니다.`
-                : '상단 동·서·남·북 중 최소 1곳 이상 GPS를 등록하면 10개 블럭 중심 좌표가 즉시 계산됩니다.'}
+                : `상단 동·서·남·북 중 최소 1곳 이상 GPS를 등록하면 ${jigs.length}개 블럭 중심 좌표가 즉시 계산됩니다.`}
             </p>
           </div>
           {calibration?.updatedAt && (

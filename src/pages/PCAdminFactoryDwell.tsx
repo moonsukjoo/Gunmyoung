@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../components/AuthProvider';
 import { 
   FactoryJig, 
@@ -79,7 +79,8 @@ import {
   CheckSquare,
   UserCheck,
   Eye,
-  Move
+  Move,
+  FileSpreadsheet
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -88,13 +89,38 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { downloadFile } from '@/lib/downloadHelper';
 
+export type FactoryDwellTab =
+  | 'BLUEPRINT'
+  | 'CHECKLIST'
+  | 'DWELL_LOG'
+  | 'INDIVIDUAL'
+  | 'SCHEDULE'
+  | 'DELAY'
+  | 'GPS_SETUP';
+
+const resolveFactoryDwellTab = (raw: string | null): FactoryDwellTab => {
+  switch (raw) {
+    case 'CHECKLIST':
+    case 'DWELL_LOG':
+    case 'INDIVIDUAL':
+    case 'SCHEDULE':
+    case 'DELAY':
+    case 'GPS_SETUP':
+    case 'BLUEPRINT':
+      return raw;
+    default:
+      return 'BLUEPRINT';
+  }
+};
+
 export const PCAdminFactoryDwell: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { profile } = useAuth();
   const isLight = profile?.lightTheme !== false && !profile?.highContrast;
   const isCEO = profile?.role === 'CEO' || profile?.email?.toLowerCase() === 'tjrwnfjqm1@gmail.com';
 
-  const [workspaceTab, setWorkspaceTab] = useState<'OVERVIEW' | 'CHECKLIST' | 'INDIVIDUAL'>('OVERVIEW');
+  const workspaceTab = resolveFactoryDwellTab(searchParams.get('tab'));
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [selectedSlot, setSelectedSlot] = useState<TrackingSlotTime>('08:20');
   const [jigs, setJigs] = useState<FactoryJig[]>(DEFAULT_FACTORY_JIGS);
@@ -515,9 +541,20 @@ export const PCAdminFactoryDwell: React.FC = () => {
     }
   };
 
+  const setWorkspaceTab = (tab: FactoryDwellTab) => {
+    if (tab === 'INDIVIDUAL' && !selectedWorkerUid && inspectableWorkers.length > 0) {
+      setSelectedWorkerUid(inspectableWorkers[0].uid);
+    }
+    if (tab === 'BLUEPRINT') {
+      setSearchParams({});
+    } else {
+      setSearchParams({ tab });
+    }
+  };
+
   const handleInspectWorker = (uid: string) => {
     setSelectedWorkerUid(uid);
-    setWorkspaceTab('INDIVIDUAL');
+    setSearchParams({ tab: 'INDIVIDUAL' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -546,13 +583,15 @@ export const PCAdminFactoryDwell: React.FC = () => {
   };
 
   const handleEnterBlueprintDragMode = () => {
-    const nextEditing = !isEditingLayout;
-    setWorkspaceTab('OVERVIEW');
+    const nextEditing = workspaceTab !== 'BLUEPRINT' ? true : !isEditingLayout;
+    if (workspaceTab !== 'BLUEPRINT') {
+      setWorkspaceTab('BLUEPRINT');
+    }
     setIsEditingLayout(nextEditing);
     if (nextEditing) {
       setTimeout(() => {
         blueprintSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 60);
+      }, 100);
     }
   };
 
@@ -645,8 +684,15 @@ export const PCAdminFactoryDwell: React.FC = () => {
 
   // PDF Export for A3 Landscape Report
   const handleExportA3PDF = async () => {
+    if (workspaceTab !== 'BLUEPRINT') {
+      setWorkspaceTab('BLUEPRINT');
+      await new Promise(resolve => setTimeout(resolve, 180));
+    }
     const el = printRef.current;
-    if (!el) return;
+    if (!el) {
+      toast.error('A3 도면 영역이 준비되지 않았습니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
 
     try {
       toast.loading('A3 가로 규격 공장 체류 감리 보고서 PDF를 생성 중입니다...', { id: 'export-a3' });
@@ -722,6 +768,70 @@ export const PCAdminFactoryDwell: React.FC = () => {
     return delayLogs.filter(l => delayFilterJigId === 'ALL' || l.jigId === delayFilterJigId);
   }, [delayLogs, delayFilterJigId]);
 
+  const activeTabMeta = useMemo(() => {
+    switch (workspaceTab) {
+      case 'CHECKLIST':
+        return {
+          breadcrumb: '블럭별 투입 체크리스트',
+          badge: '투입 인원 관리',
+          title: '블럭별 투입 인원 넣기 / 빼기 체크리스트',
+          description: '선택한 날짜 기준으로 각 정반·블럭에 투입되는 작업자를 체크박스 형태로 빠르게 추가·제외합니다.'
+        };
+      case 'DWELL_LOG':
+        return {
+          breadcrumb: '체류시간 감리 집계',
+          badge: '공정 감리 집계',
+          title: '누가 어디 블록에 몇 시간 몇 분 동안 체류했는가',
+          description: '작업자별 배정 블럭 체류 시간, 휴게실 체류, 자리비움 시간 및 8개 슬롯 이동 이력을 일괄 정산합니다.'
+        };
+      case 'INDIVIDUAL':
+        return {
+          breadcrumb: '작업자 개인별 상세 기록',
+          badge: '개인별 기록 조회',
+          title: '작업자 1인 집중 체류 · 이동 경로 상세 기록',
+          description: '개별 작업자의 일일 8타임슬롯 체류 내역과 최근 이력을 확인하고 배정 블럭을 즉시 조정합니다.'
+        };
+      case 'SCHEDULE':
+        return {
+          breadcrumb: '블럭별 계획기간 · 공수 통계',
+          badge: '공정 일정 · 공수 통계',
+          title: '블럭별 계획기간(시작~마감일) 및 투입 인원·공수 통계',
+          description: '블럭별 공정 시작~마감일, 목표 소요일수, 누적 투입 인원, 일평균 투입 및 총 공수를 관리합니다.'
+        };
+      case 'DELAY':
+        return {
+          breadcrumb: '공정 지연 크리티컬 기록지',
+          badge: '대표이사 전용 비공개',
+          title: '공정 지연 크리티컬 사유 연속 누적 기록지',
+          description: '블럭 공정 지연의 핵심 원인과 후속 만회 대책을 시계열 누적 이력으로 기록·추적합니다.'
+        };
+      case 'GPS_SETUP':
+        return {
+          breadcrumb: '동서남북 GPS 기준 · 좌표 산출',
+          badge: 'GPS 좌표 캘리브레이션',
+          title: '7공장 동·서·남·북 GPS 기준점 등록 및 정반 블럭 좌표 자동 산출',
+          description: '공장 외곽 동서남북 GPS 기준점과 실측 규격을 등록해 정반 위 블럭 GPS 중심 좌표를 자동 산출합니다.'
+        };
+      case 'BLUEPRINT':
+      default:
+        return {
+          breadcrumb: '블럭체류현황 · A3 도면',
+          badge: 'A3 가로 규격 관제망',
+          title: '중형선 7공장 블럭별 작업자 체류 및 공정 감리 (블럭체류현황)',
+          description: '2시간 주기(8개 체크포인트) 체류 집중도, A3 공장 도면 위 실시간 인원 분포 및 마우스 드래그 블럭 배치를 관제합니다.'
+        };
+    }
+  }, [workspaceTab]);
+
+  const gpsCornerCount = useMemo(() => {
+    if (!calibration) return 0;
+    return (['east', 'west', 'south', 'north'] as const).filter(dir => Boolean(calibration[dir])).length;
+  }, [calibration]);
+
+  const unresolvedDelayCount = useMemo(() => {
+    return delayLogs.filter(l => !l.resolved).length;
+  }, [delayLogs]);
+
   if (!isCEO) {
     return (
       <PCAdminLayout title="접근 권한 제한">
@@ -740,26 +850,26 @@ export const PCAdminFactoryDwell: React.FC = () => {
   }
 
   return (
-    <PCAdminLayout title="중형선 7공장 블럭 체류 관제 (A3)">
-      <div className="max-w-[1700px] mx-auto space-y-8 text-foreground pb-20">
+    <PCAdminLayout title={`7공장 관제 · ${activeTabMeta.breadcrumb}`}>
+      <div className="max-w-[1700px] mx-auto space-y-6 text-foreground pb-20">
         
         {/* Top Header Banner */}
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-card border border-border p-6 sm:p-8 rounded-[2.5rem] shadow-sm">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-card border border-border p-6 sm:p-7 rounded-[2rem] shadow-sm">
           <div className="space-y-2">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
               <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-blue-500/10 text-blue-500 border border-blue-500/20">
-                A3 가로 규격 관제망
+                {activeTabMeta.badge}
               </span>
               <span className="text-xs font-bold text-muted-foreground flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-blue-400" />
-                2시간 주기 정밀 체크포인트 기록
+                2시간 주기 8슬롯 감리
               </span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
-              중형선 7공장 블럭별 작업자 체류 및 공정 감리
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-foreground">
+              {activeTabMeta.title}
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground font-medium">
-              물량팀 인력의 <strong>지그 및 블럭 체류 시간</strong>을 8개 주요 슬롯(08:20, 09:45, 10:15, 11:45, 13:10, 14:45, 15:15, 17:45)별로 감지하여 <strong>누가 어디블록에 몇 시간 몇 분 동안 체류했는지</strong> 정밀 기록합니다.
+              {activeTabMeta.description}
             </p>
           </div>
 
@@ -888,66 +998,98 @@ export const PCAdminFactoryDwell: React.FC = () => {
           </div>
         </div>
 
-        {/* Workspace Mode Tabs (전체 관제 / 블럭별 투입 체크리스트 / 작업자 개인별 상세 기록) */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card border border-border p-2.5 rounded-2xl">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setWorkspaceTab('OVERVIEW')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
-                workspaceTab === 'OVERVIEW'
-                  ? isLight
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'bg-blue-500 text-slate-950 shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-              }`}
-            >
-              <Layers className="w-4 h-4" />
-              <span>전체 통합 관제</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setWorkspaceTab('CHECKLIST')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
-                workspaceTab === 'CHECKLIST'
-                  ? isLight
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'bg-blue-500 text-slate-950 shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-              }`}
-            >
-              <CheckSquare className="w-4 h-4" />
-              <span>블럭별 투입 체크리스트 ({assignedJigByWorkerUid.size}명 배정)</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                if (!selectedWorkerUid && inspectableWorkers.length > 0) {
-                  setSelectedWorkerUid(inspectableWorkers[0].uid);
-                }
-                setWorkspaceTab('INDIVIDUAL');
-              }}
-              className={`px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
-                workspaceTab === 'INDIVIDUAL'
-                  ? isLight
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'bg-blue-500 text-slate-950 shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-              }`}
-            >
-              <UserCheck className="w-4 h-4" />
-              <span>작업자 개인별 상세 기록 ({inspectableWorkers.length}명)</span>
-            </button>
+        {/* 7공장 기능별 소메뉴 내비게이션 (역할별 분리) */}
+        <div className="bg-card border border-border p-3 sm:p-4 rounded-2xl space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-border/60">
+            <div className="flex items-center gap-2 text-xs font-black text-foreground">
+              <Layers className="w-4 h-4 text-blue-500" />
+              <span>7공장 세부 관제 소메뉴</span>
+              <span className="text-[11px] font-bold text-muted-foreground">
+                · 메뉴를 선택하면 해당 업무 화면만 깔끔하게 표시됩니다.
+              </span>
+            </div>
+            <span className="text-xs font-bold text-muted-foreground shrink-0">
+              기준일자 <strong className="font-mono tabular-nums text-foreground">{selectedDate}</strong>
+            </span>
           </div>
 
-          <span className="text-xs font-bold text-muted-foreground px-2">
-            기준일자 <strong className="font-mono tabular-nums text-foreground">{selectedDate}</strong>
-          </span>
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-3">
+            {/* Group 1: 현장 체류 · 인원 관제 */}
+            <div className="xl:col-span-7 bg-muted/30 border border-border/70 rounded-xl p-2 space-y-1.5">
+              <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground px-1.5">
+                현장 체류 · 투입 인원 관제
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {([
+                  { id: 'BLUEPRINT', label: '블럭체류현황 · A3 도면', icon: Layers },
+                  { id: 'CHECKLIST', label: `투입 체크리스트 (${assignedJigByWorkerUid.size}명)`, icon: CheckSquare },
+                  { id: 'DWELL_LOG', label: `체류시간 감리 집계 (${filteredSummaries.length}명)`, icon: FileSpreadsheet },
+                  { id: 'INDIVIDUAL', label: `개인별 상세 기록 (${inspectableWorkers.length}명)`, icon: UserCheck },
+                ] as const).map(item => {
+                  const Icon = item.icon;
+                  const active = workspaceTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setWorkspaceTab(item.id)}
+                      className={`px-3 py-2 rounded-lg text-xs font-black flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                        active
+                          ? isLight
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'bg-blue-500 text-slate-950 shadow-sm'
+                          : 'bg-card/80 text-muted-foreground hover:text-foreground hover:bg-muted border border-border/60'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5 shrink-0" />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Group 2: 공정 · 지연 · GPS 설정 */}
+            <div className="xl:col-span-5 bg-muted/30 border border-border/70 rounded-xl p-2 space-y-1.5">
+              <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground px-1.5">
+                공정 계획 · 지연 · GPS 설정
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {([
+                  { id: 'SCHEDULE', label: `계획기간 · 공수 (${jigs.length}개)`, icon: CalendarDays },
+                  {
+                    id: 'DELAY',
+                    label: unresolvedDelayCount > 0 ? `공정 지연 기록지 (${unresolvedDelayCount}건 미조치)` : `공정 지연 기록지 (${delayLogs.length}건)`,
+                    icon: ShieldAlert
+                  },
+                  { id: 'GPS_SETUP', label: `동서남북 GPS 기준 (${gpsCornerCount}/4)`, icon: Compass },
+                ] as const).map(item => {
+                  const Icon = item.icon;
+                  const active = workspaceTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setWorkspaceTab(item.id)}
+                      className={`px-3 py-2 rounded-lg text-xs font-black flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                        active
+                          ? isLight
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'bg-blue-500 text-slate-950 shadow-sm'
+                          : 'bg-card/80 text-muted-foreground hover:text-foreground hover:bg-muted border border-border/60'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5 shrink-0" />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Dedicated Tab 2: Block-by-Block Daily Checklist */}
+        {/* Sub-Menu 2: Block-by-Block Daily Checklist */}
         {workspaceTab === 'CHECKLIST' && (
           <FactoryBlockAssignmentPanel
             selectedDate={selectedDate}
@@ -967,7 +1109,7 @@ export const PCAdminFactoryDwell: React.FC = () => {
           />
         )}
 
-        {/* Dedicated Tab 3: Individual Worker Dossier */}
+        {/* Sub-Menu 4: Individual Worker Dossier */}
         {workspaceTab === 'INDIVIDUAL' && (
           <FactoryWorkerDetailPanel
             selectedDate={selectedDate}
@@ -979,13 +1121,13 @@ export const PCAdminFactoryDwell: React.FC = () => {
             records={effectiveRecords}
             onAssignWorkerToJig={(jig, w) => handleToggleBlockWorker(jig, w, true)}
             onRemoveWorkerFromAssignment={handleRemoveWorkerFromAssignment}
-            onClose={() => setWorkspaceTab('OVERVIEW')}
+            onClose={() => setWorkspaceTab('BLUEPRINT')}
             isLight={isLight}
           />
         )}
 
-        {/* Tab 1: Overview Content */}
-        {workspaceTab === 'OVERVIEW' && (
+        {/* Sub-Menu 1: Blueprint & 2-Hour Heatmap */}
+        {workspaceTab === 'BLUEPRINT' && (
           <>
         {/* 2-Hour Interval Workforce Concentration Matrix */}
         <div className="bg-card border border-border p-4 sm:p-5 rounded-2xl space-y-4">
@@ -1225,8 +1367,12 @@ export const PCAdminFactoryDwell: React.FC = () => {
           </div>
         )}
 
-        {/* 📦 블럭별 소요 기간(캘린더 계획) 및 투입 인원/공수 종합 통계 */}
-        <div className="bg-card border border-border rounded-[2.5rem] shadow-sm p-6 sm:p-8 space-y-6">
+          </>
+        )}
+
+        {/* Sub-Menu 5: Block Schedule & Manpower Stats */}
+        {workspaceTab === 'SCHEDULE' && (
+          <div className="bg-card border border-border rounded-[2.5rem] shadow-sm p-6 sm:p-8 space-y-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
@@ -1342,22 +1488,26 @@ export const PCAdminFactoryDwell: React.FC = () => {
             })}
           </div>
         </div>
+        )}
 
-        {/* 🧭 7공장 동·서·남·북 GPS 기준점 등록 및 정반 블럭 좌표 자동 산출 */}
-        <FactoryGpsCalibrationPanel
-          jigs={jigs}
-          calibration={calibration}
-          userUid={profile?.uid}
-          userName={profile?.displayName}
-          onCalibrationSaved={(savedCal, updatedJigs) => {
-            setCalibration(savedCal);
-            setJigs(updatedJigs);
-          }}
-          onSelectJig={(jig) => handleOpenEditJig(jig)}
-        />
+        {/* Sub-Menu 7: 7공장 동·서·남·북 GPS 기준점 등록 및 정반 블럭 좌표 자동 산출 */}
+        {workspaceTab === 'GPS_SETUP' && (
+          <FactoryGpsCalibrationPanel
+            jigs={jigs}
+            calibration={calibration}
+            userUid={profile?.uid}
+            userName={profile?.displayName}
+            onCalibrationSaved={(savedCal, updatedJigs) => {
+              setCalibration(savedCal);
+              setJigs(updatedJigs);
+            }}
+            onSelectJig={(jig) => handleOpenEditJig(jig)}
+          />
+        )}
 
-        {/* 🚨 공정 지연 크리티컬 사유 연속 누적 기록지 (대표이사 전용 비공개) */}
-        <div className="bg-card border border-rose-500/30 rounded-[2.5rem] shadow-sm p-6 sm:p-8 space-y-6">
+        {/* Sub-Menu 6: 공정 지연 크리티컬 사유 연속 누적 기록지 (대표이사 전용 비공개) */}
+        {workspaceTab === 'DELAY' && (
+          <div className="bg-card border border-rose-500/30 rounded-[2.5rem] shadow-sm p-6 sm:p-8 space-y-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
@@ -1530,8 +1680,11 @@ export const PCAdminFactoryDwell: React.FC = () => {
             </div>
           </div>
         </div>
+        )}
 
-        {/* Detailed Dwell Analysis Table ("누가 어디블록에 몇시 몇분동안 체류 했다") */}
+        {/* Sub-Menu 3: Detailed Dwell Analysis Table ("누가 어디블록에 몇시 몇분동안 체류 했다") */}
+        {workspaceTab === 'DWELL_LOG' && (
+          <div className="space-y-6">
         <div className="bg-card border border-border rounded-[2.5rem] shadow-sm overflow-hidden">
           <div className="p-6 sm:p-8 border-b border-border bg-muted/20 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
@@ -1547,7 +1700,7 @@ export const PCAdminFactoryDwell: React.FC = () => {
                 누가 어디 블록에 몇 시간 몇 분 동안 체류했는가 (공정 감리 집계)
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5 font-medium">
-                작업자 행을 클릭하면 상단 A3 공장도면에서 8회 체크포인트 <strong>이동 경로(1~8번)</strong>가 실시간 하이라이트됩니다.
+                작업자 행을 클릭하면 하단 <strong>8개 타임슬롯 체류 타임라인</strong>이 펼쳐지며, <strong>[상세]</strong> 버튼으로 개인별 전체 기록을 열람할 수 있습니다.
               </p>
             </div>
 
@@ -1750,24 +1903,104 @@ export const PCAdminFactoryDwell: React.FC = () => {
           </div>
         </div>
 
-        {/* Inline Block Daily Checklist Quick Access right on Overview too */}
-        <FactoryBlockAssignmentPanel
-          selectedDate={selectedDate}
-          jigs={jigs}
-          assignments={assignments}
-          rosterWorkers={mergedRosterWorkers}
-          records={effectiveRecords}
-          selectedJigId={checklistJigId}
-          onSelectJigId={setChecklistJigId}
-          onToggleWorker={handleToggleBlockWorker}
-          onClearBlock={handleClearBlockAssignment}
-          onCopyPreviousDay={handleCopyPreviousAssignments}
-          onInspectWorker={handleInspectWorker}
-          isSaving={isSavingAssignment}
-          isCopying={isCopyingPrevious}
-          isLight={isLight}
-        />
-          </>
+        {selectedWorkerUid && (
+          <div className="bg-card border border-blue-500/40 p-6 rounded-[2rem] shadow-lg space-y-4 animate-in fade-in duration-200">
+            {(() => {
+              const summary = effectiveDwellSummaries.find(s => s.workerUid === selectedWorkerUid);
+              const workerRecords = effectiveRecords.filter(r => r.workerUid === selectedWorkerUid).sort((a,b) => a.slotIndex - b.slotIndex);
+              if (!summary) return null;
+
+              return (
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-black text-xl">
+                        {summary.workerName.slice(0, 1)}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-lg font-black text-foreground">{summary.workerName} ({summary.employeeId})</h3>
+                          <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-muted text-muted-foreground">
+                            {summary.teamName} • {summary.jobRole}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          배정 블럭: <strong className="text-blue-500">{summary.assignedBlockName}</strong> | 공정 체류 준수율: <strong className={summary.complianceRate >= 80 ? 'text-emerald-500' : 'text-rose-500'}>{summary.complianceRate}%</strong>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setWorkspaceTab('BLUEPRINT')}
+                        className="rounded-xl text-xs font-black gap-1.5 cursor-pointer"
+                      >
+                        <Layers className="w-3.5 h-3.5 text-blue-400" />
+                        <span>A3 도면에서 경로 보기</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => handleInspectWorker(summary.workerUid)}
+                        className="rounded-xl text-xs font-black gap-1.5 cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>개인별 전체 기록 / 7일 이력 보기</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setSelectedWorkerUid(null)}
+                        className="rounded-xl text-xs font-bold cursor-pointer"
+                      >
+                        선택 해제
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+                    {TRACKING_TIME_SLOTS.map((slot, idx) => {
+                      const rec = workerRecords.find(r => r.slot === slot);
+                      const isNormal = rec?.status === 'NORMAL';
+                      const isResting = rec?.status === 'RESTING';
+
+                      return (
+                        <div
+                          key={slot}
+                          className={`p-3 rounded-2xl border flex flex-col justify-between ${
+                            !rec 
+                              ? 'bg-muted/20 border-border opacity-50' 
+                              : isNormal
+                              ? 'bg-emerald-500/10 border-emerald-500/30'
+                              : isResting
+                              ? 'bg-amber-500/10 border-amber-500/30'
+                              : 'bg-rose-500/10 border-rose-500/30'
+                          }`}
+                        >
+                          <div>
+                            <span className="text-[10px] font-black text-muted-foreground block font-mono">{idx + 1}차 • {slot}</span>
+                            <p className="text-xs font-black text-foreground mt-1 break-keep">
+                              {rec ? rec.locationLabel : '신호 미수신'}
+                            </p>
+                          </div>
+                          <div className="mt-2 pt-2 border-t border-border/40 flex items-center justify-between text-[10px] font-bold">
+                            <span className={isNormal ? 'text-emerald-400' : isResting ? 'text-amber-400' : 'text-rose-400'}>
+                              {isNormal ? '정상 체류' : isResting ? '휴게' : '자리비움'}
+                            </span>
+                            <span className="text-muted-foreground font-mono">
+                              {rec ? `${rec.stayMinutesInSlot}분` : '-'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+          </div>
         )}
 
         {/* Edit Jig Modal with Calendar Pickers & Cumulative Critical Delay Log */}
