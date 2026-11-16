@@ -12,8 +12,6 @@ import {
   Bell, 
   Settings,
   LogOut,
-  Menu,
-  X,
   Trophy,
   History,
   FileBarChart,
@@ -230,7 +228,7 @@ const PCAdminLayout: React.FC<PCAdminLayoutProps> = ({ children, title }) => {
         {/* Horizontal Category Navigation Bar */}
         <div className="max-w-[1700px] mx-auto px-6 flex items-center gap-1 overflow-x-auto no-scrollbar py-2">
           {navCategories.map((cat) => {
-            const isCategoryActive = activeDropdown === cat.id || cat.items.some(it => location.pathname === it.to.split('?')[0]);
+            const isCategoryActive = activeDropdown === cat.id || cat.items.some(it => Boolean(it.to) && location.pathname === it.to!.split('?')[0]);
             return (
               <button
                 key={cat.id}
@@ -283,17 +281,33 @@ const PCAdminLayout: React.FC<PCAdminLayoutProps> = ({ children, title }) => {
                       </button>
                     );
                   }
+                  const itemPath = (item.to || '').split('?')[0];
+                  const itemQuery = (item.to || '').split('?')[1] || '';
+                  const searchParams = new URLSearchParams(location.search);
+                  const hasTabParam = itemQuery.includes('tab=');
+                  const isTabActive = hasTabParam
+                    ? searchParams.get('tab') === new URLSearchParams(itemQuery).get('tab')
+                    : !searchParams.get('tab');
+                  const isItemActive = Boolean(item.to) && location.pathname === itemPath && isTabActive;
                   return (
                     <Link
                       key={item.id}
-                      to={item.to}
+                      to={item.to || '/admin/pc-dashboard'}
                       onClick={() => setActiveDropdown(null)}
-                      className="flex items-center gap-3 p-3.5 rounded-2xl bg-muted/50 hover:bg-muted border border-border/60 hover:border-primary/50 transition-all text-left group"
+                      className={`flex items-center gap-3 p-3.5 rounded-2xl border transition-all text-left group ${
+                        isItemActive
+                          ? 'bg-primary/10 border-primary/50 text-primary shadow-sm'
+                          : 'bg-muted/50 hover:bg-muted border-border/60 hover:border-primary/50'
+                      }`}
                     >
-                      <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 ${
+                        isItemActive ? 'bg-primary text-primary-foreground' : 'bg-primary/10 text-primary'
+                      }`}>
                         <item.icon className="w-4.5 h-4.5" />
                       </div>
-                      <span className="text-xs font-black text-foreground group-hover:text-primary transition-colors">{item.label}</span>
+                      <span className={`text-xs font-black transition-colors ${
+                        isItemActive ? 'text-primary' : 'text-foreground group-hover:text-primary'
+                      }`}>{item.label}</span>
                     </Link>
                   );
                 })}
