@@ -1,16 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { db, handleFirestoreError, OperationType } from '@/firebase';
-import { collection, onSnapshot, query, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, deleteDoc, doc, addDoc, getDocs } from 'firebase/firestore';
 import { Notice } from '@/types';
 import { useAuth } from '@/components/AuthProvider';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { 
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { 
@@ -22,12 +25,19 @@ import {
   Trash2,
   AlertTriangle,
   Heart,
+  Plus,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { ko } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { grantRandomShipPart } from '@/services/shipService';
 import { useNavigate } from 'react-router-dom';
+
+const parseNoticeDate = (raw: any): Date | null => {
+  if (!raw) return null;
+  if (typeof raw?.toDate === 'function') return raw.toDate();
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? null : d;
+};
 
 export const Notices: React.FC = () => {
   const { profile } = useAuth();
@@ -38,6 +48,14 @@ export const Notices: React.FC = () => {
   const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [noticeToDelete, setNoticeToDelete] = useState<string | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [newNotice, setNewNotice] = useState({
+    title: '',
+    content: '',
+    isImportant: false,
+    shouldNotify: true,
+  });
 
   useEffect(() => {
     localStorage.setItem('lastViewedNoticesTime', new Date().toISOString());
@@ -49,9 +67,59 @@ export const Notices: React.FC = () => {
   }, []);
 
   const filteredNotices = notices.filter(n => 
-    n.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    n.content.toLowerCase().includes(searchTerm.toLowerCase())
+    (n.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (n.content || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleCreateNotice = async () => {
+    if (!profile) return;
+    if (!newNotice.title.trim() || !newNotice.content.trim()) {
+      toast.error('제목과 내용을 모두 입력해주세요.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const trimmedTitle = newNotice.title.trim();
+      const trimmedContent = newNotice.content.trim();
+      await addDoc(collection(db, 'notices'), {
+        title: trimmedTitle,
+        content: trimmedContent,
+        isImportant: newNotice.isImportant,
+        authorUid: profile.uid,
+        authorName: profile.displayName || '관리자',
+        createdAt: new Date().toISOString(),
+        targetDept: 'ALL'
+      });
+
+      if (newNotice.shouldNotify) {
+        const usersSnap = await getDocs(collection(db, 'users'));
+        const notificationPromises = usersSnap.docs.map(uDoc =>
+          addDoc(collection(db, 'notifications'), {
+            uid: uDoc.id,
+            title: newNotice.isImportant ? `🚨 [중요공지] ${trimmedTitle}` : `📢 새 공지: ${trimmedTitle}`,
+            message: trimmedContent.substring(0, 80),
+            type: newNotice.isImportant ? 'URGENT_NOTICE' : 'NOTICE',
+            isRead: false,
+            createdAt: new Date().toISOString(),
+            fromUid: profile.uid,
+            fromName: profile.displayName || '관리자',
+            priority: newNotice.isImportant ? 'high' : 'normal'
+          })
+        );
+        await Promise.all(notificationPromises);
+      }
+
+      setIsCreateOpen(false);
+      setNewNotice({ title: '', content: '', isImportant: false, shouldNotify: true });
+      toast.success('공지사항이 등록되었습니다.');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'notices');
+      toast.error('공지사항 등록 중 오류가 발생했습니다.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleDeleteNotice = async (id: string) => {
     try {
@@ -65,20 +133,31 @@ export const Notices: React.FC = () => {
     }
   };
 
-  const isAdmin = profile?.role === 'CEO' || 
-                  profile?.role === 'DIRECTOR' || 
-                  profile?.role === 'GENERAL_AFFAIRS' || 
-                  profile?.role === 'SAFETY_MANAGER' ||
-                  profile?.permissions?.includes('admin') ||
-                  profile?.permissions?.includes('notice_mgmt') ||
-                  profile?.email === 'tjrwnfjqm1@gmail.com' ||
-                  profile?.email === 'tjrwnef@gmail.com'; // Added other variants if needed, but the primary one is tjrwnfjqm1@gmail.com
+  const isAdmin =
+    !profile?.employeeId?.trim()?.toLowerCase()?.includes('x66626') &&
+    (
+      ['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'GENERAL_AFFAIRS', 'CLERK', 'SAFETY_MANAGER', 'TEAM_LEADER'].includes(profile?.role || '') ||
+      profile?.permissions?.some(p => ['admin', 'notice_mgmt', 'employee_mgmt', 'leave_mgmt', 'attendance_mgmt'].includes(p)) ||
+      profile?.email?.toLowerCase() === 'tjrwnfjqm1@gmail.com'
+    );
 
   return (
     <div className="space-y-6 pb-24 px-2">
-      <header className="py-6">
-        <h2 className="text-3xl font-black tracking-tight text-foreground leading-tight">공지사항</h2>
-        <p className="text-muted-foreground font-bold">회사 소식을 가장 빠르게 확인하세요</p>
+      <header className="py-6 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-3xl font-black tracking-tight text-foreground leading-tight">공지사항</h2>
+          <p className="text-muted-foreground font-bold">회사 소식을 가장 빠르게 확인하세요</p>
+        </div>
+        {isAdmin && (
+          <Button
+            type="button"
+            onClick={() => setIsCreateOpen(true)}
+            className="h-11 px-4 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-xs flex items-center gap-1.5 shrink-0 whitespace-nowrap shadow-sm cursor-pointer"
+          >
+            <Plus className="w-4 h-4 shrink-0" />
+            <span>공지 작성</span>
+          </Button>
+        )}
       </header>
 
       <div className="relative">
@@ -118,51 +197,56 @@ export const Notices: React.FC = () => {
       <div className="space-y-2">
         {filteredNotices.length > 0 ? (
           <>
-            {filteredNotices.slice(0, displayLimit).map((notice) => (
-              <div 
-                key={notice.id} 
-                className="bg-card p-5 rounded-2xl border border-border flex items-start gap-4 cursor-pointer active:scale-[0.98] transition-all"
-                onClick={() => {
-                  setSelectedNotice(notice);
-                  if (profile?.uid) {
-                    grantRandomShipPart(profile.uid, '공지사항 상세 확인');
-                  }
-                }}
-              >
-                <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center shrink-0">
-                  <Megaphone className={cn("w-5 h-5", notice.isImportant ? "text-red-500" : "text-primary")} />
-                </div>
-                <div className="flex-1 space-y-1 overflow-hidden">
-                  <div className="flex items-center justify-between">
-                    {notice.isImportant && (
-                      <Badge className="bg-red-500/20 text-red-500 border-none text-[8px] px-1.5 h-4 mb-1">URGENT</Badge>
-                    )}
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold text-muted-foreground">{format(new Date(notice.createdAt), 'MM.dd')}</span>
-                      {isAdmin && (
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="w-6 h-6 rounded-md text-white/20 hover:text-red-400 hover:bg-red-400/10 transition-colors"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setNoticeToDelete(notice.id);
-                            setIsDeleteOpen(true);
-                          }}
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      )}
-                    </div>
+            {filteredNotices.slice(0, displayLimit).map((notice) => {
+              const noticeDate = parseNoticeDate(notice.createdAt);
+              return (
+                <div 
+                  key={notice.id} 
+                  className="bg-card p-5 rounded-2xl border border-border flex items-start gap-4 cursor-pointer active:scale-[0.98] transition-all"
+                  onClick={() => {
+                    setSelectedNotice(notice);
+                    if (profile?.uid) {
+                      grantRandomShipPart(profile.uid, '공지사항 상세 확인');
+                    }
+                  }}
+                >
+                  <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center shrink-0">
+                    <Megaphone className={cn("w-5 h-5", notice.isImportant ? "text-red-500" : "text-primary")} />
                   </div>
-                  <h4 className="text-base font-black text-foreground tracking-tight truncate">{notice.title}</h4>
-                  <p className="text-xs text-muted-foreground font-bold line-clamp-1">{notice.content}</p>
+                  <div className="flex-1 space-y-1 overflow-hidden">
+                    <div className="flex items-center justify-between">
+                      {notice.isImportant && (
+                        <Badge className="bg-red-500/20 text-red-500 border-none text-[8px] px-1.5 h-4 mb-1">URGENT</Badge>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-muted-foreground">
+                          {noticeDate ? format(noticeDate, 'MM.dd') : '-'}
+                        </span>
+                        {isAdmin && (
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="w-6 h-6 rounded-md text-white/20 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setNoticeToDelete(notice.id);
+                              setIsDeleteOpen(true);
+                            }}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    <h4 className="text-base font-black text-foreground tracking-tight truncate">{notice.title}</h4>
+                    <p className="text-xs text-muted-foreground font-bold line-clamp-1">{notice.content}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 self-center shrink-0">
+                    <ChevronRight className="w-5 h-5 text-muted-foreground/30" />
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5 self-center shrink-0">
-                  <ChevronRight className="w-5 h-5 text-muted-foreground/30" />
-                </div>
-              </div>
-            ))}
+              );
+            })}
             
             {filteredNotices.length > displayLimit && (
               <Button 
@@ -183,6 +267,72 @@ export const Notices: React.FC = () => {
         )}
       </div>
 
+      {/* 새 공지사항 등록 모달 */}
+      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <DialogContent className="bg-card border-border rounded-3xl text-foreground max-w-[92vw] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black flex items-center gap-2">
+              <Megaphone className="w-5 h-5 text-primary" /> 새 공지사항 등록
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground font-bold">
+              전체 사원에게 공지사항을 게시합니다.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <Input
+              value={newNotice.title}
+              onChange={(e) => setNewNotice({ ...newNotice, title: e.target.value })}
+              placeholder="공지 제목을 입력하세요"
+              className="bg-muted border-border text-foreground rounded-xl h-12 font-bold"
+            />
+            <Textarea
+              value={newNotice.content}
+              onChange={(e) => setNewNotice({ ...newNotice, content: e.target.value })}
+              placeholder="공지 내용을 입력하세요"
+              className="bg-muted border-border text-foreground rounded-xl min-h-[150px] font-medium"
+            />
+            <div className="flex items-center gap-5">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={newNotice.isImportant}
+                  onChange={(e) => setNewNotice({ ...newNotice, isImportant: e.target.checked })}
+                  className="rounded bg-muted border-border"
+                />
+                <span className="text-xs font-bold">중요 공지</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={newNotice.shouldNotify}
+                  onChange={(e) => setNewNotice({ ...newNotice, shouldNotify: e.target.checked })}
+                  className="rounded bg-muted border-border"
+                />
+                <span className="text-xs font-bold">푸시 알림 발송</span>
+              </label>
+            </div>
+          </div>
+          <DialogFooter className="flex flex-row gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsCreateOpen(false)}
+              className="flex-1 h-12 rounded-xl font-black"
+            >
+              취소
+            </Button>
+            <Button
+              type="button"
+              disabled={isSubmitting}
+              onClick={handleCreateNotice}
+              className="flex-[2] bg-primary text-primary-foreground font-black h-12 rounded-xl"
+            >
+              {isSubmitting ? '등록 중...' : '등록하기'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!selectedNotice} onOpenChange={(open) => !open && setSelectedNotice(null)}>
         <DialogContent className="bg-card border border-border rounded-3xl text-foreground max-w-[90vw] sm:max-w-md p-0 overflow-hidden">
           {selectedNotice && (
@@ -195,8 +345,13 @@ export const Notices: React.FC = () => {
                   {selectedNotice.isImportant && <Badge className="bg-red-500/20 text-red-500 border-none mb-1">핵심 공지</Badge>}
                   <DialogTitle className="text-xl font-black tracking-tight leading-tight text-foreground">{selectedNotice.title}</DialogTitle>
                   <div className="flex items-center justify-center gap-4 mt-2">
-                     <span className="text-[10px] font-bold text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" /> {format(new Date(selectedNotice.createdAt), 'yyyy.MM.dd HH:mm')}</span>
-                     <span className="text-[10px] font-bold text-muted-foreground flex items-center gap-1"><User className="w-3 h-3" /> {selectedNotice.authorName}</span>
+                     <span className="text-[10px] font-bold text-muted-foreground flex items-center gap-1">
+                       <Clock className="w-3 h-3" /> {(() => {
+                         const d = parseNoticeDate(selectedNotice.createdAt);
+                         return d ? format(d, 'yyyy.MM.dd HH:mm') : '-';
+                       })()}
+                     </span>
+                     <span className="text-[10px] font-bold text-muted-foreground flex items-center gap-1"><User className="w-3 h-3" /> {selectedNotice.authorName || (selectedNotice as any).author || '관리자'}</span>
                   </div>
                 </div>
               </div>
@@ -263,3 +418,4 @@ export const Notices: React.FC = () => {
     </div>
   );
 };
+

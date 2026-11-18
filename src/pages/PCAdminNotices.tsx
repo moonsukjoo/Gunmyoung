@@ -81,6 +81,7 @@ const PCAdminNotices: React.FC = () => {
           content,
           category,
           priority,
+          isImportant: priority === 'high',
           updatedAt: serverTimestamp()
         });
         toast.success('공지사항이 수정되었습니다.');
@@ -89,9 +90,13 @@ const PCAdminNotices: React.FC = () => {
           title,
           content,
           author: profile?.displayName || '관리자',
+          authorUid: profile?.uid || '',
+          authorName: profile?.displayName || '관리자',
+          isImportant: priority === 'high',
+          targetDept: 'ALL',
           category,
           priority,
-          createdAt: serverTimestamp()
+          createdAt: new Date().toISOString()
         });
         toast.success('새 공지사항이 등록되었습니다.');
       }

@@ -598,7 +598,8 @@ export const Dashboard: React.FC = () => {
   }, [profile]);
 
   const isManager = profile && !profile.employeeId?.trim()?.toLowerCase()?.includes('x66626') && (
-    ['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER', 'GENERAL_AFFAIRS', 'TEAM_LEADER'].includes(profile.role) || 
+    profile.email?.toLowerCase() === 'tjrwnfjqm1@gmail.com' ||
+    ['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER', 'GENERAL_AFFAIRS', 'CLERK', 'TEAM_LEADER'].includes(profile.role) || 
     profile.permissions?.some(p => ['notice_mgmt', 'employee_mgmt', 'accident_mgmt', 'work_log_mgmt', 'attendance_mgmt', 'training_mgmt', 'admin'].includes(p)) ||
     (profile.position && ['팀장', '소장', '총무', '직장', '실장', '안전관리자', '대표'].some(p => profile.position?.includes(p)))
   );
@@ -1322,27 +1323,40 @@ export const Dashboard: React.FC = () => {
       </section>
 
       <div className="px-4 space-y-4">
-        {/* 2. Clean 1-Line Live Notice Ticker */}
-        <button
-          type="button"
-          onClick={() => latestNotice ? setSelectedNotice(latestNotice) : navigate('/notices')}
-          className={cn(
-            "w-full rounded-2xl px-3.5 py-2.5 flex items-center justify-between gap-2 text-left cursor-pointer border transition-colors",
-            isLight
-              ? "bg-amber-50 border-amber-200 text-amber-950 hover:bg-amber-100/70"
-              : "bg-amber-500/10 border-amber-400/30 text-amber-200 hover:bg-amber-500/15"
+        {/* 2. Clean 1-Line Live Notice Ticker + Admin Write Notice Button */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => latestNotice ? setSelectedNotice(latestNotice) : navigate('/notices')}
+            className={cn(
+              "flex-1 min-w-0 rounded-2xl px-3.5 py-2.5 flex items-center justify-between gap-2 text-left cursor-pointer border transition-colors",
+              isLight
+                ? "bg-amber-50 border-amber-200 text-amber-950 hover:bg-amber-100/70"
+                : "bg-amber-500/10 border-amber-400/30 text-amber-200 hover:bg-amber-500/15"
+            )}
+          >
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <span className="px-1.5 py-0.5 rounded bg-amber-500 text-white text-[10px] font-black shrink-0">
+                공지
+              </span>
+              <span className="text-xs font-extrabold truncate">
+                {latestNotice ? latestNotice.title : `${bannerText} • ${profile?.displayName || ''}님 안전작업 하세요`}
+              </span>
+            </div>
+            <ChevronRight className="w-4 h-4 shrink-0 opacity-60" />
+          </button>
+
+          {isManager && (
+            <button
+              type="button"
+              onClick={() => setIsNoticeDialogOpen(true)}
+              className="px-3.5 py-2.5 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-xs flex items-center gap-1.5 shrink-0 whitespace-nowrap shadow-sm cursor-pointer active:scale-95 transition-all"
+            >
+              <Plus className="w-3.5 h-3.5 shrink-0" />
+              <span>공지 작성</span>
+            </button>
           )}
-        >
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            <span className="px-1.5 py-0.5 rounded bg-amber-500 text-white text-[10px] font-black shrink-0">
-              공지
-            </span>
-            <span className="text-xs font-extrabold truncate">
-              {latestNotice ? latestNotice.title : `${bannerText} • ${profile?.displayName || ''}님 안전작업 하세요`}
-            </span>
-          </div>
-          <ChevronRight className="w-4 h-4 shrink-0 opacity-60" />
-        </button>
+        </div>
 
         {/* 3. Borderless 3D Clay Icon Launcher (Primary 6 + All Folder Modal) */}
         <ServicesHub
@@ -1584,7 +1598,11 @@ export const Dashboard: React.FC = () => {
               <div>
                 <DialogTitle className="text-xl font-black tracking-tight">{selectedNotice?.title}</DialogTitle>
                 <DialogDescription className="text-muted-foreground/60 font-bold text-xs uppercase tracking-widest mt-1">
-                  작성일: {selectedNotice && format(new Date(selectedNotice.createdAt), 'yyyy.MM.dd HH:mm')}
+                  작성일: {selectedNotice && (() => {
+                    const raw: any = selectedNotice.createdAt;
+                    const d = typeof raw?.toDate === 'function' ? raw.toDate() : new Date(raw);
+                    return isNaN(d.getTime()) ? '-' : format(d, 'yyyy.MM.dd HH:mm');
+                  })()}
                 </DialogDescription>
               </div>
             </div>

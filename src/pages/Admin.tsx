@@ -441,7 +441,7 @@ export const Admin: React.FC = () => {
     ],
     system: [
       { to: '/admin/pc-dashboard', label: 'PC 대시보드', icon: LayoutDashboard, permission: 'admin', newTab: true, color: 'text-slate-300', bgColor: 'bg-slate-500/30' },
-      { to: '/notifications', label: '공지사항 관리', icon: Megaphone, permission: 'notice_mgmt', color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
+      { to: '/notices', label: '공지사항 관리', icon: Megaphone, permission: 'notice_mgmt', color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
       { onClick: () => setIsBannerSettingsOpen(true), label: '배너 문구 설정', icon: Megaphone, permission: 'admin', color: 'text-violet-400', bgColor: 'bg-violet-500/20' },
       { to: '/coupons', label: '포상/룰렛 관리', icon: Trophy, permission: 'praise_coupon', color: 'text-amber-400', bgColor: 'bg-amber-500/20' },
       { onClick: () => setIsShipRaceSettingsOpen(true), label: '조선소 레이싱 확률 설정', icon: Radio, permissions: ['admin', 'praise_coupon'], color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
