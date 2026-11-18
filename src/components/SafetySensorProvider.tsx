@@ -19,7 +19,7 @@ interface SafetySensorContextType {
 const SafetySensorContext = createContext<SafetySensorContextType | undefined>(undefined);
 
 export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const [isMonitoring, setIsMonitoring] = useState(false);
   const lastAccelerationRef = useRef<{ x: number; y: number; z: number } | null>(null);
   const [alertType, setAlertType] = useState<'FALL' | 'IMPACT' | null>(null);
@@ -131,8 +131,9 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
     };
   }, []);
 
-  // Listen for dynamic thresholds from admin settings (statically imported to prevent dynamic import failure)
+  // Listen for dynamic thresholds from admin settings (only after auth is established)
   useEffect(() => {
+    if (!user) return;
     const unsub = onSnapshot(doc(db, 'settings', 'safety_sensors'), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
@@ -144,10 +145,10 @@ export const SafetySensorProvider: React.FC<{ children: React.ReactNode }> = ({ 
         });
       }
     }, (error) => {
-      console.error("Firestore onSnapshot error:", error);
+      console.warn("Firestore safety_sensors snapshot error:", error);
     });
     return () => unsub();
-  }, []);
+  }, [user]);
 
   const triggerAlert = (type: 'FALL' | 'IMPACT') => {
     if (isAlertingRef.current) return;

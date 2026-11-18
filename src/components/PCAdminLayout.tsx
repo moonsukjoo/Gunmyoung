@@ -264,16 +264,19 @@ const PCAdminLayout: React.FC<PCAdminLayoutProps> = ({ children, title, heroSect
     }
   };
 
+  const safeTrim = (v: unknown) => (v == null ? '' : String(v)).trim();
+  const safeLower = (v: unknown) => safeTrim(v).toLowerCase();
+
   const isExcludedRole = profile && (
-    ['EMPLOYEE', 'TEAM_LEADER', 'WORKER'].includes(profile.role?.toUpperCase() || '') ||
-    ['조장', '반장', '사원'].includes(profile.position?.trim() || '') ||
-    profile.employeeId?.trim().toLowerCase().includes('x66626') ||
-    profile.displayName?.toLowerCase().includes('x66626') ||
-    profile.email?.toLowerCase().includes('x66626') ||
-    user?.email?.toLowerCase().includes('x66626') ||
-    user?.email?.split('@')[0]?.toLowerCase() === 'x66626' ||
-    (user?.email && user.email.toLowerCase().startsWith('x66626@')) ||
-    (user?.displayName && user.displayName.toLowerCase().includes('x66626'))
+    ['EMPLOYEE', 'TEAM_LEADER', 'WORKER'].includes(safeTrim(profile.role).toUpperCase()) ||
+    ['조장', '반장', '사원'].includes(safeTrim(profile.position)) ||
+    safeLower(profile.employeeId).includes('x66626') ||
+    safeLower(profile.displayName).includes('x66626') ||
+    safeLower(profile.email).includes('x66626') ||
+    safeLower(user?.email).includes('x66626') ||
+    safeLower(user?.email).split('@')[0] === 'x66626' ||
+    safeLower(user?.email).startsWith('x66626@') ||
+    safeLower(user?.displayName).includes('x66626')
   );
 
   if (isExcludedRole) {

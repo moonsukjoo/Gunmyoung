@@ -244,11 +244,26 @@ export const CriticalIncidentAlertCenter: React.FC = () => {
     }
   };
 
+  const parseIncidentDate = (raw: any): Date | null => {
+    if (!raw) return null;
+    if (raw instanceof Date) return isNaN(raw.getTime()) ? null : raw;
+    if (typeof raw?.toDate === 'function') {
+      const d = raw.toDate();
+      return d instanceof Date && !isNaN(d.getTime()) ? d : null;
+    }
+    if (typeof raw === 'object' && typeof raw.seconds === 'number') {
+      const d = new Date(raw.seconds * 1000);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
   // Filter history list
   const filteredHistory = historyIncidents.filter(inc => {
     const matchesType = historyTypeFilter === 'ALL' || inc.type === historyTypeFilter;
-    const matchesSearch = inc.displayName?.toLowerCase().includes(historySearchTerm.toLowerCase()) ||
-                          inc.employeeId?.toLowerCase().includes(historySearchTerm.toLowerCase());
+    const matchesSearch = String(inc.displayName || '').toLowerCase().includes(historySearchTerm.toLowerCase()) ||
+                          String(inc.employeeId || '').toLowerCase().includes(historySearchTerm.toLowerCase());
     return matchesType && matchesSearch;
   });
 
@@ -279,7 +294,10 @@ export const CriticalIncidentAlertCenter: React.FC = () => {
                     </span>
                     <span className="text-[10px] text-muted-foreground font-semibold flex items-center gap-1">
                       <Clock className="w-3 h-3" />
-                      {new Date(incident.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                      {(() => {
+                        const d = parseIncidentDate(incident.createdAt);
+                        return d ? d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-';
+                      })()}
                     </span>
                   </div>
                   <h3 className="font-black text-sm text-foreground flex items-center gap-1.5">
@@ -350,7 +368,10 @@ export const CriticalIncidentAlertCenter: React.FC = () => {
                 </div>
                 <div className="flex justify-between font-bold">
                   <span className="text-muted-foreground">발생 시간</span>
-                  <span>{new Date(selectedIncident.createdAt).toLocaleString('ko-KR')}</span>
+                  <span>{(() => {
+                    const d = parseIncidentDate(selectedIncident.createdAt);
+                    return d ? d.toLocaleString('ko-KR') : '-';
+                  })()}</span>
                 </div>
                 <div className="flex justify-between font-bold">
                   <span className="text-muted-foreground">작업 위치</span>
@@ -466,7 +487,10 @@ export const CriticalIncidentAlertCenter: React.FC = () => {
                       {inc.typeName}
                     </span>
                     <span className="text-[10px] text-muted-foreground/60 font-semibold">
-                      {new Date(inc.createdAt).toLocaleString('ko-KR')}
+                      {(() => {
+                        const d = parseIncidentDate(inc.createdAt);
+                        return d ? d.toLocaleString('ko-KR') : '-';
+                      })()}
                     </span>
                   </div>
 
@@ -489,7 +513,10 @@ export const CriticalIncidentAlertCenter: React.FC = () => {
                         상급자 확인 완료
                       </span>
                       <span>
-                        시간: {new Date(inc.resolvedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                        시간: {(() => {
+                          const d = parseIncidentDate(inc.resolvedAt);
+                          return d ? d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '-';
+                        })()}
                       </span>
                     </div>
                     <p className="text-[11px] font-extrabold text-foreground leading-relaxed pl-1">

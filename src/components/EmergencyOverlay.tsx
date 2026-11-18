@@ -24,6 +24,10 @@ export const EmergencyOverlay: React.FC = () => {
   const [rollcallTab, setRollcallTab] = useState<'unconfirmed' | 'confirmed'>('unconfirmed');
 
   useEffect(() => {
+    if (!user) {
+      setStatus(null);
+      return;
+    }
     const unsubscribe = onSnapshot(doc(db, 'evacuation', 'status'), (snap) => {
       if (snap.exists()) {
         const data = snap.data() as EvacuationStatus;
@@ -35,33 +39,33 @@ export const EmergencyOverlay: React.FC = () => {
       handleFirestoreError(error, OperationType.GET, 'evacuation/status');
     });
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   // Listen to all users
   useEffect(() => {
-    if (!status?.isActive) return;
+    if (!user || !status?.isActive) return;
     const unsubscribe = onSnapshot(collection(db, 'users'), (snap) => {
       setAllUsers(snap.docs.map(doc => doc.data() as UserProfile));
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'users');
     });
     return () => unsubscribe();
-  }, [status?.isActive]);
+  }, [user, status?.isActive]);
 
   // Listen to all check-ins for the current evacuation
   useEffect(() => {
-    if (!status?.isActive || !status.id) return;
+    if (!user || !status?.isActive || !status.id) return;
     const unsubscribe = onSnapshot(collection(db, 'evacuations', status.id, 'checkins'), (snap) => {
       setCheckinUids(new Set(snap.docs.map(doc => doc.id)));
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, `evacuations/${status.id}/checkins`);
     });
     return () => unsubscribe();
-  }, [status?.isActive, status?.id]);
+  }, [user, status?.isActive, status?.id]);
 
   // Listen to today's attendance to see who is clocked in
   useEffect(() => {
-    if (!status?.isActive) return;
+    if (!user || !status?.isActive) return;
     const today = new Date().toISOString().split('T')[0];
     const q = query(collection(db, 'attendance'), where('date', '==', today));
     const unsubscribe = onSnapshot(q, (snap) => {
@@ -77,7 +81,7 @@ export const EmergencyOverlay: React.FC = () => {
       handleFirestoreError(error, OperationType.LIST, 'attendance');
     });
     return () => unsubscribe();
-  }, [status?.isActive]);
+  }, [user, status?.isActive]);
 
   useEffect(() => {
     if (status?.isActive && profile) {

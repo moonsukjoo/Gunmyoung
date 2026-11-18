@@ -127,9 +127,9 @@ const ProtectedRoute = ({ children, roles, permission, permissions }: { children
   if (!user) return <Navigate to="/login" />;
   
   const isExcludedRole = profile && (
-    ['EMPLOYEE', 'WORKER'].includes(profile.role?.toUpperCase() || '') || 
-    (['조장', '반장', '사원'].includes(profile.position?.trim() || '') && profile.role !== 'TEAM_LEADER') ||
-    profile.employeeId?.trim()?.includes('x66626')
+    ['EMPLOYEE', 'WORKER'].includes(String(profile.role ?? '').trim().toUpperCase()) || 
+    (['조장', '반장', '사원'].includes(String(profile.position ?? '').trim()) && profile.role !== 'TEAM_LEADER') ||
+    String(profile.employeeId ?? '').trim().toLowerCase().includes('x66626')
   );
 
   const hasAccess = (() => {
@@ -358,16 +358,16 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   render() {
     if (this.state.hasError) {
       return (
-        <div className="h-screen w-full flex flex-col items-center justify-center bg-background text-foreground p-10 text-center">
-          <div className="w-20 h-20 bg-destructive/10 rounded-3xl flex items-center justify-center text-destructive mb-6">
+        <div className="min-h-screen w-full flex flex-col items-center justify-center bg-slate-50 text-slate-900 p-10 text-center">
+          <div className="w-20 h-20 bg-rose-100 rounded-3xl flex items-center justify-center text-rose-600 mb-6">
             <AlertCircle className="w-10 h-10" />
           </div>
-          <h1 className="text-2xl font-black mb-4">문제가 발생했습니다</h1>
-          <p className="text-muted-foreground mb-6 font-bold text-sm max-w-md mx-auto">{this.state.error?.message}</p>
+          <h1 className="text-2xl font-black mb-4 text-slate-900">문제가 발생했습니다</h1>
+          <p className="text-slate-600 mb-6 font-bold text-sm max-w-md mx-auto">{this.state.error?.message || '화면을 표시하는 중 일시적인 오류가 발생했습니다.'}</p>
           <div className="flex flex-col gap-3 w-full max-w-xs">
             <button 
               onClick={this.handleReset}
-              className="h-14 bg-primary text-primary-foreground rounded-2xl font-black shadow-lg shadow-primary/20 cursor-pointer"
+              className="h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black shadow-lg cursor-pointer"
             >
               새로고침 (다시 시도)
             </button>
@@ -376,7 +376,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
                 this.setState({ hasError: false, error: null });
                 window.location.href = '/';
               }}
-              className="h-14 bg-muted text-foreground rounded-2xl font-black border border-border cursor-pointer"
+              className="h-14 bg-slate-200 hover:bg-slate-300 text-slate-900 rounded-2xl font-black border border-slate-300 cursor-pointer"
             >
               홈으로 이동
             </button>

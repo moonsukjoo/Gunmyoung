@@ -93,6 +93,21 @@ import shipyardDayImg from '@/assets/images/shipyard_day_hero_1794698730955.jpg'
 import shipyardNightImg from '@/assets/images/shipyard_night_hero_1794698732193.jpg';
 import { Icon3DClipboard } from '@/components/icons/Marine3DIcons';
 
+const parseSafeDate = (raw: any): Date | null => {
+  if (!raw) return null;
+  if (raw instanceof Date) return isNaN(raw.getTime()) ? null : raw;
+  if (typeof raw?.toDate === 'function') {
+    const d = raw.toDate();
+    return d instanceof Date && !isNaN(d.getTime()) ? d : null;
+  }
+  if (typeof raw === 'object' && typeof raw.seconds === 'number') {
+    const d = new Date(raw.seconds * 1000);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? null : d;
+};
+
 export interface ShortcutOption {
   id: string;
   label: string;
@@ -522,27 +537,35 @@ export const Dashboard: React.FC = () => {
     const hasInterceptor = currentState && currentState.isBackInterceptor;
 
     if (!hasInterceptor) {
-      window.history.pushState(
-        { 
-          ...(currentState || {}), 
-          isBackInterceptor: true 
-        }, 
-        '', 
-        window.location.href
-      );
+      try {
+        window.history.pushState(
+          { 
+            ...(currentState || {}), 
+            isBackInterceptor: true 
+          }, 
+          '', 
+          window.location.href
+        );
+      } catch {
+        // Ignore restricted history frames
+      }
     }
 
     const handlePopState = (event: PopStateEvent) => {
       // Re-push immediately to keep the back interceptor active and preserve internal routing states
-      const stateToRestore = window.history.state || {};
-      window.history.pushState(
-        { 
-          ...stateToRestore, 
-          isBackInterceptor: true 
-        }, 
-        '', 
-        window.location.href
-      );
+      try {
+        const stateToRestore = window.history.state || {};
+        window.history.pushState(
+          { 
+            ...stateToRestore, 
+            isBackInterceptor: true 
+          }, 
+          '', 
+          window.location.href
+        );
+      } catch {
+        // Ignore restricted history frames
+      }
 
       const now = Date.now();
       const lastBack = sessionStorage.getItem('last_back_clicked_time');
@@ -579,58 +602,61 @@ export const Dashboard: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
+  const safeTrim = (v: unknown) => (v == null ? '' : String(v)).trim();
+  const safeLower = (v: unknown) => safeTrim(v).toLowerCase();
+
   const isExcludedRole = profile && (
-    ['EMPLOYEE', 'WORKER'].includes(profile.role?.toUpperCase() || '') || 
-    (['조장', '반장', '사원'].includes(profile.position?.trim() || '') && profile.role !== 'TEAM_LEADER') ||
-    profile.employeeId?.trim()?.toLowerCase()?.includes('x66626') ||
-    profile.displayName?.toLowerCase()?.includes('x66626') ||
-    profile.email?.toLowerCase().includes('x66626') ||
-    user?.email?.toLowerCase().includes('x66626') ||
-    user?.email?.split('@')[0]?.toLowerCase() === 'x66626' ||
-    (user?.email && user.email.toLowerCase().startsWith('x66626@')) ||
-    (user?.displayName && user.displayName?.toLowerCase().includes('x66626'))
+    ['EMPLOYEE', 'WORKER'].includes(safeTrim(profile.role).toUpperCase()) || 
+    (['조장', '반장', '사원'].includes(safeTrim(profile.position)) && profile.role !== 'TEAM_LEADER') ||
+    safeLower(profile.employeeId).includes('x66626') ||
+    safeLower(profile.displayName).includes('x66626') ||
+    safeLower(profile.email).includes('x66626') ||
+    safeLower(user?.email).includes('x66626') ||
+    safeLower(user?.email).split('@')[0] === 'x66626' ||
+    safeLower(user?.email).startsWith('x66626@') ||
+    safeLower(user?.displayName).includes('x66626')
   );
 
   useEffect(() => {
-    if (profile && profile.employeeId?.trim()?.toLowerCase() === 'x66626') {
+    if (profile && safeLower(profile.employeeId) === 'x66626') {
       console.log("Excluded role detected in Dashboard:", profile.uid, profile.role, profile.employeeId);
     }
   }, [profile]);
 
-  const isManager = profile && !profile.employeeId?.trim()?.toLowerCase()?.includes('x66626') && (
-    profile.email?.toLowerCase() === 'tjrwnfjqm1@gmail.com' ||
+  const isManager = profile && !safeLower(profile.employeeId).includes('x66626') && (
+    safeLower(profile.email) === 'tjrwnfjqm1@gmail.com' ||
     ['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER', 'GENERAL_AFFAIRS', 'CLERK', 'TEAM_LEADER'].includes(profile.role) || 
     profile.permissions?.some(p => ['notice_mgmt', 'employee_mgmt', 'accident_mgmt', 'work_log_mgmt', 'attendance_mgmt', 'training_mgmt', 'admin'].includes(p)) ||
-    (profile.position && ['팀장', '소장', '총무', '직장', '실장', '안전관리자', '대표'].some(p => profile.position?.includes(p)))
+    ['팀장', '소장', '총무', '직장', '실장', '안전관리자', '대표'].some(p => safeTrim(profile.position).includes(p))
   );
 
   const isSupervisor = profile && (
     ['TEAM_LEADER', 'DIRECTOR', 'GENERAL_MANAGER', 'CEO'].includes(profile.role) ||
-    (profile.position && ['팀장', '직장', '소장', '실장'].some(p => profile.position?.includes(p))) ||
+    ['팀장', '직장', '소장', '실장'].some(p => safeTrim(profile.position).includes(p)) ||
     profile.permissions?.includes('team_work_log_approve')
   );
 
   const isExcludedFromAccidentReport = profile && (
-    ['GROUP_LEADER', 'EMPLOYEE', 'WORKER'].includes(profile.role?.toUpperCase() || '') ||
-    (profile.position && ['조장', '사원'].some(p => profile.position?.trim().includes(p)))
+    ['GROUP_LEADER', 'EMPLOYEE', 'WORKER'].includes(safeTrim(profile.role).toUpperCase()) ||
+    ['조장', '사원'].some(p => safeTrim(profile.position).includes(p))
   );
 
   const canReportAccident = profile && !isExcludedFromAccidentReport && (
     ['CEO', 'DIRECTOR', 'GENERAL_AFFAIRS', 'GENERAL_MANAGER', 'CLERK', 'SAFETY_MANAGER', 'TEAM_LEADER'].includes(profile.role) || 
     profile.permissions?.includes('accident_mgmt') ||
     profile.permissions?.includes('admin') ||
-    (profile.position && ['팀장', '직장', '소장', '서무', '총무', '실장', '안전관리자', '대표', '사장'].some(p => profile.position?.trim().includes(p)))
+    ['팀장', '직장', '소장', '서무', '총무', '실장', '안전관리자', '대표', '사장'].some(p => safeTrim(profile.position).includes(p))
   );
 
   const canWriteHealth = profile && (
     ['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'CLERK', 'SAFETY_MANAGER', 'TEAM_LEADER'].includes(profile.role) ||
     profile.permissions?.includes('health_mgmt') ||
-    (profile.position && ['반장', '조장', '팀장'].some(p => profile.position?.includes(p)))
+    ['반장', '조장', '팀장'].some(p => safeTrim(profile.position).includes(p))
   );
 
   const canRequestSnack = profile && (
     ['TEAM_LEADER', 'DIRECTOR', 'GENERAL_MANAGER', 'CEO'].includes(profile.role) ||
-    (profile.position && ['팀장', '직장', '소장', '총무'].some(p => profile.position?.includes(p)))
+    ['팀장', '직장', '소장', '총무'].some(p => safeTrim(profile.position).includes(p))
   );
 
   const canManageMeal = profile && (
@@ -704,7 +730,8 @@ export const Dashboard: React.FC = () => {
         
         snapshot.docs.forEach(doc => {
           const data = doc.data();
-          const logDate = new Date(data.createdAt);
+          const logDate = parseSafeDate(data.createdAt);
+          if (!logDate) return;
           if (logDate >= currentMonthStart) {
             currentMonthDelta += data.scoreDelta;
           } else if (logDate >= prevMonthStart && logDate < currentMonthStart) {
@@ -975,8 +1002,9 @@ export const Dashboard: React.FC = () => {
     setIsClockingOut(true);
     try {
       const now = new Date();
-      const isSpecial = checkIsSpecialDay(new Date(todayAttendance.clockIn), specialDates).isSpecial;
-      const { workHours, overtimeHours } = calculateAttendanceHours(todayAttendance.clockIn, now, isSpecial);
+      const clockInDate = parseSafeDate(todayAttendance.clockIn) || now;
+      const isSpecial = checkIsSpecialDay(clockInDate, specialDates).isSpecial;
+      const { workHours, overtimeHours } = calculateAttendanceHours(clockInDate.toISOString(), now, isSpecial);
       
       await updateDoc(doc(db, 'attendance', todayAttendance.id), {
         clockOut: now.toISOString(),
@@ -1135,7 +1163,8 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const workingDays = profile?.joinedAt ? differenceInDays(new Date(), new Date(profile.joinedAt)) + 1 : null;
+  const joinedAtDate = parseSafeDate(profile?.joinedAt);
+  const workingDays = joinedAtDate ? differenceInDays(new Date(), joinedAtDate) + 1 : null;
   const { isMonitoring, startMonitoring } = useSafetySensor();
 
   if (isAppExited) {
@@ -1164,16 +1193,18 @@ export const Dashboard: React.FC = () => {
   }
 
   const isLight = profile?.lightTheme !== false && !profile?.highContrast;
+  const clockInDate = parseSafeDate(todayAttendance?.clockIn);
+  const clockOutDate = parseSafeDate(todayAttendance?.clockOut);
   const isClockedIn = !!todayAttendance?.clockIn;
   const isClockedOut = !!todayAttendance?.clockOut;
-  const clockInTimeText = todayAttendance?.clockIn ? format(new Date(todayAttendance.clockIn), 'HH:mm') : '--:--';
-  const clockOutTimeText = todayAttendance?.clockOut ? format(new Date(todayAttendance.clockOut), 'HH:mm') : '--:--';
+  const clockInTimeText = clockInDate ? format(clockInDate, 'HH:mm') : '--:--';
+  const clockOutTimeText = clockOutDate ? format(clockOutDate, 'HH:mm') : '--:--';
   const currentMonthPrefix = format(new Date(), 'yyyy-MM');
   const monthlyAttendanceDays = Object.values(weeklyAttendanceMap).filter(
     (a) => a.date?.startsWith(currentMonthPrefix) && !!a.clockIn
   ).length;
-  const elapsedHours = isClockedIn && !isClockedOut && todayAttendance?.clockIn
-    ? Math.max(0, Math.floor((Date.now() - new Date(todayAttendance.clockIn).getTime()) / (1000 * 60 * 60)))
+  const elapsedHours = isClockedIn && !isClockedOut && clockInDate
+    ? Math.max(0, Math.floor((Date.now() - clockInDate.getTime()) / (1000 * 60 * 60)))
     : 0;
   const latestNotice = recentNotices[0];
 
@@ -1599,9 +1630,8 @@ export const Dashboard: React.FC = () => {
                 <DialogTitle className="text-xl font-black tracking-tight">{selectedNotice?.title}</DialogTitle>
                 <DialogDescription className="text-muted-foreground/60 font-bold text-xs uppercase tracking-widest mt-1">
                   작성일: {selectedNotice && (() => {
-                    const raw: any = selectedNotice.createdAt;
-                    const d = typeof raw?.toDate === 'function' ? raw.toDate() : new Date(raw);
-                    return isNaN(d.getTime()) ? '-' : format(d, 'yyyy.MM.dd HH:mm');
+                    const d = parseSafeDate(selectedNotice.createdAt);
+                    return d ? format(d, 'yyyy.MM.dd HH:mm') : '-';
                   })()}
                 </DialogDescription>
               </div>
@@ -1737,7 +1767,10 @@ export const Dashboard: React.FC = () => {
                           </div>
                         </div>
                         <span className="text-[10px] font-black text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-md">
-                          {format(new Date(person.clockIn), 'HH:mm')} 출근
+                          {(() => {
+                            const d = parseSafeDate(person.clockIn);
+                            return d ? format(d, 'HH:mm') : '--:--';
+                          })()} 출근
                         </span>
                       </div>
                     ))}

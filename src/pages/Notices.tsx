@@ -34,7 +34,15 @@ import { useNavigate } from 'react-router-dom';
 
 const parseNoticeDate = (raw: any): Date | null => {
   if (!raw) return null;
-  if (typeof raw?.toDate === 'function') return raw.toDate();
+  if (raw instanceof Date) return isNaN(raw.getTime()) ? null : raw;
+  if (typeof raw?.toDate === 'function') {
+    const dt = raw.toDate();
+    return dt instanceof Date && !isNaN(dt.getTime()) ? dt : null;
+  }
+  if (typeof raw === 'object' && typeof raw.seconds === 'number') {
+    const dt = new Date(raw.seconds * 1000);
+    return isNaN(dt.getTime()) ? null : dt;
+  }
   const d = new Date(raw);
   return isNaN(d.getTime()) ? null : d;
 };
@@ -134,11 +142,11 @@ export const Notices: React.FC = () => {
   };
 
   const isAdmin =
-    !profile?.employeeId?.trim()?.toLowerCase()?.includes('x66626') &&
+    !String(profile?.employeeId ?? '').trim().toLowerCase().includes('x66626') &&
     (
-      ['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'GENERAL_AFFAIRS', 'CLERK', 'SAFETY_MANAGER', 'TEAM_LEADER'].includes(profile?.role || '') ||
+      ['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'GENERAL_AFFAIRS', 'CLERK', 'SAFETY_MANAGER', 'TEAM_LEADER'].includes(String(profile?.role || '')) ||
       profile?.permissions?.some(p => ['admin', 'notice_mgmt', 'employee_mgmt', 'leave_mgmt', 'attendance_mgmt'].includes(p)) ||
-      profile?.email?.toLowerCase() === 'tjrwnfjqm1@gmail.com'
+      String(profile?.email ?? '').trim().toLowerCase() === 'tjrwnfjqm1@gmail.com'
     );
 
   return (

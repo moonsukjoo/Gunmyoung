@@ -113,8 +113,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       snapshot.docChanges().forEach((change) => {
         if (change.type === 'added') {
           const data = change.doc.data();
-          // Avoid notifying for old messages on first load or messages from self
-          const isNew = data.createdAt && new Date(data.createdAt).getTime() > Date.now() - 10000;
+          const rawCreated = data.createdAt;
+          const createdDate = typeof rawCreated?.toDate === 'function'
+            ? rawCreated.toDate()
+            : typeof rawCreated?.seconds === 'number'
+              ? new Date(rawCreated.seconds * 1000)
+              : rawCreated ? new Date(rawCreated) : null;
+          const isNew = createdDate && !isNaN(createdDate.getTime()) && createdDate.getTime() > Date.now() - 10000;
           if (isNew) {
             sendPushNotification(data.title, {
               body: data.message,
@@ -142,11 +147,11 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         
         let createdAtDate: Date;
         if (doc.createdAt) {
-          if (typeof doc.createdAt === 'string') {
+          if (typeof doc.createdAt === 'string' || typeof doc.createdAt === 'number') {
             createdAtDate = new Date(doc.createdAt);
-          } else if (doc.createdAt.toDate) {
+          } else if (typeof doc.createdAt.toDate === 'function') {
             createdAtDate = doc.createdAt.toDate();
-          } else if (doc.createdAt.seconds) {
+          } else if (typeof doc.createdAt.seconds === 'number') {
             createdAtDate = new Date(doc.createdAt.seconds * 1000);
           } else {
             createdAtDate = new Date();
@@ -154,13 +159,15 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         } else {
           createdAtDate = new Date();
         }
+        if (isNaN(createdAtDate.getTime())) createdAtDate = new Date();
         
         // Is recent (within last 7 days)
         const isRecent = Date.now() - createdAtDate.getTime() < 7 * 24 * 60 * 60 * 1000;
         
         // Is unread (createdAt is newer than lastViewedNoticesTime)
         const lastViewed = localStorage.getItem('lastViewedNoticesTime');
-        const isUnread = !lastViewed || createdAtDate.getTime() > new Date(lastViewed).getTime() + 1000;
+        const lastViewedMs = lastViewed ? new Date(lastViewed).getTime() : NaN;
+        const isUnread = !lastViewed || isNaN(lastViewedMs) || createdAtDate.getTime() > lastViewedMs + 1000;
         
         return isRecent && isUnread;
       });
@@ -260,16 +267,19 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     }
   };
 
+  const safeTrim = (v: unknown) => (v == null ? '' : String(v)).trim();
+  const safeLower = (v: unknown) => safeTrim(v).toLowerCase();
+
   const isExcludedRole = profile && (
-    ['EMPLOYEE', 'WORKER'].includes(profile.role?.toUpperCase() || '') || 
-    (['조장', '반장', '사원'].includes(profile.position?.trim() || '') && profile.role !== 'TEAM_LEADER') ||
-    profile.employeeId?.trim()?.toLowerCase()?.includes('x66626') ||
-    profile.displayName?.toLowerCase().includes('x66626') ||
-    profile.email?.toLowerCase().includes('x66626') ||
-    user?.email?.toLowerCase().includes('x66626') ||
-    user?.email?.split('@')[0]?.toLowerCase() === 'x66626' ||
-    (user?.email && user.email.toLowerCase().startsWith('x66626@')) ||
-    (user?.displayName && user.displayName.toLowerCase().includes('x66626'))
+    ['EMPLOYEE', 'WORKER'].includes(safeTrim(profile.role).toUpperCase()) || 
+    (['조장', '반장', '사원'].includes(safeTrim(profile.position)) && profile.role !== 'TEAM_LEADER') ||
+    safeLower(profile.employeeId).includes('x66626') ||
+    safeLower(profile.displayName).includes('x66626') ||
+    safeLower(profile.email).includes('x66626') ||
+    safeLower(user?.email).includes('x66626') ||
+    safeLower(user?.email).split('@')[0] === 'x66626' ||
+    safeLower(user?.email).startsWith('x66626@') ||
+    safeLower(user?.displayName).includes('x66626')
   );
 
   const isAdmin = profile && !isExcludedRole && (['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER'].includes(profile.role) || profile.permissions?.includes('admin'));

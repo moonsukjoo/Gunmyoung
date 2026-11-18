@@ -92,7 +92,7 @@ interface AutoAttendanceContextType {
 const AutoAttendanceContext = createContext<AutoAttendanceContextType | undefined>(undefined);
 
 export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
 
   // 🛰️ Master GPS Attendance Feature Toggle (Default: FALSE / Inactive per user request)
   const [isGpsAttendanceEnabled, setIsGpsAttendanceEnabled] = useState<boolean>(() => {
@@ -181,8 +181,12 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
     }
   }, [profile?.uid]);
 
-  // 1. Listen to global location settings in Firestore
+  // 1. Listen to global location settings in Firestore (after auth)
   useEffect(() => {
+    if (!user) {
+      setLocationSettings(DEFAULT_ATTENDANCE_LOCATION_SETTINGS);
+      return;
+    }
     const unsub = onSnapshot(
       doc(db, 'settings', 'attendance_location'),
       (snap) => {
@@ -199,21 +203,28 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
       }
     );
     return () => unsub();
-  }, []);
+  }, [user]);
 
-  // 2. Listen to special dates (holidays / multipliers)
+  // 2. Listen to special dates (holidays / multipliers) (after auth)
   useEffect(() => {
+    if (!user) return;
     const q = query(collection(db, 'specialDates'));
-    const unsub = onSnapshot(q, (snapshot) => {
-      const dates: Record<string, any> = {};
-      snapshot.docs.forEach(d => {
-        const data = d.data();
-        if (data.date) dates[data.date] = data;
-      });
-      setSpecialDates(dates);
-    });
+    const unsub = onSnapshot(
+      q,
+      (snapshot) => {
+        const dates: Record<string, any> = {};
+        snapshot.docs.forEach(d => {
+          const data = d.data();
+          if (data.date) dates[data.date] = data;
+        });
+        setSpecialDates(dates);
+      },
+      (err) => {
+        console.warn('Error listening to specialDates', err);
+      }
+    );
     return () => unsub();
-  }, []);
+  }, [user]);
 
   // 3. Listen to today's attendance record for current user
   useEffect(() => {

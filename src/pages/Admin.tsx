@@ -143,16 +143,19 @@ export const Admin: React.FC = () => {
   const [rouletteProbs, setRouletteProbs] = useState<number[]>([0.35, 0.3, 0.2, 0.1, 0.03, 0.02]);
   const [ladderProbs, setLadderProbs] = useState<number[]>([0.75, 0.25]);
 
+  const safeTrim = (v: unknown) => (v == null ? '' : String(v)).trim();
+  const safeLower = (v: unknown) => safeTrim(v).toLowerCase();
+
   const isExcludedRole = profile && (
-    ['EMPLOYEE', 'WORKER'].includes(profile.role?.toUpperCase() || '') || 
-    (['조장', '반장', '사원'].includes(profile.position?.trim() || '') && profile.role !== 'TEAM_LEADER') ||
-    profile.employeeId?.trim()?.toLowerCase()?.includes('x66626') ||
-    profile.displayName?.toLowerCase()?.includes('x66626') ||
-    profile.email?.toLowerCase()?.includes('x66626') ||
-    user?.email?.toLowerCase()?.includes('x66626') ||
-    user?.email?.split('@')[0]?.toLowerCase() === 'x66626' ||
-    (user?.email && user.email.toLowerCase().startsWith('x66626@')) ||
-    (user?.displayName && user.displayName.toLowerCase().includes('x66626'))
+    ['EMPLOYEE', 'WORKER'].includes(safeTrim(profile.role).toUpperCase()) || 
+    (['조장', '반장', '사원'].includes(safeTrim(profile.position)) && profile.role !== 'TEAM_LEADER') ||
+    safeLower(profile.employeeId).includes('x66626') ||
+    safeLower(profile.displayName).includes('x66626') ||
+    safeLower(profile.email).includes('x66626') ||
+    safeLower(user?.email).includes('x66626') ||
+    safeLower(user?.email).split('@')[0] === 'x66626' ||
+    safeLower(user?.email).startsWith('x66626@') ||
+    safeLower(user?.displayName).includes('x66626')
   );
 
   const [shipSettings, setShipSettings] = useState({
@@ -1340,7 +1343,7 @@ export const Admin: React.FC = () => {
                         <div className="bg-muted/50 p-4 rounded-2xl flex items-center justify-between border border-border">
                            <div className="flex items-center gap-3">
                               <div className="w-10 h-10 bg-primary/20 text-primary rounded-xl flex items-center justify-center font-black">
-                                {activeUser.displayName.charAt(0)}
+                                {String(activeUser.displayName || '?').charAt(0)}
                               </div>
                               <div>
                                 <p className="font-black text-sm text-foreground">{activeUser.displayName}</p>
@@ -1386,7 +1389,7 @@ export const Admin: React.FC = () => {
                   >
                      <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-muted rounded-xl flex items-center justify-center font-black text-sm text-muted-foreground border border-border">
-                          {u.displayName.charAt(0)}
+                          {String(u.displayName || '?').charAt(0)}
                         </div>
                         <div>
                           <p className="font-black text-sm text-foreground">{u.displayName}</p>
@@ -1648,7 +1651,7 @@ export const Admin: React.FC = () => {
                         <div key={user.uid} className="flex items-center justify-between p-4 bg-red-600/5 border border-red-600/10 rounded-xl">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 bg-red-600/20 text-red-600 rounded-lg flex items-center justify-center font-black text-xs">
-                              {user.displayName.charAt(0)}
+                              {String(user.displayName || '?').charAt(0)}
                             </div>
                             <div>
                               <p className="font-black text-sm text-red-600">{user.displayName}님</p>
@@ -1889,12 +1892,16 @@ export const Admin: React.FC = () => {
                       {inc.typeName || inc.type}
                     </span>
                     <span className="text-[10px] text-muted-foreground/60 font-semibold font-mono">
-                      {inc.createdAt ? new Date(inc.createdAt).toLocaleString('ko-KR') : '-'}
+                      {(() => {
+                        const raw = inc.createdAt;
+                        const d = typeof raw?.toDate === 'function' ? raw.toDate() : typeof raw?.seconds === 'number' ? new Date(raw.seconds * 1000) : raw ? new Date(raw) : null;
+                        return d && !isNaN(d.getTime()) ? d.toLocaleString('ko-KR') : '-';
+                      })()}
                     </span>
                   </div>
 
                   <div className="flex justify-between font-bold">
-                    <span className="text-foreground">{inc.displayName} ({inc.employeeId || '사번없음'})</span>
+                    <span className="text-foreground">{inc.displayName || '이름없음'} ({inc.employeeId || '사번없음'})</span>
                     <span className="text-muted-foreground/75 text-[10px]">{inc.departmentName} · {inc.jobRole}</span>
                   </div>
 
@@ -1911,7 +1918,11 @@ export const Admin: React.FC = () => {
                         상급자 확인 완료
                       </span>
                       <span className="font-mono">
-                        시간: {inc.resolvedAt ? new Date(inc.resolvedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                        시간: {(() => {
+                          const raw = inc.resolvedAt;
+                          const d = typeof raw?.toDate === 'function' ? raw.toDate() : typeof raw?.seconds === 'number' ? new Date(raw.seconds * 1000) : raw ? new Date(raw) : null;
+                          return d && !isNaN(d.getTime()) ? d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '-';
+                        })()}
                       </span>
                     </div>
                     <p className="text-[11px] font-extrabold text-foreground leading-relaxed pl-1">

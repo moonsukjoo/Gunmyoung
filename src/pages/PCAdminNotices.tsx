@@ -17,7 +17,7 @@ import { db, handleFirestoreError, OperationType } from '../firebase';
 import PCAdminLayout from '../components/PCAdminLayout';
 import { useAuth } from '../components/AuthProvider';
 import { toast } from 'sonner';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 
 interface Notice {
   id: string;
@@ -138,36 +138,42 @@ const PCAdminNotices: React.FC = () => {
 
   const openEditModal = (notice: Notice) => {
     setEditingNotice(notice);
-    setTitle(notice.title);
-    setContent(notice.content);
-    setCategory(notice.category);
-    setPriority(notice.priority);
+    setTitle(String(notice.title || ''));
+    setContent(String(notice.content || ''));
+    setCategory(String(notice.category || '전체'));
+    setPriority(notice.priority || ((notice as any).isImportant ? 'high' : 'medium'));
     setIsModalOpen(true);
   };
 
   const filteredNotices = notices.filter(notice => {
-    const titleVal = notice.title || '';
-    const contentVal = notice.content || '';
+    const titleVal = String(notice.title || '');
+    const contentVal = String(notice.content || '');
     return titleVal.toLowerCase().includes(searchTerm.toLowerCase()) ||
            contentVal.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
-  const getAuthorInitial = (author?: string) => {
-    if (!author) return '관';
-    return author[0] || '관';
+  const getAuthorInitial = (author?: unknown) => {
+    const str = typeof author === 'string' ? author.trim() : '';
+    return str ? str[0] : '관';
   };
 
-  const getAuthorName = (author?: string) => {
-    return author || '관리자';
+  const getAuthorName = (author?: unknown) => {
+    const str = typeof author === 'string' ? author.trim() : '';
+    return str || '관리자';
   };
 
   const formatTimestamp = (timestamp: any) => {
     if (!timestamp) return '-';
     if (typeof timestamp.toDate === 'function') {
-      return timestamp.toDate().toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' });
+      const dt = timestamp.toDate();
+      return !isNaN(dt.getTime()) ? dt.toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' }) : '-';
+    }
+    if (typeof timestamp === 'object' && typeof timestamp.seconds === 'number') {
+      const dt = new Date(timestamp.seconds * 1000);
+      return !isNaN(dt.getTime()) ? dt.toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' }) : '-';
     }
     if (timestamp instanceof Date) {
-      return timestamp.toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' });
+      return !isNaN(timestamp.getTime()) ? timestamp.toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' }) : '-';
     }
     const d = new Date(timestamp);
     if (!isNaN(d.getTime())) {
@@ -249,23 +255,23 @@ const PCAdminNotices: React.FC = () => {
                   filteredNotices.map((notice) => (
                     <tr key={notice.id} className="group hover:bg-muted/50 transition-colors">
                       <td className="px-8 py-6">
-                        {getPriorityBadge(notice.priority)}
+                        {getPriorityBadge(notice.priority || ((notice as any).isImportant ? 'high' : 'medium'))}
                       </td>
                       <td className="px-8 py-6 text-sm font-bold text-muted-foreground">
-                        {notice.category}
+                        {notice.category || '전체'}
                       </td>
                       <td className="px-8 py-6">
                         <div className="flex flex-col gap-1">
-                          <span className="text-sm font-black text-foreground group-hover:text-primary transition-colors">{notice.title}</span>
-                          <span className="text-xs text-muted-foreground font-medium truncate max-w-lg">{notice.content}</span>
+                          <span className="text-sm font-black text-foreground group-hover:text-primary transition-colors">{notice.title || '(제목 없음)'}</span>
+                          <span className="text-xs text-muted-foreground font-medium truncate max-w-lg">{notice.content || ''}</span>
                         </div>
                       </td>
                       <td className="px-8 py-6">
                         <div className="flex items-center gap-2">
                           <div className="w-7 h-7 bg-muted rounded-full flex items-center justify-center text-[10px] font-black text-muted-foreground border border-border">
-                             {getAuthorInitial(notice.author)}
+                             {getAuthorInitial(notice.author || (notice as any).authorName)}
                           </div>
-                          <span className="text-xs font-bold text-muted-foreground">{getAuthorName(notice.author)}</span>
+                          <span className="text-xs font-bold text-muted-foreground">{getAuthorName(notice.author || (notice as any).authorName)}</span>
                         </div>
                       </td>
                       <td className="px-8 py-6 text-xs font-black text-muted-foreground">
