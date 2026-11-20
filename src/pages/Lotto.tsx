@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+import { formatPointsDisplay } from '@/services/attendancePointService';
 
 export const Lotto: React.FC = () => {
   const { profile } = useAuth();
@@ -121,7 +122,7 @@ export const Lotto: React.FC = () => {
                   <Coins className="w-4 h-4 text-primary" />
                   <span className="text-xs font-black text-muted-foreground uppercase tracking-widest">나의 포인트</span>
                 </div>
-                <span className="text-xl font-black text-primary tracking-tighter">{(profile?.points || 0).toFixed(1)}P</span>
+                <span className="text-xl font-black text-primary tracking-tighter">{formatPointsDisplay(profile?.points)}P</span>
               </div>
 
               <div className="space-y-4 min-h-[400px] flex flex-col justify-center">

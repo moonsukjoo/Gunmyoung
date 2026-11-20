@@ -136,7 +136,11 @@
         "healthStatus": { "type": "string", "enum": ["GOOD", "NORMAL", "BAD"] },
         "workHours": { "type": "number", "description": "Total hours including overtime" },
         "overtimeHours": { "type": "number", "description": "Overtime hours" },
-        "memo": { "type": "string" }
+        "memo": { "type": "string" },
+        "attendancePointAwarded": { "type": "boolean", "description": "Whether daily 10 KRW praise point reward has been credited" },
+        "attendancePointAmountKrw": { "type": "number", "description": "KRW reward credited for daily check-in (10 KRW)" },
+        "attendancePointsDelta": { "type": "number", "description": "Points credited for daily check-in (0.002P)" },
+        "attendancePointAwardedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "date", "clockIn"]
     },

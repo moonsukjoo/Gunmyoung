@@ -72,6 +72,7 @@ import { requestNotificationPermission } from '@/services/notificationService';
 import SignatureCanvas from 'react-signature-canvas';
 import { MarineSubpageHero } from '@/components/MarineSubpageHero';
 import { Icon3DShip } from '@/components/icons/Marine3DIcons';
+import { formatPointsDisplay, pointsToKrw } from '@/services/attendancePointService';
 
 type MyPageTab = 'WORK_HR' | 'WELFARE' | 'SETTINGS' | 'ADMIN';
 
@@ -548,9 +549,8 @@ export const MyPage: React.FC = () => {
         : "bg-[#111B2E]/92 border-white/10 hover:border-primary/40 hover:bg-[#162238] shadow-xs"
   );
 
-  const rawPoints = Number(profile?.points ?? 0);
-  const ptsText = Number.isInteger(rawPoints) ? rawPoints.toLocaleString() : rawPoints.toFixed(1);
-  const krwText = Math.round(rawPoints * 5000).toLocaleString();
+  const ptsText = formatPointsDisplay(profile?.points);
+  const krwText = pointsToKrw(profile?.points).toLocaleString();
 
   const roleLabel =
     profile?.role === 'CEO' ? '대표' :

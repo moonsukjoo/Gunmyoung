@@ -21,6 +21,7 @@ import { Gift, Trophy, Settings, MapPin, Search, ShieldCheck, Download, History,
 import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
 import { exportToExcel, exportToPDF, exportPhotoCardPDF, ReportCardItem } from '@/lib/exportUtils';
+import { formatPointsDisplay, pointsToKrw } from '@/services/attendancePointService';
 import { 
   Table, 
   TableBody, 
@@ -265,7 +266,8 @@ export const Coupons: React.FC = () => {
             <div className="mt-4 pt-4 border-t border-border flex justify-around items-center">
               <div>
                 <span className="text-[11px] text-muted-foreground block font-bold">보유 포인트</span>
-                <span className="text-2xl font-black text-emerald-500">{(profile?.points || 0).toLocaleString()}P</span>
+                <span className="text-2xl font-black text-emerald-500">{formatPointsDisplay(profile?.points)}P</span>
+                <span className="text-[10px] font-bold text-muted-foreground block">({pointsToKrw(profile?.points).toLocaleString()}원)</span>
               </div>
               <div className="h-8 w-px bg-border" />
               <div>

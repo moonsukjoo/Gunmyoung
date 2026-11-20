@@ -14,6 +14,7 @@ import confetti from 'canvas-confetti';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
+import { formatPointsDisplay } from '@/services/attendancePointService';
 
 const playChimeSound = () => {
   try {
@@ -1087,7 +1088,7 @@ export const Entertainment: React.FC = () => {
          </div>
          <div className="space-y-1">
             <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">현재 보유 포인트</p>
-            <p className="text-4xl font-black italic text-foreground leading-none">{profile?.points?.toLocaleString() || 0} <span className="text-xl text-yellow-500 not-italic">P</span></p>
+            <p className="text-4xl font-black italic text-foreground leading-none">{formatPointsDisplay(profile?.points)} <span className="text-xl text-yellow-500 not-italic">P</span></p>
          </div>
       </div>
 
@@ -1871,7 +1872,7 @@ export const Entertainment: React.FC = () => {
                         </div>
                         <div>
                            <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">현재 포인트</p>
-                           <p className="text-2xl font-black text-white italic leading-none">{profile?.points?.toLocaleString() || 0} <span className="text-[10px] text-emerald-400 not-italic uppercase ml-1">P</span></p>
+                           <p className="text-2xl font-black text-white italic leading-none">{formatPointsDisplay(profile?.points)} <span className="text-[10px] text-emerald-400 not-italic uppercase ml-1">P</span></p>
                         </div>
                      </div>
                      <Button 

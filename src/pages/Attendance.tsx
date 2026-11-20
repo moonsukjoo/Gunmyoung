@@ -17,6 +17,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { grantRandomShipPart } from '@/services/shipService';
+import { awardDailyAttendancePoints } from '@/services/attendancePointService';
 import { 
   format, 
   startOfMonth, 
@@ -223,7 +224,7 @@ export const Attendance: React.FC = () => {
   }, [profile, month, todayStr]);
 
   const handleClockIn = async () => {
-    if (!profile) return;
+    if (!profile || todayAttendance?.clockIn) return;
     const dt = new Date();
     const ds = format(dt, 'yyyy-MM-dd');
     const id = `${profile.uid}_${ds}`;
@@ -236,14 +237,21 @@ export const Attendance: React.FC = () => {
         workHours: 0,
         overtimeHours: 0,
         createdAt: dt.toISOString()
-      });
+      }, { merge: true });
       // 출근 시 유령 가드 자동 활성화
       await updateDoc(doc(db, 'users', profile.uid), {
         ghostGuardEnabled: true,
         lastMovementAt: dt.toISOString(),
         isImmobile: false
       });
-      toast.success('출근 완료 (유령 가드 활성화)');
+      const pointResult = await awardDailyAttendancePoints(profile.uid, ds);
+      if (pointResult.awarded) {
+        toast.success('출근 완료! 칭찬포인트 +10원 적립', {
+          description: `유령 가드 활성화 · 현재 보유 ${pointResult.totalKrw.toLocaleString()}원`
+        });
+      } else {
+        toast.success('출근 완료 (유령 가드 활성화)');
+      }
       syncAttendanceNotificationSchedules({ uid: profile.uid, date: ds, clockIn: dt.toISOString() } as any).catch(() => {});
       if (profile?.uid) grantRandomShipPart(profile.uid, '출근');
     } catch (error) { toast.error('실패'); }
@@ -600,7 +608,9 @@ export const Attendance: React.FC = () => {
                     )}
                   >
                     <LogIn className="w-5 h-5" />
-                    <span className="font-black text-xs">출근 등록</span>
+                    <span className="font-black text-xs">
+                      출근 등록{!todayAttendance?.clockIn ? ' (+10원)' : ''}
+                    </span>
                   </button>
 
                   <button 

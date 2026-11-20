@@ -29,6 +29,7 @@ import PCAdminLayout from '../components/PCAdminLayout';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
+import { formatPointsDisplay } from '../services/attendancePointService';
 
 const PCAdminCoupons: React.FC = () => {
   const { profile } = useAuth();
@@ -900,7 +901,7 @@ const PCAdminCoupons: React.FC = () => {
                              <div className="flex flex-wrap items-center gap-2">
                                <p className="text-sm font-black text-foreground">{log.receiverName}</p>
                                <span className="no-print text-[10px] font-black text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-lg whitespace-nowrap">
-                                 실제 잔여: {targetUserObj ? (targetUserObj.points ?? 0).toLocaleString() : 0}P
+                                 실제 잔여: {targetUserObj ? formatPointsDisplay(targetUserObj.points) : 0}P
                                </span>
                              </div>
                              <p className="text-[10px] font-bold text-muted-foreground tracking-tight no-print">
@@ -1027,7 +1028,7 @@ const PCAdminCoupons: React.FC = () => {
                             {users.find(u => u.uid === selectedUserUid)?.displayName}
                           </p>
                           <p className="text-[10px] font-bold text-muted-foreground">
-                            사번: {users.find(u => u.uid === selectedUserUid)?.employeeId} | 부서: {users.find(u => u.uid === selectedUserUid)?.departmentName} | 실제 잔여: {(users.find(u => u.uid === selectedUserUid)?.points ?? 0).toLocaleString()}P
+                            사번: {users.find(u => u.uid === selectedUserUid)?.employeeId} | 부서: {users.find(u => u.uid === selectedUserUid)?.departmentName} | 실제 잔여: {formatPointsDisplay(users.find(u => u.uid === selectedUserUid)?.points)}P
                           </p>
                         </div>
                       </div>
@@ -1066,7 +1067,7 @@ const PCAdminCoupons: React.FC = () => {
                                   <span className="text-[10px] font-bold text-slate-400">({user.departmentName || '부서미정'})</span>
                                 </div>
                                 <span className="text-[10px] font-black text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-md w-fit whitespace-nowrap">
-                                  잔여: {(user.points ?? 0).toLocaleString()}P
+                                  잔여: {formatPointsDisplay(user.points)}P
                                 </span>
                               </div>
                               <span className="text-[10px] font-bold text-slate-400">사번: {user.employeeId}</span>
@@ -1203,7 +1204,7 @@ const PCAdminCoupons: React.FC = () => {
                             {users.find(u => u.uid === editUserUid)?.displayName}
                           </p>
                           <p className="text-[10px] font-bold text-muted-foreground">
-                            사번: {users.find(u => u.uid === editUserUid)?.employeeId} | 부서: {users.find(u => u.uid === editUserUid)?.departmentName} | 실제 잔여: {(users.find(u => u.uid === editUserUid)?.points ?? 0).toLocaleString()}P
+                            사번: {users.find(u => u.uid === editUserUid)?.employeeId} | 부서: {users.find(u => u.uid === editUserUid)?.departmentName} | 실제 잔여: {formatPointsDisplay(users.find(u => u.uid === editUserUid)?.points)}P
                           </p>
                         </div>
                       </div>
@@ -1242,7 +1243,7 @@ const PCAdminCoupons: React.FC = () => {
                                   <span className="text-[10px] font-bold text-slate-400">({user.departmentName || '부서미정'})</span>
                                 </div>
                                 <span className="text-[10px] font-black text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-md w-fit whitespace-nowrap">
-                                  잔여: {(user.points ?? 0).toLocaleString()}P
+                                  잔여: {formatPointsDisplay(user.points)}P
                                 </span>
                               </div>
                               <span className="text-[10px] font-bold text-slate-400">사번: {user.employeeId}</span>

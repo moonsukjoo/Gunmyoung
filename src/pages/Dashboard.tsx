@@ -80,6 +80,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { grantRandomShipPart } from '@/services/shipService';
+import { awardDailyAttendancePoints, pointsToKrw } from '@/services/attendancePointService';
 import { sendPushNotification, requestNotificationPermission } from '@/services/notificationService';
 import { calculateAttendanceHours } from '@/lib/attendance';
 import { checkIsSpecialDay } from '@/lib/holidays';
@@ -931,12 +932,12 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleClockIn = async () => {
-    if (!profile) return;
+    if (!profile || todayAttendance?.clockIn) return;
     setIsClockInHealthDialogOpen(true);
   };
 
   const confirmClockIn = async (selectedHealth: 'GOOD' | 'NORMAL' | 'BAD') => {
-    if (!profile) return;
+    if (!profile || todayAttendance?.clockIn) return;
     setIsClockingIn(true);
     const now = new Date();
     const today = format(now, 'yyyy-MM-dd');
@@ -979,15 +980,22 @@ export const Dashboard: React.FC = () => {
         isImmobile: false
       }).catch(err => console.warn('User ghost guard activate warning', err));
 
-      // Grant random ship part
+      // Grant random ship part & daily 10 KRW praise points (once per day)
       grantRandomShipPart(profile.uid, '출근');
+      const pointResult = await awardDailyAttendancePoints(profile.uid, today);
 
       setHealthStatus(selectedHealth);
       await sendHealthNotification(selectedHealth);
       setIsClockInHealthDialogOpen(false);
-      toast.success('🎉 출근 등록 완료!', {
-        description: `${format(now, 'HH:mm')}에 정상적으로 출근 등록되었습니다. (유령 가드 활성화 & 파츠 지급)`
-      });
+      if (pointResult.awarded) {
+        toast.success('🎉 출근 등록 완료! (칭찬포인트 +10원 적립)', {
+          description: `${format(now, 'HH:mm')} 정상 출근 · 오늘 출근 보상 10원이 적립되었습니다. (보유: ${pointResult.totalKrw.toLocaleString()}원)`
+        });
+      } else {
+        toast.success('🎉 출근 등록 완료!', {
+          description: `${format(now, 'HH:mm')}에 정상적으로 출근 등록되었습니다. (오늘 출근 포인트 10원은 이미 적립됨)`
+        });
+      }
     } catch (error) {
       console.error("Clock-in error:", error);
       toast.error('출근 처리 중 오류가 발생했습니다.');
@@ -1307,7 +1315,7 @@ export const Dashboard: React.FC = () => {
                   <span>{isClockingIn ? '출근 등록 처리중...' : '지금 바로 출근 등록하기'}</span>
                 </div>
                 <span className="px-2 py-0.5 rounded-lg bg-amber-400 text-slate-950 text-[11px] font-black">
-                  터치 →
+                  +10원 · 터치 →
                 </span>
               </button>
             ) : !isClockedOut ? (
@@ -1419,14 +1427,13 @@ export const Dashboard: React.FC = () => {
               선박·칭찬 포인트
             </p>
             {(() => {
-              const rawPoints = Number(profile?.points ?? 0);
-              const krwText = Math.round(rawPoints * 5000).toLocaleString();
+              const krwText = pointsToKrw(profile?.points).toLocaleString();
               return (
                 <>
                   <p className="text-lg font-black text-foreground mt-1">
                     {krwText}원
                   </p>
-                  <p className="text-[11px] font-bold text-muted-foreground mt-0.5">선박·칭찬 보상 보기 →</p>
+                  <p className="text-[11px] font-bold text-muted-foreground mt-0.5">출근 시 +10원/일 · 보상 보기 →</p>
                 </>
               );
             })()}
@@ -1861,8 +1868,8 @@ export const Dashboard: React.FC = () => {
         <DialogContent className="bg-card border-border text-foreground max-w-sm rounded-[2.5rem]">
           <DialogHeader>
             <DialogTitle className="text-2xl font-black text-center pt-4">오늘의 몸 상태는 어떠신가요?</DialogTitle>
-            <DialogDescription className="text-center text-muted-foreground/40 font-bold">
-              안전한 업무를 위해 현재 컨디션을 체크해주세요.
+            <DialogDescription className="text-center text-muted-foreground/70 font-bold">
+              컨디션 선택 시 출근 등록과 함께 칭찬포인트 10원이 적립됩니다. (1일 1회)
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-3 gap-3 py-6">

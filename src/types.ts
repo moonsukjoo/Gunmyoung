@@ -243,6 +243,10 @@ export interface Attendance {
   clockOutLng?: number;
   pendingExitSince?: string | null;
   lastVerifiedInsideAt?: string | null;
+  attendancePointAwarded?: boolean;
+  attendancePointAmountKrw?: number;
+  attendancePointsDelta?: number;
+  attendancePointAwardedAt?: string;
 }
 
 export interface AccidentCase {

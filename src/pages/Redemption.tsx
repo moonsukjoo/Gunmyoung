@@ -12,6 +12,7 @@ import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import { formatPointsDisplay, pointsToKrw } from '@/services/attendancePointService';
 
 export const Redemption: React.FC = () => {
   const { profile } = useAuth();
@@ -112,8 +113,8 @@ export const Redemption: React.FC = () => {
           </div>
           <div className="space-y-1">
             <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest text-center">현재 보유 포인트</p>
-            <p className="text-4xl font-black text-foreground">{(profile?.points || 0).toLocaleString()}P</p>
-            <p className="text-xs font-bold text-primary">환전 가능 금액: {((profile?.points || 0) * 5000).toLocaleString()}원</p>
+            <p className="text-4xl font-black text-foreground">{formatPointsDisplay(profile?.points)}P</p>
+            <p className="text-xs font-bold text-primary">환전 가능 금액: {pointsToKrw(profile?.points).toLocaleString()}원</p>
           </div>
         </CardContent>
       </Card>

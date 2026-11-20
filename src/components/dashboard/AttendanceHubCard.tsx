@@ -163,7 +163,7 @@ export const AttendanceHubCard: React.FC<AttendanceHubCardProps> = ({
                   <div className="min-w-0">
                     <span className="text-xs font-black text-foreground">상태: 미출근</span>
                     <p className="text-[11px] font-medium text-muted-foreground leading-none mt-0.5">
-                      버튼 터치 시 컨디션 체크 후 즉시 등록됩니다.
+                      버튼 터치 시 컨디션 체크 후 즉시 등록 및 칭찬포인트 +10원 적립!
                     </p>
                   </div>
                 </div>
