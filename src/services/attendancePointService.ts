@@ -2,9 +2,9 @@ import { db, auth } from '@/firebase';
 import { doc, runTransaction } from 'firebase/firestore';
 import { OperationType } from '@/lib/errorHandlers';
 
-export const DAILY_ATTENDANCE_REWARD_KRW = 10;
+export const DAILY_ATTENDANCE_REWARD_KRW = 30;
 export const KRW_PER_POINT = 5000;
-export const DAILY_ATTENDANCE_REWARD_POINTS = DAILY_ATTENDANCE_REWARD_KRW / KRW_PER_POINT; // 0.002P
+export const DAILY_ATTENDANCE_REWARD_POINTS = DAILY_ATTENDANCE_REWARD_KRW / KRW_PER_POINT;
 
 export interface DailyAttendanceRewardResult {
   awarded: boolean;

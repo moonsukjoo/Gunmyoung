@@ -64,23 +64,27 @@
           return false;
         }
 
-        function showPreBootRecovery(title, detail) {
+        function showPreBootRecovery(title, detail, failedSrc) {
           if (shown || hasMountedUI()) return;
           if (document.getElementById('boot-recovery-overlay')) return;
           shown = true;
+          var isInIframe = false;
+          try { isInIframe = window.self !== window.top; } catch (e) { isInIframe = true; }
           var mount = function () {
             if (hasMountedUI() || document.getElementById('boot-recovery-overlay')) return;
             var el = document.createElement('div');
             el.id = 'boot-recovery-overlay';
             el.style.cssText = 'position:fixed;inset:0;background:#f8fafc;color:#0f172a;display:flex;align-items:center;justify-content:center;padding:24px;z-index:99999;font-family:system-ui,-apple-system,sans-serif;';
             var box = document.createElement('div');
-            box.style.cssText = 'max-width:420px;width:100%;background:#ffffff;border:1px solid #e2e8f0;border-radius:20px;padding:24px;box-shadow:0 20px 50px rgba(15,23,42,0.12);text-align:center;';
+            box.style.cssText = 'max-width:440px;width:100%;background:#ffffff;border:1px solid #e2e8f0;border-radius:20px;padding:24px;box-shadow:0 20px 50px rgba(15,23,42,0.12);text-align:center;';
             var h = document.createElement('h2');
             h.style.cssText = 'margin:0 0 8px;font-size:18px;font-weight:800;color:#0f172a;';
             h.textContent = title || '화면을 불러오지 못했습니다';
             var p = document.createElement('p');
-            p.style.cssText = 'margin:0 0 16px;font-size:13px;line-height:1.5;color:#475569;word-break:break-word;';
+            p.style.cssText = 'margin:0 0 12px;font-size:13px;line-height:1.5;color:#475569;word-break:break-word;';
             p.textContent = detail || '모듈 로딩 지연 또는 캐시 불일치가 발생했습니다. 아래 버튼을 눌러 다시 불러와 주세요.';
+            var diag = document.createElement('p');
+            diag.style.cssText = 'margin:0 0 16px;font-size:11px;line-height:1.45;color:#64748b;background:#f1f5f9;padding:10px 12px;border-radius:10px;word-break:break-word;display:none;';
             var btn = document.createElement('button');
             btn.type = 'button';
             btn.style.cssText = 'width:100%;padding:12px 18px;background:#2563eb;color:#ffffff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;';
@@ -88,9 +92,39 @@
             btn.onclick = clearCachesAndReload;
             box.appendChild(h);
             box.appendChild(p);
+            box.appendChild(diag);
             box.appendChild(btn);
+            if (isInIframe) {
+              var newTabLink = document.createElement('a');
+              newTabLink.href = window.location.href;
+              newTabLink.target = '_blank';
+              newTabLink.rel = 'noopener noreferrer';
+              newTabLink.style.cssText = 'display:block;width:100%;box-sizing:border-box;margin-top:10px;padding:11px 18px;background:#f1f5f9;color:#0f172a;border:1px solid #cbd5e1;border-radius:12px;font-size:13px;font-weight:700;text-decoration:none;cursor:pointer;';
+              newTabLink.textContent = '새 탭에서 직접 열기 (브라우저 차단 우회)';
+              box.appendChild(newTabLink);
+            }
             el.appendChild(box);
             (document.body || document.documentElement).appendChild(el);
+
+            if (failedSrc && window.fetch) {
+              fetch(failedSrc, { cache: 'no-store', credentials: 'include' })
+                .then(function (res) {
+                  diag.style.display = 'block';
+                  if (res.redirected || res.status === 401 || res.status === 403) {
+                    diag.textContent = '원인 진단: 브라우저 보안/서드파티 쿠키 차단으로 프리뷰 인증이 막혔습니다 (HTTP ' + res.status + '). 위 [새 탭에서 직접 열기]를 눌러주세요.';
+                  } else if (!res.ok) {
+                    diag.textContent = '원인 진단: 서버 응답 오류 (HTTP ' + res.status + ')';
+                  } else {
+                    diag.textContent = '원인 진단: 메인 스크립트 응답은 정상(200)이나 하위 모듈 또는 브라우저 확장프로그램(광고차단 등)에서 차단되었을 수 있습니다.';
+                  }
+                })
+                .catch(function (err) {
+                  diag.style.display = 'block';
+                  diag.textContent = isInIframe
+                    ? '원인 진단: 프리뷰 프레임 내 서드파티 쿠키 차단 또는 네트워크/보안 프로그램(광고차단 등)이 스크립트 로드를 차단했습니다. [새 탭에서 직접 열기]를 이용해 주세요. (' + ((err && err.message) || 'Failed to fetch') + ')'
+                    : '원인 진단: 네트워크 연결 또는 보안 프로그램/확장프로그램에 의해 스크립트가 차단되었습니다. (' + ((err && err.message) || 'Failed to fetch') + ')';
+                });
+            }
           };
           if (document.body) mount();
           else document.addEventListener('DOMContentLoaded', mount, { once: true });
@@ -101,7 +135,8 @@
             if (!tryGuardedReload()) {
               showPreBootRecovery(
                 '화면 초기화가 지연되고 있습니다',
-                '네트워크 또는 브라우저 캐시 문제로 앱이 시작되지 않았습니다.'
+                '네트워크 또는 브라우저 캐시 문제로 앱이 시작되지 않았습니다.',
+                '/src/main.tsx'
               );
             }
           }
@@ -110,10 +145,10 @@
         window.addEventListener('error', function (ev) {
           if (hasMountedUI()) return;
           var t = ev && ev.target;
-          if (t && (t.tagName === 'SCRIPT' || t.tagName === 'LINK')) {
+          if (t && (t.tagName === 'SCRIPT' || (t.tagName === 'LINK' && t.rel === 'stylesheet'))) {
             var src = t.src || t.href || '';
             if (src && !tryGuardedReload()) {
-              showPreBootRecovery('리소스 로드 오류', '필수 스크립트를 불러오지 못했습니다: ' + src);
+              showPreBootRecovery('리소스 로드 오류', '필수 스크립트를 불러오지 못했습니다: ' + src, src);
             }
             return;
           }
@@ -137,7 +172,7 @@
             msg.indexOf('error loading dynamically imported module') !== -1
           ) {
             if (!tryGuardedReload()) {
-              showPreBootRecovery('모듈 버전 불일치', msg);
+              showPreBootRecovery('모듈 버전 불일치', msg, '/src/main.tsx');
             }
           }
         });

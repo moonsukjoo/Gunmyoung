@@ -30,7 +30,8 @@ import {
   ShieldAlert,
   CheckSquare,
   UserCheck,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Award
 } from 'lucide-react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthProvider';
@@ -183,6 +184,7 @@ export const PC_ADMIN_NAV_CATEGORIES: NavCategory[] = [
         label: '안전 포상 · 쿠폰 · 현물',
         items: [
           { id: 'coupons', label: '안전 포상 · 칭찬쿠폰', desc: '칭찬포인트 지급 및 룰렛 관리', icon: Trophy, to: '/admin/pc/coupons' },
+          { id: 'coupons_by_employee', label: '사원별 칭찬쿠폰 관리', desc: '사원별 상세 칭찬쿠폰 내역 및 포인트 직접 수정', icon: Award, to: '/admin/pc/coupons-by-employee' },
           { id: 'redemption', label: '포상 현물 신청 관리', desc: '복지 포인트 현물 교환 승인', icon: Settings, to: '/admin/pc/redemption' },
         ]
       }

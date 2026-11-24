@@ -7,11 +7,6 @@ import { Layout } from './components/Layout';
 import { Toaster, toast } from 'sonner';
 import { GlowLoading } from './components/GlowLoading';
 import { AlertCircle } from 'lucide-react';
-import { EmergencyOverlay } from './components/EmergencyOverlay';
-import { SecretGpsDebugLayer } from './components/SecretGpsDebugLayer';
-import { SilentFactoryGpsTracker } from './components/SilentFactoryGpsTracker';
-import { Login } from './pages/Login';
-import { Dashboard } from './pages/Dashboard';
 import { Capacitor } from '@capacitor/core';
 import { Geolocation } from '@capacitor/geolocation';
 import { App as CapApp } from '@capacitor/app';
@@ -58,6 +53,33 @@ const lazyWithRetry = <T extends React.ComponentType<any>>(
   });
 };
 
+// Non-fatal lazy loader for auxiliary background/overlay widgets so a blocked tracker/overlay never prevents boot
+const lazyOptional = <T extends React.ComponentType<any>>(
+  componentImport: () => Promise<{ default: T } | any>
+): React.LazyExoticComponent<T> => {
+  return lazy(async () => {
+    try {
+      const module = await componentImport();
+      if (module && typeof module === 'object') {
+        if (module.default) return { default: module.default as T };
+        const firstExport = Object.values(module).find(v => typeof v === 'function');
+        if (firstExport) return { default: firstExport as T };
+      }
+      return module;
+    } catch (err) {
+      console.warn('Optional module failed to load:', err);
+      const EmptyFallback: any = () => null;
+      return { default: EmptyFallback as T };
+    }
+  });
+};
+
+const Login = lazyWithRetry(() => import('./pages/Login').then(m => ({ default: m.Login })), 'Login');
+const Dashboard = lazyWithRetry(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })), 'Dashboard');
+const EmergencyOverlay = lazyOptional(() => import('./components/EmergencyOverlay').then(m => ({ default: m.EmergencyOverlay })));
+const SecretGpsDebugLayer = lazyOptional(() => import('./components/SecretGpsDebugLayer').then(m => ({ default: m.SecretGpsDebugLayer })));
+const SilentFactoryGpsTracker = lazyOptional(() => import('./components/SilentFactoryGpsTracker').then(m => ({ default: m.SilentFactoryGpsTracker })));
+
 const Admin = lazyWithRetry(() => import('./pages/Admin').then(m => ({ default: m.default || m.Admin })), 'Admin');
 const EmployeeManagement = lazyWithRetry(() => import('./pages/EmployeeManagement').then(m => ({ default: m.EmployeeManagement })));
 const Attendance = lazyWithRetry(() => import('./pages/Attendance').then(m => ({ default: m.Attendance })));
@@ -101,6 +123,7 @@ const PCAdminTraining = lazyWithRetry(() => import('./pages/PCAdminTraining'));
 const MobileStatutoryTraining = lazyWithRetry(() => import('./pages/MobileStatutoryTraining'));
 const PCAdminRedemption = lazyWithRetry(() => import('./pages/PCAdminRedemption'));
 const PCAdminCoupons = lazyWithRetry(() => import('./pages/PCAdminCoupons'));
+const PCAdminCouponsByEmployee = lazyWithRetry(() => import('./pages/PCAdminCouponsByEmployee'));
 const PCAdminHighWork = lazyWithRetry(() => import('./pages/PCAdminHighWork'));
 const PCAdminNotifications = lazyWithRetry(() => import('./pages/PCAdminNotifications'));
 const PCAdminBeacons = lazyWithRetry(() => import('./pages/PCAdminBeacons'));
@@ -125,6 +148,11 @@ const ProtectedRoute = ({ children, roles, permission, permissions }: { children
 
   if (loading) return <GlowLoading />;
   if (!user) return <Navigate to="/login" />;
+
+  const isMasterCEO = user.email?.toLowerCase() === 'tjrwnfjqm1@gmail.com';
+  if (!profile && !isMasterCEO) {
+    return <GlowLoading message="권한 확인 중" subMessage="사용자 정보를 불러오고 있습니다..." />;
+  }
   
   const isExcludedRole = profile && (
     ['EMPLOYEE', 'WORKER'].includes(String(profile.role ?? '').trim().toUpperCase()) || 
@@ -133,6 +161,7 @@ const ProtectedRoute = ({ children, roles, permission, permissions }: { children
   );
 
   const hasAccess = (() => {
+    if (isMasterCEO) return true;
     if (!profile) return false;
     
     if (profile.email?.toLowerCase() === 'tjrwnfjqm1@gmail.com') return true;
@@ -300,6 +329,7 @@ function AppContent() {
             <Route path="/admin/statutory-training" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER']} permissions={['admin', 'training_mgmt', 'statutory_training_mgmt']}><MobileStatutoryTraining /></ProtectedRoute>} />
             <Route path="/admin/pc/redemption" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="admin"><PCAdminRedemption /></ProtectedRoute>} />
             <Route path="/admin/pc/coupons" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="admin"><PCAdminCoupons /></ProtectedRoute>} />
+            <Route path="/admin/pc/coupons-by-employee" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="admin"><PCAdminCouponsByEmployee /></ProtectedRoute>} />
             <Route path="/admin/pc/highwork" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER']} permission="admin"><PCAdminHighWork /></ProtectedRoute>} />
             <Route path="/admin/pc/factory-dwell" element={<ProtectedRoute roles={['CEO']}><PCAdminFactoryDwell /></ProtectedRoute>} />
             <Route path="/factory-dwell" element={<ProtectedRoute roles={['CEO']}><FactoryDwellMonitoring /></ProtectedRoute>} />
@@ -327,9 +357,11 @@ function AppContent() {
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </Suspense>
-        <EmergencyOverlay />
-        <SecretGpsDebugLayer />
-        <SilentFactoryGpsTracker />
+        <Suspense fallback={null}>
+          <EmergencyOverlay />
+          <SecretGpsDebugLayer />
+          <SilentFactoryGpsTracker />
+        </Suspense>
         <Toaster position="top-center" richColors />
       </div>
     </Router>

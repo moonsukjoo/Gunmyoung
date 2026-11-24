@@ -563,20 +563,22 @@ export const Admin: React.FC = () => {
         subtitle="건명기업 통합 운영 · 인사 · 현장 관제 · 보상"
         title="관리자 제어 센터"
         rightAction={
-          <Link
-            to="/admin/pc-dashboard"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={cn(
-              "h-9 px-3 rounded-2xl border text-xs font-black flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all",
-              isLight
-                ? "bg-[#EFF6FF] border-blue-200/80 text-blue-700 hover:bg-blue-100/70"
-                : "bg-muted/60 border-border text-foreground hover:bg-muted"
-            )}
-          >
-            <LayoutDashboard className="w-3.5 h-3.5 text-blue-600" />
-            <span>PC 관제</span>
-          </Link>
+          (isAdminMode || (profile && !isExcludedRole && ['CEO', 'DIRECTOR', 'GENERAL_MANAGER'].includes(profile.role))) ? (
+            <Link
+              to="/admin/pc-dashboard"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(
+                "h-9 px-3 rounded-2xl border text-xs font-black flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all",
+                isLight
+                  ? "bg-[#EFF6FF] border-blue-200/80 text-blue-700 hover:bg-blue-100/70"
+                  : "bg-muted/60 border-border text-foreground hover:bg-muted"
+              )}
+            >
+              <LayoutDashboard className="w-3.5 h-3.5 text-blue-600" />
+              <span>PC 관제</span>
+            </Link>
+          ) : undefined
         }
       />
 

@@ -29,112 +29,106 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAuthReady, setIsAuthReady] = useState(false);
 
   useEffect(() => {
-    // Safety net: Force loading to end if it hangs too long (e.g. Firebase initialization issues)
+    // Safety net: Force loading to end only if auth initialization hangs completely
     const initTimeout = setTimeout(() => {
       console.warn("Auth initialization timed out, forcing ready state");
       setLoading(false);
       setIsAuthReady(true);
-    }, 5000);
+    }, 12000);
 
     let unsubscribeProfile: (() => void) | null = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
+        if (unsubscribeProfile) {
+          unsubscribeProfile();
+          unsubscribeProfile = null;
+        }
         setUser(firebaseUser);
         
         if (firebaseUser) {
+          setLoading(true);
           const email = firebaseUser.email || '';
           const namePrefix = email.split('@')[0] || '';
           const employeeId = namePrefix;
           const usersRef = collection(db, 'users');
 
-          // 1. Process profile migration/merging BEFORE setting up any snapshot listeners to avoid duplicate profiles
+          // 1. Check direct UID doc first for fast boot; only run migration queries if missing
           try {
-            const possibleIds = [employeeId, employeeId.toUpperCase(), employeeId.toLowerCase()];
-            const cleanedEmail = email.trim().toLowerCase();
-            
-            // Map to gather matching docs to merge
-            const matchedDocsMap = new Map<string, any>();
-            
-            // Query A: by employeeId
-            const qIds = query(usersRef, where('employeeId', 'in', [...new Set(possibleIds)]));
-            const idSnapshot = await getDocs(qIds);
-            idSnapshot.docs.forEach(doc => {
-              if (doc.id !== firebaseUser.uid) {
-                matchedDocsMap.set(doc.id, { id: doc.id, data: doc.data() });
+            const directDocSnap = await getDoc(doc(db, 'users', firebaseUser.uid));
+            if (!directDocSnap.exists()) {
+              const possibleIds = [employeeId, employeeId.toUpperCase(), employeeId.toLowerCase()];
+              const cleanedEmail = email.trim().toLowerCase();
+              const matchedDocsMap = new Map<string, any>();
+
+              const qIds = query(usersRef, where('employeeId', 'in', [...new Set(possibleIds)]));
+              const idSnapshot = await getDocs(qIds);
+              idSnapshot.docs.forEach(d => {
+                if (d.id !== firebaseUser.uid) {
+                  matchedDocsMap.set(d.id, { id: d.id, data: d.data() });
+                }
+              });
+
+              if (cleanedEmail && !cleanedEmail.includes('anonymous')) {
+                const qEmails = query(usersRef, where('email', '==', cleanedEmail));
+                const emailSnapshot = await getDocs(qEmails);
+                emailSnapshot.docs.forEach(d => {
+                  if (d.id !== firebaseUser.uid) {
+                    matchedDocsMap.set(d.id, { id: d.id, data: d.data() });
+                  }
+                });
+
+                const qEmailsRaw = query(usersRef, where('email', '==', email.trim()));
+                const emailSnapshotRaw = await getDocs(qEmailsRaw);
+                emailSnapshotRaw.docs.forEach(d => {
+                  if (d.id !== firebaseUser.uid) {
+                    matchedDocsMap.set(d.id, { id: d.id, data: d.data() });
+                  }
+                });
               }
-            });
 
-            // Query B: by email (if valid)
-            if (cleanedEmail && !cleanedEmail.includes('anonymous')) {
-              const qEmails = query(usersRef, where('email', '==', cleanedEmail));
-              const emailSnapshot = await getDocs(qEmails);
-              emailSnapshot.docs.forEach(doc => {
-                if (doc.id !== firebaseUser.uid) {
-                  matchedDocsMap.set(doc.id, { id: doc.id, data: doc.data() });
-                }
-              });
-              
-              const qEmailsRaw = query(usersRef, where('email', '==', email.trim()));
-              const emailSnapshotRaw = await getDocs(qEmailsRaw);
-              emailSnapshotRaw.docs.forEach(doc => {
-                if (doc.id !== firebaseUser.uid) {
-                  matchedDocsMap.set(doc.id, { id: doc.id, data: doc.data() });
-                }
-              });
-            }
+              if (matchedDocsMap.size > 0) {
+                let bestManualDocId: string | null = null;
+                let bestProfileData: any = null;
 
-            // Sync/Merge matched manual profiles with the native Auth account
-            if (matchedDocsMap.size > 0) {
-              let bestManualDocId: string | null = null;
-              let bestProfileData: any = null;
-
-              for (const [docId, item] of matchedDocsMap.entries()) {
-                if (!bestProfileData) {
-                  bestProfileData = item.data;
-                  bestManualDocId = docId;
-                } else {
-                  // Prefer profile with more populated fields or role not EMPLOYEE
-                  const currLen = Object.keys(item.data).length;
-                  const bestLen = Object.keys(bestProfileData).length;
-                  if (currLen > bestLen || item.data.role !== 'EMPLOYEE') {
+                for (const [docId, item] of matchedDocsMap.entries()) {
+                  if (!bestProfileData) {
                     bestProfileData = item.data;
                     bestManualDocId = docId;
+                  } else {
+                    const currLen = Object.keys(item.data).length;
+                    const bestLen = Object.keys(bestProfileData).length;
+                    if (currLen > bestLen || item.data.role !== 'EMPLOYEE') {
+                      bestProfileData = item.data;
+                      bestManualDocId = docId;
+                    }
                   }
                 }
-              }
 
-              if (bestManualDocId && bestProfileData) {
-                const currentDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-                const currentData = currentDoc.exists() ? currentDoc.data() : {};
+                if (bestManualDocId && bestProfileData) {
+                  const migratedProfile = {
+                    ...bestProfileData,
+                    uid: firebaseUser.uid,
+                    email: email || bestProfileData.email || '',
+                    employeeId: bestProfileData.employeeId || employeeId,
+                    displayName: bestProfileData.displayName || firebaseUser.displayName || employeeId.toUpperCase(),
+                    isActive: true,
+                    updatedAt: new Date().toISOString()
+                  };
 
-                const migratedProfile = {
-                  ...bestProfileData,
-                  ...currentData, // Keep auth-specific fields if any already exist
-                  uid: firebaseUser.uid,
-                  email: email || bestProfileData.email || '',
-                  employeeId: bestProfileData.employeeId || employeeId,
-                  displayName: currentData.displayName || bestProfileData.displayName || firebaseUser.displayName || employeeId.toUpperCase(),
-                  isActive: true,
-                  updatedAt: new Date().toISOString()
-                };
-
-                // Save to the auth uid location
-                await setDoc(doc(db, 'users', firebaseUser.uid), migratedProfile);
-                
-                // Keep the DB clean by deleting the old duplicate entries
-                for (const docId of matchedDocsMap.keys()) {
-                  await deleteDoc(doc(db, 'users', docId));
+                  await setDoc(doc(db, 'users', firebaseUser.uid), migratedProfile);
+                  for (const docId of matchedDocsMap.keys()) {
+                    await deleteDoc(doc(db, 'users', docId));
+                  }
+                  toast.success('기존 등록된 임직원 정보가 온전하게 연동 및 병합되었습니다.');
                 }
-                
-                toast.success('기존 등록된 임직원 정보가 온전하게 연동 및 병합되었습니다.');
               }
             }
           } catch (syncErr) {
             console.error("Critical Profile Sync Error:", syncErr);
           }
 
-          // 2. Start the onSnapshot listener only after merging is completed
+          // 2. Start the onSnapshot listener
           unsubscribeProfile = onSnapshot(doc(db, 'users', firebaseUser.uid), async (snapshot) => {
             clearTimeout(initTimeout); // Profile found or created, clear the guard
             try {
