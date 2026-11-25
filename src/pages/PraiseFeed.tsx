@@ -47,53 +47,93 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import confetti from 'canvas-confetti';
+import { MarineSubpageHero } from '@/components/MarineSubpageHero';
+import { Icon3DPraise } from '@/components/icons/Marine3DIcons';
 
-const RankingSection: React.FC<{ rankings: UserProfile[] }> = ({ rankings }) => {
+const RankingSection: React.FC<{
+  rankings: UserProfile[];
+  isLight: boolean;
+  isHighContrast: boolean;
+}> = ({ rankings, isLight, isHighContrast }) => {
   if (rankings.length === 0) return null;
 
   return (
-    <div className="mb-8">
-      <div className="flex items-center gap-2 mb-4">
-        <Trophy className="w-5 h-5 text-yellow-500" />
-        <h3 className="text-lg font-black text-foreground">이번 달 칭찬 랭킹</h3>
+    <div className="mb-6">
+      <div className="flex items-center gap-2 mb-3">
+        <Trophy className="w-5 h-5 text-amber-500" />
+        <h3 className="text-base font-black text-foreground">이번 달 칭찬 랭킹</h3>
       </div>
-      
-      <div className="grid grid-cols-1 gap-3">
+
+      <div className="grid grid-cols-1 gap-2.5">
         {rankings.map((user, index) => {
           const isFirst = index === 0;
           const isSecond = index === 1;
           const isThird = index === 2;
-          
+
           return (
             <motion.div
               key={user.uid}
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.1 }}
+              transition={{ delay: index * 0.08 }}
               className={cn(
-                "flex items-center justify-between p-4 rounded-2xl border",
-                isFirst ? "bg-yellow-500/10 border-yellow-500/20" : 
-                isSecond ? "bg-muted/50 border-border" : 
-                isThird ? "bg-orange-500/10 border-orange-500/20" : "bg-muted/30 border-border"
+                'flex items-center justify-between p-3.5 rounded-2xl border transition-colors',
+                isHighContrast
+                  ? 'bg-card border-2 border-border text-foreground'
+                  : isFirst
+                    ? isLight
+                      ? 'bg-amber-50 border-amber-200/80 shadow-xs'
+                      : 'bg-yellow-500/12 border-yellow-500/25'
+                    : isSecond
+                      ? isLight
+                        ? 'bg-white border-slate-200/80 shadow-xs'
+                        : 'bg-white/[0.06] border-white/12'
+                      : isThird
+                        ? isLight
+                          ? 'bg-orange-50/80 border-orange-200/80 shadow-xs'
+                          : 'bg-orange-500/12 border-orange-500/25'
+                        : isLight
+                          ? 'bg-white border-slate-200/70'
+                          : 'bg-white/[0.04] border-white/10'
               )}
             >
-              <div className="flex items-center gap-4">
-                <div className="flex items-center justify-center w-8 h-8 font-black text-sm">
-                  {isFirst ? <Crown className="w-6 h-6 text-yellow-500" /> : 
-                   isSecond ? <Medal className="w-5 h-5 text-gray-400" /> : 
-                   isThird ? <Medal className="w-5 h-5 text-orange-500" /> : index + 1}
+              <div className="flex items-center gap-3.5">
+                <div className="flex items-center justify-center w-8 h-8 font-black text-sm text-foreground">
+                  {isFirst ? (
+                    <Crown className="w-6 h-6 text-amber-500" />
+                  ) : isSecond ? (
+                    <Medal className="w-5 h-5 text-slate-400" />
+                  ) : isThird ? (
+                    <Medal className="w-5 h-5 text-orange-500" />
+                  ) : (
+                    index + 1
+                  )}
                 </div>
-                <div className="w-10 h-10 bg-muted rounded-xl flex items-center justify-center">
-                  <UserIcon className="w-5 h-5 text-muted-foreground opacity-50" />
+                <div
+                  className={cn(
+                    'w-10 h-10 rounded-xl flex items-center justify-center border',
+                    isLight ? 'bg-slate-100 border-slate-200/70' : 'bg-white/8 border-white/10'
+                  )}
+                >
+                  <UserIcon className="w-5 h-5 text-muted-foreground" />
                 </div>
                 <div>
                   <p className="text-sm font-black text-foreground">{user.displayName}님</p>
-                  <p className="text-[10px] font-bold text-muted-foreground">{user.departmentName}</p>
+                  <p className="text-[11px] font-bold text-muted-foreground">
+                    {user.departmentName || '현장'}
+                  </p>
                 </div>
               </div>
-              <div className="flex items-center gap-1 bg-muted px-3 py-1.5 rounded-full border border-border">
-                <Heart className="w-3 h-3 text-pink-500 fill-pink-500" />
-                <span className="text-xs font-black text-foreground">{user.monthlyKudosCount || 0}</span>
+              <div
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-full border',
+                  isLight
+                    ? 'bg-rose-50 border-rose-200/80 text-rose-600'
+                    : 'bg-muted border-border text-foreground'
+                )}
+              >
+                <Heart className="w-3.5 h-3.5 text-pink-500 fill-pink-500" />
+                <span className="text-xs font-black tabular-nums">{user.monthlyKudosCount || 0}</span>
               </div>
             </motion.div>
           );
@@ -103,7 +143,11 @@ const RankingSection: React.FC<{ rankings: UserProfile[] }> = ({ rankings }) => 
   );
 };
 
-const CommentSection: React.FC<{ praiseId: string; userProfile: UserProfile | null }> = ({ praiseId, userProfile }) => {
+const CommentSection: React.FC<{
+  praiseId: string;
+  userProfile: UserProfile | null;
+  isLight: boolean;
+}> = ({ praiseId, userProfile, isLight }) => {
   const [comments, setComments] = useState<PraiseComment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -156,21 +200,26 @@ const CommentSection: React.FC<{ praiseId: string; userProfile: UserProfile | nu
         isRead: false,
         createdAt: new Date().toISOString()
       });
-      // Just for UX, in real app we'd check permissions
       await deleteDoc(doc(db, 'praises', praiseId, 'comments', commentId));
       toast.success('댓글이 삭제되었습니다.');
     } catch (err) {}
   };
 
   return (
-    <div className="mt-4 border-t border-white/5 pt-4">
-      <button 
+    <div
+      className={cn(
+        'mt-3 border-t pt-3',
+        isLight ? 'border-slate-100' : 'border-white/10'
+      )}
+    >
+      <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 text-[10px] font-black text-muted-foreground hover:text-primary transition-colors"
+        className="flex items-center gap-2 text-xs font-black text-muted-foreground hover:text-primary transition-colors cursor-pointer"
       >
-        <MessageSquare className="w-3 h-3" />
+        <MessageSquare className="w-3.5 h-3.5" />
         댓글 {comments.length > 0 ? comments.length : ''}
-        {isOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+        {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
       </button>
 
       <AnimatePresence>
@@ -179,33 +228,48 @@ const CommentSection: React.FC<{ praiseId: string; userProfile: UserProfile | nu
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden space-y-3 mt-3"
+            className="overflow-hidden space-y-2.5 mt-3"
           >
             {comments.map(comment => (
-              <div key={comment.id} className="bg-white/5 p-3 rounded-xl flex flex-col gap-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-black text-primary">{comment.userName}</span>
-                  <span className="text-[8px] text-muted-foreground">{format(new Date(comment.createdAt), 'MM.dd HH:mm')}</span>
+              <div
+                key={comment.id}
+                className={cn(
+                  'p-3 rounded-xl flex flex-col gap-1 border',
+                  isLight
+                    ? 'bg-slate-50 border-slate-200/70'
+                    : 'bg-white/[0.06] border-white/10'
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-black text-primary">{comment.userName}</span>
+                  <span className="text-[10px] font-bold text-muted-foreground">
+                    {comment.createdAt ? format(new Date(comment.createdAt), 'MM.dd HH:mm') : ''}
+                  </span>
                 </div>
-                <p className="text-[11px] text-white/80">{comment.message}</p>
+                <p className="text-xs text-foreground leading-relaxed">{comment.message}</p>
               </div>
             ))}
 
             <div className="flex gap-2 items-center mt-2">
-              <Input 
+              <Input
                 placeholder="따뜻한 댓글을 남겨주세요"
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
-                className="bg-white/5 border-white/10 text-white h-9 rounded-xl text-xs font-medium"
+                className={cn(
+                  'h-9 rounded-xl text-xs font-medium text-foreground placeholder:text-muted-foreground',
+                  isLight
+                    ? 'bg-slate-50 border-slate-200'
+                    : 'bg-white/8 border-white/15'
+                )}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
               />
-              <Button 
-                size="sm" 
+              <Button
+                size="sm"
                 onClick={handleAddComment}
                 disabled={isSubmitting || !newComment.trim()}
-                className="h-9 px-3 rounded-xl bg-primary text-white"
+                className="h-9 px-3 rounded-xl bg-primary text-primary-foreground cursor-pointer"
               >
-                <Send className="w-3 h-3" />
+                <Send className="w-3.5 h-3.5" />
               </Button>
             </div>
           </motion.div>
@@ -222,6 +286,15 @@ export const PraiseFeed: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isWriteOpen, setIsWriteOpen] = useState(false);
   const [rankings, setRankings] = useState<UserProfile[]>([]);
+
+  const isHighContrast = !!profile?.highContrast;
+  const isLight = profile?.lightTheme !== false && !isHighContrast;
+
+  const cardSurfaceClass = isHighContrast
+    ? 'bg-card border-2 border-border text-foreground shadow-none'
+    : isLight
+      ? 'bg-white border border-slate-200/80 text-slate-900 shadow-[0_10px_28px_rgba(15,23,42,0.06)]'
+      : 'bg-[#111B2E]/92 border border-white/12 text-white shadow-[0_12px_32px_rgba(0,0,0,0.35)]';
   
   // Search & Select User
   const [searchTerm, setSearchTerm] = useState('');
@@ -393,190 +466,273 @@ export const PraiseFeed: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 pb-24 px-1">
-      <header className="flex items-center justify-between py-6">
-        <div className="flex items-center gap-3">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => navigate(-1)}
-            className="w-10 h-10 rounded-xl bg-muted border border-border text-foreground"
+    <div className="w-full space-y-5 pb-28 overflow-x-hidden bg-background">
+      <MarineSubpageHero
+        isLight={isLight}
+        highContrast={isHighContrast}
+        icon={<Icon3DPraise className="w-8 h-8" />}
+        iconBedClass={isLight ? 'bg-rose-50' : 'bg-rose-500/15'}
+        subtitle="동료의 안전과 배려에 감사의 마음을 전하세요"
+        title="칭찬 릴레이"
+        rightAction={
+          <Button
+            onClick={() => setIsWriteOpen(!isWriteOpen)}
+            className={cn(
+              'rounded-2xl font-black gap-1.5 transition-all cursor-pointer h-10 px-4 text-xs shadow-sm',
+              isWriteOpen
+                ? 'bg-muted text-foreground border border-border hover:bg-muted/80'
+                : 'bg-gradient-to-r from-rose-500 to-pink-600 text-white hover:opacity-95 shadow-rose-500/20'
+            )}
           >
-            <ChevronLeft className="w-5 h-5" />
+            {isWriteOpen ? (
+              '취소'
+            ) : (
+              <>
+                <Heart className="w-3.5 h-3.5 fill-white" />
+                칭찬하기
+              </>
+            )}
           </Button>
-          <div>
-            <h2 className="text-2xl font-black text-foreground tracking-tight">칭찬 릴레이</h2>
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Praise Relay & Kudos</p>
-          </div>
-        </div>
-        <Button 
-          onClick={() => setIsWriteOpen(!isWriteOpen)}
-          className={cn(
-            " rounded-2xl font-black gap-2 transition-all shadow-lg",
-            isWriteOpen ? "bg-muted text-foreground" : "bg-primary text-white shadow-primary/20"
-          )}
-        >
-          {isWriteOpen ? '취소' : (
-            <>
-              <Heart className="w-4 h-4 fill-white" />
-              칭찬하기
-            </>
-          )}
-        </Button>
-      </header>
+        }
+      />
 
-      {/* Write Section */}
-      <AnimatePresence>
-        {isWriteOpen && (
-          <motion.div
-            initial={{ opacity: 0, height: 0, y: -20 }}
-            animate={{ opacity: 1, height: 'auto', y: 0 }}
-            exit={{ opacity: 0, height: 0, y: -20 }}
-            className="overflow-hidden"
-          >
-            <Card className="bg-card border-primary/20 rounded-3xl overflow-hidden mb-6 shadow-xl shadow-primary/5">
-              <CardContent className="p-6 space-y-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-primary uppercase ml-1">누구를 칭찬할까요?</label>
-                  {!selectedUser ? (
-                    <div className="relative">
-                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input 
-                        placeholder="동료 이름 또는 사번 입력"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="bg-white/5 border-white/10 text-white pl-11 h-12 rounded-2xl font-bold"
-                      />
-                      {searchResults.length > 0 && (
-                        <div className="absolute top-full left-0 right-0 z-50 bg-[#1a1a1a] border border-white/10 rounded-2xl mt-2 overflow-hidden shadow-2xl">
-                          {searchResults.map(user => (
-                            <button
-                              key={user.uid}
-                              onClick={() => {
-                                setSelectedUser(user);
-                                setSearchResults([]);
-                                setSearchTerm('');
-                              }}
-                              className="w-full p-4 flex items-center gap-3 hover:bg-white/5 transition-colors border-b border-white/5 last:border-0"
-                            >
-                              <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-muted-foreground">
-                                <UserIcon className="w-5 h-5" />
-                              </div>
-                              <div className="text-left">
-                                <p className="text-sm font-black text-white">{user.displayName}</p>
-                                <p className="text-[10px] text-muted-foreground font-bold">{user.departmentName} · {user.employeeId}</p>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between p-4 bg-primary/10 rounded-2xl border border-primary/20">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-primary text-white rounded-xl flex items-center justify-center">
-                          <UserIcon className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-black text-white">{selectedUser.displayName}</p>
-                          <p className="text-[10px] text-primary font-bold">{selectedUser.departmentName}</p>
-                        </div>
-                      </div>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        onClick={() => setSelectedUser(null)}
-                        className="text-[10px] font-black text-primary hover:bg-primary/20"
-                      >
-                        변경
-                      </Button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-primary uppercase ml-1">응원 메시지</label>
-                  <Textarea 
-                    placeholder="동료의 안전한 행동이나 도움에 대해 작성해주세요!"
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    className="bg-white/5 border-white/10 text-white rounded-2xl min-h-[100px] font-medium leading-relaxed"
-                  />
-                </div>
-
-                <Button 
-                  onClick={handleSendPraise}
-                  disabled={isSending || !selectedUser || !message.trim()}
-                  className="w-full h-14 bg-primary text-white font-black text-lg rounded-2xl shadow-lg shadow-primary/20 gap-2"
-                >
-                  <Send className="w-5 h-5" />
-                  {isSending ? '보내는 중...' : '칭찬 전송하기'}
-                </Button>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <RankingSection rankings={rankings} />
-
-      {/* Feed List */}
-      <div className="space-y-4">
-        {loading ? (
-          <div className="flex justify-center p-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-          </div>
-        ) : praises.length > 0 ? (
-          praises.map((praise) => (
+      <div className="px-4 space-y-5">
+        {/* Write Section */}
+        <AnimatePresence>
+          {isWriteOpen && (
             <motion.div
-              key={praise.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
+              initial={{ opacity: 0, height: 0, y: -12 }}
+              animate={{ opacity: 1, height: 'auto', y: 0 }}
+              exit={{ opacity: 0, height: 0, y: -12 }}
+              className="overflow-visible"
             >
-              <Card className="bg-card border-white/5 rounded-3xl overflow-hidden group hover:border-primary/10 transition-all shadow-lg">
-                <CardContent className="p-5 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex -space-x-2">
-                        <div className="w-8 h-8 bg-white/5 rounded-full border-2 border-card flex items-center justify-center text-muted-foreground">
-                           <UserIcon className="w-4 h-4" />
-                        </div>
-                        <div className="w-8 h-8 bg-primary/20 rounded-full border-2 border-card flex items-center justify-center text-primary">
-                           <Heart className="w-4 h-4 fill-primary" />
-                        </div>
+              <Card className={cn('rounded-3xl overflow-visible', cardSurfaceClass)}>
+                <CardContent className="p-5 sm:p-6 space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-black text-primary uppercase ml-1">
+                      누구를 칭찬할까요?
+                    </label>
+                    {!selectedUser ? (
+                      <div className="relative">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input
+                          placeholder="동료 이름 또는 사번 입력"
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className={cn(
+                            'pl-11 h-12 rounded-2xl font-bold text-foreground placeholder:text-muted-foreground',
+                            isLight
+                              ? 'bg-slate-50 border-slate-200'
+                              : 'bg-white/8 border-white/15'
+                          )}
+                        />
+                        {searchResults.length > 0 && (
+                          <div
+                            className={cn(
+                              'absolute top-full left-0 right-0 z-50 rounded-2xl mt-2 overflow-hidden shadow-2xl border',
+                              isLight
+                                ? 'bg-white border-slate-200 text-slate-900'
+                                : 'bg-[#162033] border-white/15 text-white'
+                            )}
+                          >
+                            {searchResults.map(user => (
+                              <button
+                                key={user.uid}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedUser(user);
+                                  setSearchResults([]);
+                                  setSearchTerm('');
+                                }}
+                                className={cn(
+                                  'w-full p-3.5 flex items-center gap-3 transition-colors border-b last:border-0 cursor-pointer',
+                                  isLight
+                                    ? 'hover:bg-slate-50 border-slate-100'
+                                    : 'hover:bg-white/8 border-white/10'
+                                )}
+                              >
+                                <div
+                                  className={cn(
+                                    'w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground',
+                                    isLight ? 'bg-slate-100' : 'bg-white/10'
+                                  )}
+                                >
+                                  <UserIcon className="w-5 h-5" />
+                                </div>
+                                <div className="text-left">
+                                  <p className="text-sm font-black text-foreground">{user.displayName}</p>
+                                  <p className="text-[11px] text-muted-foreground font-bold">
+                                    {user.departmentName || '현장'} · {user.employeeId}
+                                  </p>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      <div className="flex flex-col">
-                        <span className="text-xs font-black text-white">
-                          {praise.senderName} <span className="text-muted-foreground font-bold mx-1">→</span> {praise.receiverName}
-                        </span>
-                        <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest">
-                          {format(new Date(praise.createdAt), 'MM.dd HH:mm')}
-                        </span>
+                    ) : (
+                      <div className="flex items-center justify-between p-4 bg-primary/10 rounded-2xl border border-primary/25">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-primary text-primary-foreground rounded-xl flex items-center justify-center">
+                            <UserIcon className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-black text-foreground">{selectedUser.displayName}</p>
+                            <p className="text-[11px] text-primary font-bold">
+                              {selectedUser.departmentName || '현장'}
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedUser(null)}
+                          className="text-xs font-black text-primary hover:bg-primary/15 cursor-pointer"
+                        >
+                          변경
+                        </Button>
                       </div>
-                    </div>
+                    )}
                   </div>
 
-                  <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5 relative">
-                    <MessageCircle className="absolute -top-2 -left-2 w-5 h-5 text-primary opacity-20" />
-                    <p className="text-xs font-medium text-white leading-relaxed">
-                      {praise.message}
-                    </p>
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-black text-primary uppercase ml-1">
+                      응원 메시지
+                    </label>
+                    <Textarea
+                      placeholder="동료의 안전한 행동이나 도움에 대해 작성해주세요!"
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      className={cn(
+                        'rounded-2xl min-h-[100px] font-medium leading-relaxed text-foreground placeholder:text-muted-foreground',
+                        isLight
+                          ? 'bg-slate-50 border-slate-200'
+                          : 'bg-white/8 border-white/15'
+                      )}
+                    />
                   </div>
 
-                  <CommentSection praiseId={praise.id} userProfile={profile} />
+                  <Button
+                    onClick={handleSendPraise}
+                    disabled={isSending || !selectedUser || !message.trim()}
+                    className="w-full h-12 bg-gradient-to-r from-rose-500 to-pink-600 hover:opacity-95 text-white font-black text-base rounded-2xl shadow-lg shadow-rose-500/20 gap-2 cursor-pointer"
+                  >
+                    <Send className="w-4 h-4" />
+                    {isSending ? '보내는 중...' : '칭찬 전송하기'}
+                  </Button>
                 </CardContent>
               </Card>
             </motion.div>
-          ))
-        ) : (
-          <div className="p-12 text-center bg-white/5 rounded-3xl border border-dashed border-white/10 flex flex-col items-center gap-3">
-            <Heart className="w-12 h-12 text-muted-foreground opacity-20" />
-            <div>
-              <p className="text-sm font-black text-white opacity-40">아직 칭찬이 없습니다</p>
-              <p className="text-[10px] text-muted-foreground font-bold">첫 번째 칭찬의 주인공이 되어보세요!</p>
+          )}
+        </AnimatePresence>
+
+        <RankingSection
+          rankings={rankings}
+          isLight={isLight}
+          isHighContrast={isHighContrast}
+        />
+
+        {/* Feed List */}
+        <div className="space-y-4">
+          {loading ? (
+            <div className="flex justify-center p-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
             </div>
-          </div>
-        )}
+          ) : praises.length > 0 ? (
+            praises.map((praise) => (
+              <motion.div
+                key={praise.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                <Card
+                  className={cn(
+                    'rounded-3xl overflow-hidden group transition-all',
+                    cardSurfaceClass
+                  )}
+                >
+                  <CardContent className="p-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex -space-x-2">
+                          <div
+                            className={cn(
+                              'w-9 h-9 rounded-full border-2 flex items-center justify-center text-muted-foreground',
+                              isLight
+                                ? 'bg-slate-100 border-white'
+                                : 'bg-white/10 border-[#111B2E]'
+                            )}
+                          >
+                            <UserIcon className="w-4 h-4" />
+                          </div>
+                          <div
+                            className={cn(
+                              'w-9 h-9 rounded-full border-2 flex items-center justify-center text-rose-500',
+                              isLight
+                                ? 'bg-rose-50 border-white'
+                                : 'bg-rose-500/20 border-[#111B2E]'
+                            )}
+                          >
+                            <Heart className="w-4 h-4 fill-rose-500" />
+                          </div>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-black text-foreground">
+                            {praise.senderName}
+                            <span className="text-muted-foreground font-bold mx-1.5">→</span>
+                            <span className="text-primary">{praise.receiverName}</span>
+                          </span>
+                          <span className="text-[10px] font-bold text-muted-foreground tracking-wide">
+                            {praise.createdAt ? format(new Date(praise.createdAt), 'MM.dd HH:mm') : ''}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      className={cn(
+                        'p-4 rounded-2xl border relative',
+                        isLight
+                          ? 'bg-slate-50/90 border-slate-200/70'
+                          : isHighContrast
+                            ? 'bg-muted/40 border-border'
+                            : 'bg-white/[0.04] border-white/10'
+                      )}
+                    >
+                      <MessageCircle className="absolute -top-2 -left-2 w-5 h-5 text-rose-500/35" />
+                      <p className="text-xs sm:text-sm font-medium text-foreground leading-relaxed whitespace-pre-wrap">
+                        {praise.message}
+                      </p>
+                    </div>
+
+                    <CommentSection
+                      praiseId={praise.id}
+                      userProfile={profile}
+                      isLight={isLight}
+                    />
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))
+          ) : (
+            <div
+              className={cn(
+                'p-12 text-center rounded-3xl border border-dashed flex flex-col items-center gap-3',
+                isLight
+                  ? 'bg-white border-slate-300'
+                  : 'bg-white/5 border-white/15'
+              )}
+            >
+              <Heart className="w-12 h-12 text-rose-400/50" />
+              <div>
+                <p className="text-sm font-black text-foreground">아직 칭찬이 없습니다</p>
+                <p className="text-xs text-muted-foreground font-bold mt-1">
+                  첫 번째 칭찬의 주인공이 되어보세요!
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

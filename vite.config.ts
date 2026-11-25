@@ -14,6 +14,7 @@ export default defineConfig(({mode}) => {
     },
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+      'import.meta.env.VITE_APP_BUILD_AT': JSON.stringify(new Date().toISOString()),
     },
     resolve: {
       alias: {
