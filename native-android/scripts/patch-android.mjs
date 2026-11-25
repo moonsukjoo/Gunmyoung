@@ -135,15 +135,49 @@ if (fs.existsSync(filePathsXml)) {
   }
 }
 
-// 5. Patch Android app/build.gradle versionCode & versionName when provided by CI
+// 5. Patch Android app/build.gradle versionCode, versionName, and deterministic signingConfig when provided by CI
 const appGradlePath = path.join(root, 'android', 'app', 'build.gradle');
-const envVersionCode = Number(process.env.APP_VERSION_CODE);
-const envVersionName = process.env.APP_VERSION_NAME;
-if (fs.existsSync(appGradlePath) && Number.isFinite(envVersionCode) && envVersionCode > 0 && envVersionName) {
+if (fs.existsSync(appGradlePath)) {
   let gradle = fs.readFileSync(appGradlePath, 'utf8');
-  gradle = gradle.replace(/versionCode\s+\d+/, `versionCode ${Math.floor(envVersionCode)}`);
-  gradle = gradle.replace(/versionName\s+"[^"]+"/, `versionName "${envVersionName}"`);
-  fs.writeFileSync(appGradlePath, gradle, 'utf8');
-  console.log(`[patch-android] Set Android versionCode=${Math.floor(envVersionCode)}, versionName=${envVersionName}`);
+  let gradleChanged = false;
+
+  const envVersionCode = Number(process.env.APP_VERSION_CODE);
+  const envVersionName = process.env.APP_VERSION_NAME;
+  if (Number.isFinite(envVersionCode) && envVersionCode > 0 && envVersionName) {
+    gradle = gradle.replace(/versionCode\s+\d+/, `versionCode ${Math.floor(envVersionCode)}`);
+    gradle = gradle.replace(/versionName\s+"[^"]+"/, `versionName "${envVersionName}"`);
+    gradleChanged = true;
+    console.log(`[patch-android] Set Android versionCode=${Math.floor(envVersionCode)}, versionName=${envVersionName}`);
+  }
+
+  const keystorePath = process.env.SIGNING_KEYSTORE_PATH;
+  if (keystorePath && fs.existsSync(keystorePath) && !gradle.includes('signingConfigs')) {
+    const signingBlock = `    signingConfigs {
+        gunmyoung {
+            storeFile file(System.getenv("SIGNING_KEYSTORE_PATH"))
+            storePassword System.getenv("SIGNING_STORE_PASSWORD")
+            keyAlias System.getenv("SIGNING_KEY_ALIAS")
+            keyPassword System.getenv("SIGNING_KEY_PASSWORD")
+        }
+    }
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.gunmyoung
+        }`;
+    if (gradle.includes('buildTypes {')) {
+      gradle = gradle.replace('    buildTypes {', signingBlock);
+      gradle = gradle.replace(
+        /release\s*\{/,
+        'release {\n            signingConfig signingConfigs.gunmyoung'
+      );
+      gradleChanged = true;
+      console.log(`[patch-android] Configured persistent signingConfig using ${keystorePath}`);
+    }
+  }
+
+  if (gradleChanged) {
+    fs.writeFileSync(appGradlePath, gradle, 'utf8');
+  }
 }
+
 

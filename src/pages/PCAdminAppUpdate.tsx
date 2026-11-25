@@ -338,7 +338,7 @@ const PCAdminAppUpdate: React.FC = () => {
                 </Button>
               </div>
               <p className="text-[11px] font-bold text-muted-foreground">
-                기본 저장소(`moonsukjoo/Gunmyoung`)가 이미 연결되어 있습니다. GitHub에 코드를 공유(Push)해 APK 빌드가 끝나면 직원 앱에서 자동으로 새 버전을 감지합니다.
+                기본 저장소(`moonsukjoo/Gunmyoung`)가 이미 연결되어 있습니다. GitHub에 코드를 공유(Push)해 APK 빌드가 끝나면 직원 앱에서 자동으로 새 버전을 감지합니다. (예전 구버전 앱에서 &apos;패키지 충돌&apos;이 뜨는 경우에만 1회 삭제 후 재설치하면 이후부터 삭제 없이 자동 덮어쓰기 됩니다.)
               </p>
             </div>
 

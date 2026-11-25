@@ -343,6 +343,11 @@ export const AppUpdateManager: React.FC = () => {
                   브라우저로 직접 내려받기
                 </button>
               )}
+              {!isDownloading && (
+                <p className="text-[11px] font-medium text-muted-foreground/90 text-center leading-snug px-2">
+                  ※ &apos;기존 패키지와 충돌&apos; 안내가 뜨면 기존 앱을 1회만 삭제 후 다시 설치해 주세요. 이후부터는 바로 덮어쓰기 업데이트됩니다.
+                </p>
+              )}
               {!availableUpdate?.forceUpdate && !isDownloading && (
                 <Button
                   variant="ghost"
