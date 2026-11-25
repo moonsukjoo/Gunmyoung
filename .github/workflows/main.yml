@@ -59,10 +59,13 @@ jobs:
       - name: "Capacitor 싱크 및 리소스 동기화"
         run: npx cap sync android
 
+      - name: "빌드 버전 정보 계산"
+        run: |
+          RUN_NUM="${{ github.run_number }}"
+          echo "APP_VERSION_CODE=$((100 + RUN_NUM))" >> "$GITHUB_ENV"
+          echo "APP_VERSION_NAME=1.0.${RUN_NUM}" >> "$GITHUB_ENV"
+
       - name: "네이티브 플러그인, 버전 코드 및 AndroidManifest 패치"
-        env:
-          APP_VERSION_CODE: ${{ 100 + github.run_number }}
-          APP_VERSION_NAME: 1.0.${{ github.run_number }}
         run: |
           node native-android/scripts/patch-android.mjs
           cat android/app/src/main/AndroidManifest.xml
@@ -100,16 +103,13 @@ jobs:
           ./gradlew clean assembleDebug --stacktrace
 
       - name: "자동 업데이트 릴리스 파일 생성"
-        env:
-          APP_VERSION_CODE: ${{ 100 + github.run_number }}
-          APP_VERSION_NAME: 1.0.${{ github.run_number }}
         run: |
           mkdir -p release-assets
           cp android/app/build/outputs/apk/debug/app-debug.apk release-assets/gunyoung-hrm-latest.apk
           cat <<EOF > release-assets/version.json
           {
-            "versionCode": $APP_VERSION_CODE,
-            "versionName": "$APP_VERSION_NAME",
+            "versionCode": ${{ env.APP_VERSION_CODE }},
+            "versionName": "${{ env.APP_VERSION_NAME }}",
             "apkFileName": "gunyoung-hrm-latest.apk",
             "builtAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
           }
@@ -119,12 +119,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: 건명기업 HRM v1.0.${{ github.run_number }}
+          tag_name: v${{ env.APP_VERSION_NAME }}
+          name: 건명기업 HRM v${{ env.APP_VERSION_NAME }}
           body: |
             자동 빌드된 최신 안드로이드 APK입니다.
-            - Version Name: 1.0.${{ github.run_number }}
-            - Version Code: ${{ 100 + github.run_number }}
+            - Version Name: ${{ env.APP_VERSION_NAME }}
+            - Version Code: ${{ env.APP_VERSION_CODE }}
           make_latest: true
           files: |
             release-assets/gunyoung-hrm-latest.apk
