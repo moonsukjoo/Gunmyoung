@@ -18,7 +18,9 @@ import {
 } from 'lucide-react';
 import {
   AppUpdateSettings,
+  DEFAULT_APK_URL,
   DEFAULT_APP_UPDATE_SETTINGS,
+  DEFAULT_GITHUB_REPO,
   fetchLatestGithubRelease,
   normalizeGithubRepo,
   saveAppUpdateSettings,
@@ -41,10 +43,10 @@ const PCAdminAppUpdate: React.FC = () => {
   const [savingReward, setSavingReward] = useState(false);
 
   // App update state
-  const [githubRepo, setGithubRepo] = useState('');
+  const [githubRepo, setGithubRepo] = useState(DEFAULT_GITHUB_REPO);
   const [latestVersionCode, setLatestVersionCode] = useState('101');
   const [latestVersionName, setLatestVersionName] = useState('1.0.1');
-  const [apkUrl, setApkUrl] = useState('');
+  const [apkUrl, setApkUrl] = useState(DEFAULT_APK_URL);
   const [releaseNotes, setReleaseNotes] = useState('');
   const [forceUpdate, setForceUpdate] = useState(false);
   const [autoCheckEnabled, setAutoCheckEnabled] = useState(true);
@@ -60,10 +62,10 @@ const PCAdminAppUpdate: React.FC = () => {
     const unsub = subscribeAppUpdateSettings((settings) => {
       if (settings) {
         setSavedMeta(settings);
-        setGithubRepo(settings.githubRepo || '');
+        setGithubRepo(settings.githubRepo || DEFAULT_GITHUB_REPO);
         setLatestVersionCode(String(settings.latestVersionCode || 100));
         setLatestVersionName(settings.latestVersionName || '1.0.0');
-        setApkUrl(settings.apkUrl || '');
+        setApkUrl(settings.apkUrl || DEFAULT_APK_URL);
         setReleaseNotes(settings.releaseNotes || '');
         setForceUpdate(!!settings.forceUpdate);
         setAutoCheckEnabled(settings.autoCheckEnabled !== false);
@@ -307,16 +309,21 @@ const PCAdminAppUpdate: React.FC = () => {
           <form onSubmit={handleSaveAppUpdate} className="space-y-5">
             {/* GitHub Repo Quick Sync */}
             <div className="p-5 rounded-3xl bg-blue-600/[0.04] border border-blue-500/20 space-y-3">
-              <label className="text-xs font-black text-foreground flex items-center gap-1.5">
-                <Github className="w-4 h-4 text-blue-600" />
-                GitHub 저장소 연동 (공개 저장소 권장 · 선택 사항)
-              </label>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="text-xs font-black text-foreground flex items-center gap-1.5">
+                  <Github className="w-4 h-4 text-blue-600" />
+                  연동된 GitHub 저장소 (`moonsukjoo/gun` → `moonsukjoo/Gunmyoung` 공개)
+                </label>
+                <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                  최고 관리자: tjrwnfjqm1@gmail.com
+                </span>
+              </div>
               <div className="flex flex-col sm:flex-row gap-2.5">
                 <Input
                   type="text"
                   value={githubRepo}
                   onChange={(e) => setGithubRepo(e.target.value)}
-                  placeholder="예: username/gunmyoung-app 또는 https://github.com/username/gunmyoung-app"
+                  placeholder="moonsukjoo/Gunmyoung"
                   className="h-12 rounded-xl bg-card border-border font-bold text-sm flex-1"
                 />
                 <Button
@@ -331,7 +338,7 @@ const PCAdminAppUpdate: React.FC = () => {
                 </Button>
               </div>
               <p className="text-[11px] font-bold text-muted-foreground">
-                저장소를 입력해 저장하면 직원 앱이 GitHub Releases의 최신 버전을 직접 확인하기도 합니다. 비공개 저장소라면 아래 APK URL에 Google Drive/Firebase Storage 등의 직접 다운로드 주소를 넣어주세요.
+                기본 저장소(`moonsukjoo/Gunmyoung`)가 이미 연결되어 있습니다. GitHub에 코드를 공유(Push)해 APK 빌드가 끝나면 직원 앱에서 자동으로 새 버전을 감지합니다.
               </p>
             </div>
 
@@ -375,7 +382,7 @@ const PCAdminAppUpdate: React.FC = () => {
                 type="url"
                 value={apkUrl}
                 onChange={(e) => setApkUrl(e.target.value)}
-                placeholder="https://github.com/아이디/저장소/releases/latest/download/gunyoung-hrm-latest.apk"
+                placeholder={DEFAULT_APK_URL}
                 className="h-12 rounded-xl bg-muted border-border font-bold text-sm"
               />
             </div>

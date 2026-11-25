@@ -271,7 +271,12 @@ const PCAdminLayout: React.FC<PCAdminLayoutProps> = ({ children, title, heroSect
   const safeTrim = (v: unknown) => (v == null ? '' : String(v)).trim();
   const safeLower = (v: unknown) => safeTrim(v).toLowerCase();
 
-  const isExcludedRole = profile && (
+  const isCEO =
+    profile?.role === 'CEO' ||
+    safeLower(profile?.email) === 'tjrwnfjqm1@gmail.com' ||
+    safeLower(user?.email) === 'tjrwnfjqm1@gmail.com';
+
+  const isExcludedRole = !isCEO && profile && (
     ['EMPLOYEE', 'TEAM_LEADER', 'WORKER'].includes(safeTrim(profile.role).toUpperCase()) ||
     ['조장', '반장', '사원'].includes(safeTrim(profile.position)) ||
     safeLower(profile.employeeId).includes('x66626') ||
@@ -302,8 +307,6 @@ const PCAdminLayout: React.FC<PCAdminLayoutProps> = ({ children, title, heroSect
       </div>
     );
   }
-
-  const isCEO = profile?.role === 'CEO' || profile?.email?.toLowerCase() === 'tjrwnfjqm1@gmail.com';
 
   const handleOpenCategory = (cat: NavCategory) => {
     if (activeDropdown === cat.id) {

@@ -45,11 +45,14 @@ interface AppUpdaterPlugin {
 
 const AppUpdater = registerPlugin<AppUpdaterPlugin>('AppUpdater');
 
+export const DEFAULT_GITHUB_REPO = 'moonsukjoo/Gunmyoung';
+export const DEFAULT_APK_URL = `https://github.com/${DEFAULT_GITHUB_REPO}/releases/latest/download/gunyoung-hrm-latest.apk`;
+
 export const DEFAULT_APP_UPDATE_SETTINGS: AppUpdateSettings = {
   latestVersionCode: 100,
   latestVersionName: '1.0.0',
-  apkUrl: '',
-  githubRepo: '',
+  apkUrl: DEFAULT_APK_URL,
+  githubRepo: DEFAULT_GITHUB_REPO,
   releaseNotes: '',
   forceUpdate: false,
   autoCheckEnabled: true,
@@ -200,8 +203,11 @@ export function normalizeGithubRepo(input: string): string {
   const raw = String(input || '').trim();
   if (!raw) return '';
   const match = raw.match(/github\.com\/([^/\s]+\/[^/\s#?]+)/i);
-  const repo = match ? match[1] : raw;
-  return repo.replace(/\.git$/i, '').replace(/^\/+|\/+$/g, '').slice(0, 200);
+  const repo = (match ? match[1] : raw).replace(/\.git$/i, '').replace(/^\/+|\/+$/g, '');
+  if (repo.toLowerCase() === 'moonsukjoo/gun') {
+    return DEFAULT_GITHUB_REPO;
+  }
+  return repo.slice(0, 200);
 }
 
 export interface GithubReleaseInfo {

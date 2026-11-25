@@ -87,6 +87,12 @@ jobs:
           java-version: '21'
           cache: 'gradle'
 
+      - name: "안드로이드 서명 키스토어 캐시 (기존 앱 덮어쓰기 업데이트 유지)"
+        uses: actions/cache@v4
+        with:
+          path: ~/.android
+          key: gunmyoung-android-keystore-v1
+
       - name: "안드로이드 APK 빌드"
         run: |
           cd android

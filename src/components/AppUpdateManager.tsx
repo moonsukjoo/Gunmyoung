@@ -14,6 +14,7 @@ import { Browser } from '@capacitor/browser';
 import {
   AppUpdateSettings,
   AppVersionInfo,
+  DEFAULT_GITHUB_REPO,
   DownloadProgressEvent,
   fetchLatestGithubRelease,
   getInstalledAppVersion,
@@ -68,11 +69,12 @@ export const AppUpdateManager: React.FC = () => {
         };
       }
 
-      const repo = settings?.githubRepo?.trim();
+      const repo = (settings?.githubRepo ?? DEFAULT_GITHUB_REPO).trim();
+      const autoCheck = settings ? settings.autoCheckEnabled !== false : true;
       const now = Date.now();
       const shouldFetchGithub =
         repo &&
-        (settings?.autoCheckEnabled !== false) &&
+        autoCheck &&
         (forceGithubCheck || now - lastGithubCheckRef.current > 10 * 60 * 1000);
 
       if (shouldFetchGithub && repo) {
@@ -98,10 +100,10 @@ export const AppUpdateManager: React.FC = () => {
     [settings]
   );
 
-  // Automatic check for native Android APK users
+  // Automatic check for native Android APK users (uses Firestore settings or moonsukjoo/Gunmyoung default)
   useEffect(() => {
     if (!installed?.isNativeAndroid) return;
-    if (!settings || settings.autoCheckEnabled === false) return;
+    if (settings && settings.autoCheckEnabled === false) return;
 
     let cancelled = false;
     resolveLatestTarget(false).then((target) => {
