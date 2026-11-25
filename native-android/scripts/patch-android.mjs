@@ -17,31 +17,42 @@ for (const file of javaFiles) {
   console.log(`[patch-android] Copied ${file}`);
 }
 
-// 2. Patch MainActivity.java to register SilentBgGpsPlugin
+// 2. Patch MainActivity.java to register SilentBgGpsPlugin & AppUpdaterPlugin
 const mainActivityPath = path.join(targetJavaDir, 'MainActivity.java');
 if (fs.existsSync(mainActivityPath)) {
   let mainActivity = fs.readFileSync(mainActivityPath, 'utf8');
-  if (!mainActivity.includes('registerPlugin(SilentBgGpsPlugin.class)')) {
-    if (!mainActivity.includes('import android.os.Bundle;')) {
-      mainActivity = mainActivity.replace(
-        'import com.getcapacitor.BridgeActivity;',
-        'import android.os.Bundle;\nimport com.getcapacitor.BridgeActivity;'
-      );
-    }
+  let changed = false;
 
+  if (!mainActivity.includes('import android.os.Bundle;')) {
+    mainActivity = mainActivity.replace(
+      'import com.getcapacitor.BridgeActivity;',
+      'import android.os.Bundle;\nimport com.getcapacitor.BridgeActivity;'
+    );
+    changed = true;
+  }
+
+  const pluginsToRegister = ['SilentBgGpsPlugin.class', 'AppUpdaterPlugin.class'];
+  const missingPlugins = pluginsToRegister.filter(p => !mainActivity.includes(`registerPlugin(${p})`));
+
+  if (missingPlugins.length > 0) {
+    const regCalls = missingPlugins.map(p => `registerPlugin(${p});`).join('\n        ');
     if (mainActivity.includes('super.onCreate(savedInstanceState);')) {
       mainActivity = mainActivity.replace(
         'super.onCreate(savedInstanceState);',
-        'registerPlugin(SilentBgGpsPlugin.class);\n        super.onCreate(savedInstanceState);'
+        `${regCalls}\n        super.onCreate(savedInstanceState);`
       );
     } else {
       mainActivity = mainActivity.replace(
         /public class MainActivity extends BridgeActivity\s*\{/,
-        `public class MainActivity extends BridgeActivity {\n    @Override\n    public void onCreate(Bundle savedInstanceState) {\n        registerPlugin(SilentBgGpsPlugin.class);\n        super.onCreate(savedInstanceState);\n    }`
+        `public class MainActivity extends BridgeActivity {\n    @Override\n    public void onCreate(Bundle savedInstanceState) {\n        ${regCalls}\n        super.onCreate(savedInstanceState);\n    }`
       );
     }
+    changed = true;
+  }
+
+  if (changed) {
     fs.writeFileSync(mainActivityPath, mainActivity, 'utf8');
-    console.log('[patch-android] Registered SilentBgGpsPlugin in MainActivity.java');
+    console.log('[patch-android] Registered native plugins in MainActivity.java');
   }
 }
 
@@ -50,6 +61,8 @@ if (fs.existsSync(manifestPath)) {
   let manifest = fs.readFileSync(manifestPath, 'utf8');
 
   const requiredPermissions = [
+    '<uses-permission android:name="android.permission.INTERNET" />',
+    '<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />',
     '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />',
     '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />',
     '<uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />',
@@ -110,3 +123,27 @@ if (fs.existsSync(manifestPath)) {
   fs.writeFileSync(manifestPath, manifest, 'utf8');
   console.log('[patch-android] Patched AndroidManifest.xml cleanly');
 }
+
+// 4. Ensure FileProvider cache path exists for APK updates
+const filePathsXml = path.join(root, 'android', 'app', 'src', 'main', 'res', 'xml', 'file_paths.xml');
+if (fs.existsSync(filePathsXml)) {
+  let xml = fs.readFileSync(filePathsXml, 'utf8');
+  if (!xml.includes('name="updates_cache"')) {
+    xml = xml.replace('</paths>', '    <cache-path name="updates_cache" path="updates/" />\n</paths>');
+    fs.writeFileSync(filePathsXml, xml, 'utf8');
+    console.log('[patch-android] Added updates_cache path to file_paths.xml');
+  }
+}
+
+// 5. Patch Android app/build.gradle versionCode & versionName when provided by CI
+const appGradlePath = path.join(root, 'android', 'app', 'build.gradle');
+const envVersionCode = Number(process.env.APP_VERSION_CODE);
+const envVersionName = process.env.APP_VERSION_NAME;
+if (fs.existsSync(appGradlePath) && Number.isFinite(envVersionCode) && envVersionCode > 0 && envVersionName) {
+  let gradle = fs.readFileSync(appGradlePath, 'utf8');
+  gradle = gradle.replace(/versionCode\s+\d+/, `versionCode ${Math.floor(envVersionCode)}`);
+  gradle = gradle.replace(/versionName\s+"[^"]+"/, `versionName "${envVersionName}"`);
+  fs.writeFileSync(appGradlePath, gradle, 'utf8');
+  console.log(`[patch-android] Set Android versionCode=${Math.floor(envVersionCode)}, versionName=${envVersionName}`);
+}
+

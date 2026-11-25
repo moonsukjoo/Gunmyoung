@@ -17,7 +17,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { grantRandomShipPart } from '@/services/shipService';
-import { awardDailyAttendancePoints } from '@/services/attendancePointService';
+import { awardDailyAttendancePoints, useDailyAttendanceRewardKrw } from '@/services/attendancePointService';
 import { 
   format, 
   startOfMonth, 
@@ -90,6 +90,7 @@ import { Icon3DClock } from '@/components/icons/Marine3DIcons';
 export const Attendance: React.FC = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const dailyRewardKrw = useDailyAttendanceRewardKrw();
   const {
     locationSettings,
     currentLocation,
@@ -246,7 +247,7 @@ export const Attendance: React.FC = () => {
       });
       const pointResult = await awardDailyAttendancePoints(profile.uid, ds);
       if (pointResult.awarded) {
-        toast.success('출근 완료! 칭찬포인트 +10원 적립', {
+        toast.success(`출근 완료! 칭찬포인트 +${pointResult.rewardKrw}원 적립`, {
           description: `유령 가드 활성화 · 현재 보유 ${pointResult.totalKrw.toLocaleString()}원`
         });
       } else {
@@ -609,7 +610,7 @@ export const Attendance: React.FC = () => {
                   >
                     <LogIn className="w-5 h-5" />
                     <span className="font-black text-xs">
-                      출근 등록{!todayAttendance?.clockIn ? ' (+10원)' : ''}
+                      출근 등록{!todayAttendance?.clockIn ? ` (+${dailyRewardKrw}원)` : ''}
                     </span>
                   </button>
 

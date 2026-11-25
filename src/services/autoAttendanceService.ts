@@ -114,13 +114,13 @@ export async function executeAutoClockIn(
       isImmobile: false
     }).catch(err => console.warn('User ghost guard update warning', err));
 
-    // Grant ship part & daily 10 KRW praise points (once per day)
+    // Grant ship part & daily attendance praise points (once per day)
     grantRandomShipPart(uid, '출근');
     const pointResult = await awardDailyAttendancePoints(uid, todayStr);
 
     return { 
       success: true, 
-      message: `[자동 출근 완료] 사업장 반경 1km 이내 진입 (${format(dt, 'HH:mm')})${pointResult.awarded ? ' · 칭찬포인트 +10원 적립' : ''}` 
+      message: `[자동 출근 완료] 사업장 반경 1km 이내 진입 (${format(dt, 'HH:mm')})${pointResult.awarded ? ` · 칭찬포인트 +${pointResult.rewardKrw}원 적립` : ''}` 
     };
   } catch (error: any) {
     console.error('Auto clock-in failed', error);

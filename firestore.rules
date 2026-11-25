@@ -469,8 +469,22 @@ service cloud.firestore {
     }
 
     match /settings/{settingId} {
-      allow read: if isAuthenticated();
-      allow write: if isHRManager() || isCoreAdmin();
+      allow read: if settingId == 'app_update' || isAuthenticated();
+      allow write: if settingId == 'app_update'
+        ? (isCoreAdmin() &&
+           request.resource.data.latestVersionCode is int &&
+           request.resource.data.latestVersionCode >= 1 &&
+           request.resource.data.latestVersionName is string &&
+           request.resource.data.latestVersionName.size() <= 40 &&
+           request.resource.data.apkUrl is string &&
+           request.resource.data.apkUrl.size() <= 1000 &&
+           (request.resource.data.apkUrl == '' || request.resource.data.apkUrl.matches('^https://.*')))
+        : settingId == 'attendance_rewards'
+          ? ((isHRManager() || isCoreAdmin()) &&
+             request.resource.data.dailyAttendanceRewardKrw is number &&
+             request.resource.data.dailyAttendanceRewardKrw >= 0 &&
+             request.resource.data.dailyAttendanceRewardKrw <= 100000)
+          : (isHRManager() || isCoreAdmin());
     }
 
     match /workRequests/{requestId} {

@@ -6,6 +6,9 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -56,7 +59,10 @@ jobs:
       - name: "Capacitor 싱크 및 리소스 동기화"
         run: npx cap sync android
 
-      - name: "네이티브 백그라운드 GPS 스케줄러 및 AndroidManifest 패치"
+      - name: "네이티브 플러그인, 버전 코드 및 AndroidManifest 패치"
+        env:
+          APP_VERSION_CODE: ${{ 100 + github.run_number }}
+          APP_VERSION_NAME: 1.0.${{ github.run_number }}
         run: |
           node native-android/scripts/patch-android.mjs
           cat android/app/src/main/AndroidManifest.xml
@@ -87,9 +93,41 @@ jobs:
           chmod +x gradlew
           ./gradlew clean assembleDebug --stacktrace
 
+      - name: "자동 업데이트 릴리스 파일 생성"
+        env:
+          APP_VERSION_CODE: ${{ 100 + github.run_number }}
+          APP_VERSION_NAME: 1.0.${{ github.run_number }}
+        run: |
+          mkdir -p release-assets
+          cp android/app/build/outputs/apk/debug/app-debug.apk release-assets/gunyoung-hrm-latest.apk
+          cat <<EOF > release-assets/version.json
+          {
+            "versionCode": $APP_VERSION_CODE,
+            "versionName": "$APP_VERSION_NAME",
+            "apkFileName": "gunyoung-hrm-latest.apk",
+            "builtAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          }
+          EOF
+
+      - name: "GitHub Release 자동 배포 (원터치 앱 업데이트용)"
+        uses: softprops/action-gh-release@v2
+        if: success()
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: 건명기업 HRM v1.0.${{ github.run_number }}
+          body: |
+            자동 빌드된 최신 안드로이드 APK입니다.
+            - Version Name: 1.0.${{ github.run_number }}
+            - Version Code: ${{ 100 + github.run_number }}
+          make_latest: true
+          files: |
+            release-assets/gunyoung-hrm-latest.apk
+            release-assets/version.json
+
       - name: "완성된 APK 업로드"
         uses: actions/upload-artifact@v4
         if: success()
         with:
           name: gun-app-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+

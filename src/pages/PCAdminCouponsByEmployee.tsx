@@ -18,7 +18,9 @@ import {
   Clock as ClockIcon,
   Download,
   Users,
-  Award
+  Award,
+  Coins,
+  Save
 } from 'lucide-react';
 import { collection, query, getDocs, addDoc, updateDoc, deleteDoc, doc, increment, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -28,7 +30,13 @@ import PCAdminLayout from '../components/PCAdminLayout';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'motion/react';
-import { formatPointsDisplay, pointsToKrw } from '../services/attendancePointService';
+import {
+  formatPointsDisplay,
+  pointsToKrw,
+  saveDailyAttendanceRewardKrw,
+  useAttendanceRewardSettings,
+  KRW_PER_POINT,
+} from '../services/attendancePointService';
 
 const PCAdminCouponsByEmployee: React.FC = () => {
   const { profile } = useAuth();
@@ -58,6 +66,17 @@ const PCAdminCouponsByEmployee: React.FC = () => {
   // Direct Point Edit Modal State
   const [isDirectPointModalOpen, setIsDirectPointModalOpen] = useState(false);
   const [directPointsInput, setDirectPointsInput] = useState<number>(0);
+
+  // Daily Attendance Praise Point Setting State (Firestore synced)
+  const rewardMeta = useAttendanceRewardSettings();
+  const [dailyRewardInput, setDailyRewardInput] = useState<string>(
+    String(rewardMeta.dailyAttendanceRewardKrw)
+  );
+  const [savingDailyReward, setSavingDailyReward] = useState(false);
+
+  useEffect(() => {
+    setDailyRewardInput(String(rewardMeta.dailyAttendanceRewardKrw));
+  }, [rewardMeta.dailyAttendanceRewardKrw]);
 
   useEffect(() => {
     fetchData();
@@ -255,9 +274,97 @@ const PCAdminCouponsByEmployee: React.FC = () => {
     }
   };
 
+  const handleSaveDailyRewardSetting = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const num = Number(dailyRewardInput);
+    if (!Number.isFinite(num) || num < 0 || num > 100000) {
+      toast.error('0원 이상 100,000원 이하의 금액을 입력해주세요.');
+      return;
+    }
+    setSavingDailyReward(true);
+    try {
+      const saved = await saveDailyAttendanceRewardKrw(
+        num,
+        profile?.uid,
+        profile?.displayName || '관리자'
+      );
+      toast.success(
+        `출근 시 칭찬포인트가 ${saved.toLocaleString()}원(${(saved / KRW_PER_POINT).toFixed(4)}P)으로 즉시 변경되었습니다.`
+      );
+    } catch (err) {
+      console.error(err);
+      toast.error('출근 포인트 설정 저장 중 오류가 발생했습니다.');
+    } finally {
+      setSavingDailyReward(false);
+    }
+  };
+
   return (
     <PCAdminLayout title="사원별 칭찬쿠폰 및 포인트 관리">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 max-w-[1600px] mx-auto p-4 lg:p-8 text-foreground pb-20">
+      <div className="max-w-[1600px] mx-auto p-4 lg:p-8 text-foreground pb-20 space-y-6">
+        {/* Global Daily Attendance Reward Settings Bar (Firestore synced) */}
+        <form
+          onSubmit={handleSaveDailyRewardSetting}
+          className="bg-card border border-border rounded-[2rem] p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-xs"
+        >
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="w-11 h-11 rounded-2xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center text-amber-500 shrink-0">
+              <Coins className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm font-black text-foreground">
+                  출근 시 자동 지급 칭찬포인트 설정 (실시간 적용)
+                </h3>
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[11px] font-black">
+                  현재 {rewardMeta.dailyAttendanceRewardKrw.toLocaleString()}원/일
+                </span>
+              </div>
+              <p className="text-xs font-bold text-muted-foreground mt-0.5">
+                변경 저장 즉시 재빌드 없이 모든 직원 앱의 출근 적립 금액과 화면 문구가 바뀝니다.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {[10, 30, 50, 100].map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => setDailyRewardInput(String(preset))}
+                className={`px-3 py-2 rounded-xl text-xs font-black border cursor-pointer transition-all ${
+                  Number(dailyRewardInput) === preset
+                    ? 'bg-amber-500 text-white border-amber-500'
+                    : 'bg-muted/60 text-foreground border-border hover:border-amber-500/50'
+                }`}
+              >
+                {preset}원
+              </button>
+            ))}
+            <div className="flex items-center gap-1.5">
+              <input
+                type="number"
+                min={0}
+                max={100000}
+                step={1}
+                value={dailyRewardInput}
+                onChange={(e) => setDailyRewardInput(e.target.value)}
+                className="w-24 h-10 px-3 rounded-xl bg-muted border border-border font-black text-sm text-foreground"
+              />
+              <span className="text-xs font-black text-muted-foreground">원</span>
+            </div>
+            <Button
+              type="submit"
+              disabled={savingDailyReward}
+              className="h-10 px-4 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs gap-1.5 cursor-pointer"
+            >
+              <Save className="w-3.5 h-3.5" />
+              {savingDailyReward ? '저장 중...' : '즉시 적용'}
+            </Button>
+          </div>
+        </form>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
         {/* Left: Employee List */}
         <div className="lg:col-span-5 space-y-4">
@@ -730,6 +837,7 @@ const PCAdminCouponsByEmployee: React.FC = () => {
         </div>
       )}
 
+      </div>
     </PCAdminLayout>
   );
 };

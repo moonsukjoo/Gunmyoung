@@ -80,7 +80,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { grantRandomShipPart } from '@/services/shipService';
-import { awardDailyAttendancePoints, pointsToKrw } from '@/services/attendancePointService';
+import { awardDailyAttendancePoints, pointsToKrw, useDailyAttendanceRewardKrw } from '@/services/attendancePointService';
 import { sendPushNotification, requestNotificationPermission } from '@/services/notificationService';
 import { calculateAttendanceHours } from '@/lib/attendance';
 import { checkIsSpecialDay } from '@/lib/holidays';
@@ -342,6 +342,7 @@ export const DEFAULT_PINNED_SHORTCUTS = ['attendance', 'leave', 'health'];
 export const Dashboard: React.FC = () => {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
+  const dailyRewardKrw = useDailyAttendanceRewardKrw();
   const { 
     locationSettings, 
     currentLocation, 
@@ -980,7 +981,7 @@ export const Dashboard: React.FC = () => {
         isImmobile: false
       }).catch(err => console.warn('User ghost guard activate warning', err));
 
-      // Grant random ship part & daily 10 KRW praise points (once per day)
+      // Grant random ship part & daily attendance praise points (once per day)
       grantRandomShipPart(profile.uid, '출근');
       const pointResult = await awardDailyAttendancePoints(profile.uid, today);
 
@@ -988,12 +989,12 @@ export const Dashboard: React.FC = () => {
       await sendHealthNotification(selectedHealth);
       setIsClockInHealthDialogOpen(false);
       if (pointResult.awarded) {
-        toast.success('🎉 출근 등록 완료! (칭찬포인트 +10원 적립)', {
-          description: `${format(now, 'HH:mm')} 정상 출근 · 오늘 출근 보상 10원이 적립되었습니다. (보유: ${pointResult.totalKrw.toLocaleString()}원)`
+        toast.success(`🎉 출근 등록 완료! (칭찬포인트 +${pointResult.rewardKrw}원 적립)`, {
+          description: `${format(now, 'HH:mm')} 정상 출근 · 오늘 출근 보상 ${pointResult.rewardKrw}원이 적립되었습니다. (보유: ${pointResult.totalKrw.toLocaleString()}원)`
         });
       } else {
         toast.success('🎉 출근 등록 완료!', {
-          description: `${format(now, 'HH:mm')}에 정상적으로 출근 등록되었습니다. (오늘 출근 포인트 10원은 이미 적립됨)`
+          description: `${format(now, 'HH:mm')}에 정상적으로 출근 등록되었습니다. (오늘 출근 포인트 ${dailyRewardKrw}원은 이미 적립됨)`
         });
       }
     } catch (error) {
@@ -1315,7 +1316,7 @@ export const Dashboard: React.FC = () => {
                   <span>{isClockingIn ? '출근 등록 처리중...' : '지금 바로 출근 등록하기'}</span>
                 </div>
                 <span className="px-2 py-0.5 rounded-lg bg-amber-400 text-slate-950 text-[11px] font-black">
-                  +10원 · 터치 →
+                  +{dailyRewardKrw}원 · 터치 →
                 </span>
               </button>
             ) : !isClockedOut ? (
@@ -1433,7 +1434,7 @@ export const Dashboard: React.FC = () => {
                   <p className="text-lg font-black text-foreground mt-1">
                     {krwText}원
                   </p>
-                  <p className="text-[11px] font-bold text-muted-foreground mt-0.5">출근 시 +10원/일 · 보상 보기 →</p>
+                  <p className="text-[11px] font-bold text-muted-foreground mt-0.5">출근 시 +{dailyRewardKrw}원/일 · 보상 보기 →</p>
                 </>
               );
             })()}
@@ -1869,7 +1870,7 @@ export const Dashboard: React.FC = () => {
           <DialogHeader>
             <DialogTitle className="text-2xl font-black text-center pt-4">오늘의 몸 상태는 어떠신가요?</DialogTitle>
             <DialogDescription className="text-center text-muted-foreground/70 font-bold">
-              컨디션 선택 시 출근 등록과 함께 칭찬포인트 10원이 적립됩니다. (1일 1회)
+              컨디션 선택 시 출근 등록과 함께 칭찬포인트 {dailyRewardKrw}원이 적립됩니다. (1일 1회)
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-3 gap-3 py-6">

@@ -16,6 +16,7 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Attendance } from '@/types';
+import { useDailyAttendanceRewardKrw } from '@/services/attendancePointService';
 
 interface AttendanceHubCardProps {
   todayAttendance: Attendance | null;
@@ -50,6 +51,7 @@ export const AttendanceHubCard: React.FC<AttendanceHubCardProps> = ({
 }) => {
   const navigate = useNavigate();
   const [showWeekly, setShowWeekly] = useState(false);
+  const dailyRewardKrw = useDailyAttendanceRewardKrw();
 
   const daysKo = ['일', '월', '화', '수', '목', '금', '토'];
   const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -163,7 +165,7 @@ export const AttendanceHubCard: React.FC<AttendanceHubCardProps> = ({
                   <div className="min-w-0">
                     <span className="text-xs font-black text-foreground">상태: 미출근</span>
                     <p className="text-[11px] font-medium text-muted-foreground leading-none mt-0.5">
-                      버튼 터치 시 컨디션 체크 후 즉시 등록 및 칭찬포인트 +10원 적립!
+                      버튼 터치 시 컨디션 체크 후 즉시 등록 및 칭찬포인트 +{dailyRewardKrw}원 적립!
                     </p>
                   </div>
                 </div>

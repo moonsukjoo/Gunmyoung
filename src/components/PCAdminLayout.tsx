@@ -31,7 +31,8 @@ import {
   CheckSquare,
   UserCheck,
   FileSpreadsheet,
-  Award
+  Award,
+  DownloadCloud
 } from 'lucide-react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthProvider';
@@ -85,9 +86,10 @@ export const PC_ADMIN_NAV_CATEGORIES: NavCategory[] = [
       },
       {
         id: 'dash_reports',
-        label: '보고서 · 아카이브',
+        label: '보고서 · 시스템 설정',
         items: [
           { id: 'unified_reports', label: '통합 보고서 센터', desc: '월간 근태·안전·작업일지 일괄 PDF/엑셀', icon: FileBarChart, to: '/admin/pc/reports' },
+          { id: 'app_update', label: '앱 자동 업데이트 · 포인트 설정', desc: 'APK 자동 배포 및 출근 칭찬포인트 금액 관리', icon: DownloadCloud, to: '/admin/pc/app-update' },
         ]
       }
     ]

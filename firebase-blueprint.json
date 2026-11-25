@@ -758,6 +758,36 @@
         "resolvedNote": { "type": "string" }
       },
       "required": ["jigId", "jigName", "blockName", "category", "severity", "reason", "recordedByUid", "recordedAt"]
+    },
+    "AttendanceRewardSettings": {
+      "title": "Attendance Reward Settings",
+      "description": "Global daily attendance praise point reward configuration stored in Firestore",
+      "type": "object",
+      "properties": {
+        "dailyAttendanceRewardKrw": { "type": "number", "description": "KRW praise point reward granted once per day on clock-in (default 30)" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string" },
+        "updatedByName": { "type": "string" }
+      },
+      "required": ["dailyAttendanceRewardKrw"]
+    },
+    "AppUpdateSettings": {
+      "title": "Mobile App Update Settings",
+      "description": "Android APK auto-update version and release URL metadata",
+      "type": "object",
+      "properties": {
+        "latestVersionCode": { "type": "number", "description": "Target Android versionCode integer" },
+        "latestVersionName": { "type": "string", "maxLength": 40, "description": "Display version name (e.g., 1.0.15)" },
+        "apkUrl": { "type": "string", "maxLength": 1000, "description": "HTTPS direct APK download URL" },
+        "githubRepo": { "type": "string", "maxLength": 200, "description": "Optional owner/repo for GitHub Releases auto-sync" },
+        "releaseNotes": { "type": "string", "maxLength": 2000 },
+        "forceUpdate": { "type": "boolean" },
+        "autoCheckEnabled": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string" },
+        "updatedByName": { "type": "string" }
+      },
+      "required": ["latestVersionCode", "latestVersionName", "apkUrl"]
     }
   },
   "firestore": {
@@ -868,6 +898,14 @@
     "/settings/banner": {
       "schema": "Banner",
       "description": "Global banner text configuration"
+    },
+    "/settings/attendance_rewards": {
+      "schema": "AttendanceRewardSettings",
+      "description": "Daily attendance praise point reward configuration in KRW"
+    },
+    "/settings/app_update": {
+      "schema": "AppUpdateSettings",
+      "description": "Android APK auto-update configuration"
     },
     "/evacuation/status": {
       "schema": "EvacuationStatus",

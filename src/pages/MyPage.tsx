@@ -73,6 +73,11 @@ import SignatureCanvas from 'react-signature-canvas';
 import { MarineSubpageHero } from '@/components/MarineSubpageHero';
 import { Icon3DShip } from '@/components/icons/Marine3DIcons';
 import { formatPointsDisplay, pointsToKrw } from '@/services/attendancePointService';
+import {
+  AppVersionInfo,
+  getInstalledAppVersion,
+  triggerManualUpdateCheck,
+} from '@/services/appUpdateService';
 
 type MyPageTab = 'WORK_HR' | 'WELFARE' | 'SETTINGS' | 'ADMIN';
 
@@ -107,6 +112,11 @@ export const MyPage: React.FC = () => {
   const [notificationPermission, setNotificationPermission] = useState<string>(
     'Notification' in window ? Notification.permission : 'denied'
   );
+  const [appVersionInfo, setAppVersionInfo] = useState<AppVersionInfo | null>(null);
+
+  React.useEffect(() => {
+    getInstalledAppVersion().then(setAppVersionInfo).catch(() => {});
+  }, []);
 
   // Emergency Evacuation State
   const [evacuationStatus, setEvacuationStatus] = useState<any>(null);
@@ -1108,6 +1118,32 @@ export const MyPage: React.FC = () => {
                 </div>
               </button>
             </div>
+
+            {/* App Version & Auto-Update Check Card */}
+            <button
+              type="button"
+              onClick={triggerManualUpdateCheck}
+              className="w-full p-3.5 rounded-2xl border bg-card/90 border-border/70 hover:bg-muted/60 transition-all text-left flex items-center justify-between gap-2 shadow-2xs cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-blue-600/12 text-blue-600 flex items-center justify-center shrink-0">
+                  <Smartphone className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-black text-foreground truncate">
+                    앱 버전 · 자동 업데이트 확인
+                  </p>
+                  <p className="text-[10px] font-bold text-muted-foreground truncate mt-0.5">
+                    {appVersionInfo?.isNativeAndroid
+                      ? `설치된 버전: v${appVersionInfo.versionName} (코드 ${appVersionInfo.versionCode})`
+                      : '웹/브라우저 접속 중 (항상 최신)'}
+                  </p>
+                </div>
+              </div>
+              <span className="px-2.5 py-1 rounded-xl bg-blue-600/10 text-blue-600 font-black text-[11px] shrink-0">
+                확인 →
+              </span>
+            </button>
 
             {/* Sensor Info */}
             <div className="p-3 rounded-2xl bg-muted/40 border border-border/40 flex items-start gap-2 text-[10px] text-muted-foreground">

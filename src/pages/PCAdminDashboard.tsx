@@ -212,6 +212,7 @@ const PCAdminDashboard: React.FC = () => {
     { id: 'training', serviceIconId: 'training', label: '안전교육', to: '/admin/pc/training' },
     { id: 'beacons', serviceIconId: 'ship', label: '밀폐공간', to: '/admin/pc/beacons' },
     { id: 'perceived_temp_mgmt', serviceIconId: 'temp', label: '체감온도', to: '/admin/pc/perceived-temp' },
+    { id: 'app_update', serviceIconId: 'settings', label: '앱 업데이트', to: '/admin/pc/app-update' },
   ];
 
   const handleExportStats = async () => {

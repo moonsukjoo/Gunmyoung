@@ -10,6 +10,7 @@ import { AlertCircle } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Geolocation } from '@capacitor/geolocation';
 import { App as CapApp } from '@capacitor/app';
+import { AppUpdateManager } from './components/AppUpdateManager';
 
 // Lazy load components with robust multi-attempt retry and auto-reload recovery
 const lazyWithRetry = <T extends React.ComponentType<any>>(
@@ -124,6 +125,7 @@ const MobileStatutoryTraining = lazyWithRetry(() => import('./pages/MobileStatut
 const PCAdminRedemption = lazyWithRetry(() => import('./pages/PCAdminRedemption'));
 const PCAdminCoupons = lazyWithRetry(() => import('./pages/PCAdminCoupons'));
 const PCAdminCouponsByEmployee = lazyWithRetry(() => import('./pages/PCAdminCouponsByEmployee'));
+const PCAdminAppUpdate = lazyWithRetry(() => import('./pages/PCAdminAppUpdate'));
 const PCAdminHighWork = lazyWithRetry(() => import('./pages/PCAdminHighWork'));
 const PCAdminNotifications = lazyWithRetry(() => import('./pages/PCAdminNotifications'));
 const PCAdminBeacons = lazyWithRetry(() => import('./pages/PCAdminBeacons'));
@@ -330,6 +332,7 @@ function AppContent() {
             <Route path="/admin/pc/redemption" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="admin"><PCAdminRedemption /></ProtectedRoute>} />
             <Route path="/admin/pc/coupons" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="admin"><PCAdminCoupons /></ProtectedRoute>} />
             <Route path="/admin/pc/coupons-by-employee" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="admin"><PCAdminCouponsByEmployee /></ProtectedRoute>} />
+            <Route path="/admin/pc/app-update" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER']} permission="admin"><PCAdminAppUpdate /></ProtectedRoute>} />
             <Route path="/admin/pc/highwork" element={<ProtectedRoute roles={['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SAFETY_MANAGER']} permission="admin"><PCAdminHighWork /></ProtectedRoute>} />
             <Route path="/admin/pc/factory-dwell" element={<ProtectedRoute roles={['CEO']}><PCAdminFactoryDwell /></ProtectedRoute>} />
             <Route path="/factory-dwell" element={<ProtectedRoute roles={['CEO']}><FactoryDwellMonitoring /></ProtectedRoute>} />
@@ -362,6 +365,7 @@ function AppContent() {
           <SecretGpsDebugLayer />
           <SilentFactoryGpsTracker />
         </Suspense>
+        <AppUpdateManager />
         <Toaster position="top-center" richColors />
       </div>
     </Router>
