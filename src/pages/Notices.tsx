@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { db, handleFirestoreError, OperationType } from '@/firebase';
-import { collection, onSnapshot, query, orderBy, deleteDoc, doc, addDoc, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, deleteDoc, doc, addDoc, limit } from 'firebase/firestore';
+import { getCachedActiveUsers, invalidateNoticesCache } from '@/services/firestoreCacheService';
 import { Notice } from '@/types';
 import { useAuth } from '@/components/AuthProvider';
 import { Button } from '@/components/ui/button';
@@ -67,7 +68,7 @@ export const Notices: React.FC = () => {
 
   useEffect(() => {
     localStorage.setItem('lastViewedNoticesTime', new Date().toISOString());
-    const q = query(collection(db, 'notices'), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'notices'), orderBy('createdAt', 'desc'), limit(50));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setNotices(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notice)));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'notices'));
@@ -101,10 +102,10 @@ export const Notices: React.FC = () => {
       });
 
       if (newNotice.shouldNotify) {
-        const usersSnap = await getDocs(collection(db, 'users'));
-        const notificationPromises = usersSnap.docs.map(uDoc =>
+        const activeUsers = await getCachedActiveUsers();
+        const notificationPromises = activeUsers.map(u =>
           addDoc(collection(db, 'notifications'), {
-            uid: uDoc.id,
+            uid: u.uid,
             title: newNotice.isImportant ? `🚨 [중요공지] ${trimmedTitle}` : `📢 새 공지: ${trimmedTitle}`,
             message: trimmedContent.substring(0, 80),
             type: newNotice.isImportant ? 'URGENT_NOTICE' : 'NOTICE',
@@ -118,6 +119,7 @@ export const Notices: React.FC = () => {
         await Promise.all(notificationPromises);
       }
 
+      invalidateNoticesCache();
       setIsCreateOpen(false);
       setNewNotice({ title: '', content: '', isImportant: false, shouldNotify: true });
       toast.success('공지사항이 등록되었습니다.');
@@ -132,6 +134,7 @@ export const Notices: React.FC = () => {
   const handleDeleteNotice = async (id: string) => {
     try {
       await deleteDoc(doc(db, 'notices', id));
+      invalidateNoticesCache();
       toast.success('공지사항이 삭제되었습니다.');
       setSelectedNotice(null);
       setIsDeleteOpen(false);

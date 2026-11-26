@@ -57,6 +57,7 @@ import {
 import { useAutoAttendance } from '@/components/AutoAttendanceProvider';
 import { db } from '@/firebase';
 import { collection, query, onSnapshot, updateDoc, doc, setDoc, getDocs, where, addDoc, deleteDoc, orderBy, limit } from 'firebase/firestore';
+import { getCachedUsers, invalidateAllFirestoreCaches, invalidateUsersCache } from '@/services/firestoreCacheService';
 import { UserProfile } from '@/types';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -189,7 +190,7 @@ export const Admin: React.FC = () => {
     });
 
     return () => unsubEvacuation();
-  }, [profile]);
+  }, [profile?.uid]);
 
   useEffect(() => {
     if (evacuationStatus?.isActive) {
@@ -206,22 +207,27 @@ export const Admin: React.FC = () => {
   }, [evacuationStatus?.isActive, evacuationStatus?.id]);
 
   useEffect(() => {
-    if (!profile) return;
-    
-    const minLoadTime = new Promise(resolve => setTimeout(resolve, 800));
-    const q = query(collection(db, 'users'));
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
-      await minLoadTime;
-      setUsers(data);
-      setFilteredUsers(data);
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'users');
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, [profile]);
+    if (!profile?.uid) return;
+    let cancelled = false;
+    const minLoadTime = new Promise(resolve => setTimeout(resolve, 400));
+
+    getCachedUsers()
+      .then(async (data) => {
+        await minLoadTime;
+        if (cancelled) return;
+        setUsers(data);
+        setFilteredUsers(data);
+        setLoading(false);
+      })
+      .catch((error) => {
+        handleFirestoreError(error, OperationType.LIST, 'users');
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.uid]);
 
   useEffect(() => {
     if (!profile) return;
@@ -285,7 +291,7 @@ export const Admin: React.FC = () => {
       unsubSafetySensors();
       unsubCompany();
     };
-  }, [profile]);
+  }, [profile?.uid]);
 
   // Fetch resolved emergency critical incidents logs
   const fetchIncidentHistory = async () => {
@@ -327,6 +333,8 @@ export const Admin: React.FC = () => {
     const updated = current.includes(permissionId) ? current.filter(p => p !== permissionId) : [...current, permissionId];
     try {
       await updateDoc(doc(db, 'users', userId), { permissions: updated });
+      setUsers(prev => prev.map(u => u.uid === userId ? { ...u, permissions: updated } : u));
+      invalidateUsersCache();
       toast.success('권한 업데이트 완료');
     } catch (e) { toast.error('권한 업데이트 실패'); }
   };
@@ -396,6 +404,7 @@ export const Admin: React.FC = () => {
         });
       });
       await Promise.all(userResetPromises);
+      invalidateAllFirestoreCaches();
 
       toast.success('실운영을 위한 트랜잭션 데이터 초기화가 성공적으로 완료되었습니다.', { id: toastId });
       setIsDBResetOpen(false);

@@ -1,23 +1,16 @@
 import React, { useEffect, useRef } from 'react';
 import { db } from '@/firebase';
-import { 
-  collection, 
-  query, 
-  where, 
-  onSnapshot, 
-  updateDoc, 
-  doc,
-  limit
-} from 'firebase/firestore';
+import { updateDoc, doc } from 'firebase/firestore';
 import { useAuth } from './AuthProvider';
+import { useAutoAttendance } from './AutoAttendanceProvider';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
-import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
 
 export const GhostGuardTracker: React.FC = () => {
   const { profile } = useAuth();
+  const { todayAttendance } = useAutoAttendance();
   const lastMovementTimeRef = useRef<number>(Date.now());
   const isClockedInRef = useRef<boolean>(false);
+  const isImmobileRef = useRef<boolean>(!!profile?.isImmobile);
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Constants
@@ -25,25 +18,17 @@ export const GhostGuardTracker: React.FC = () => {
   const MOVEMENT_THRESHOLD = 0.5; // 가속도 변화 임계값
 
   useEffect(() => {
-    if (!profile || !profile.ghostGuardEnabled) return;
+    isClockedInRef.current = !!(todayAttendance && todayAttendance.clockIn && !todayAttendance.clockOut);
+  }, [todayAttendance?.clockIn, todayAttendance?.clockOut]);
 
-    // 1. 오늘 출근 여부 확인 리스너
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const q = query(
-      collection(db, 'attendance'),
-      where('uid', '==', profile.uid),
-      where('date', '==', todayStr),
-      limit(1)
-    );
+  useEffect(() => {
+    isImmobileRef.current = !!profile?.isImmobile;
+  }, [profile?.isImmobile]);
 
-    const unsubscribeAttendance = onSnapshot(q, (snapshot) => {
-      const att = snapshot.docs[0]?.data();
-      isClockedInRef.current = !!(att && att.clockIn && !att.clockOut);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'attendance_daily_ghost');
-    });
+  useEffect(() => {
+    if (!profile?.uid || !profile?.ghostGuardEnabled) return;
 
-    // 2. 가속도 센서 시작
+    // 가속도 센서 시작
     let sensor: any = null;
     let fallbackCleanup: (() => void) | null = null;
     
@@ -58,7 +43,8 @@ export const GhostGuardTracker: React.FC = () => {
             if (acceleration > MOVEMENT_THRESHOLD) {
               lastMovementTimeRef.current = Date.now();
               // 만약 이전에 무동작 판정이었다면 해제
-              if (profile.isImmobile) {
+              if (isImmobileRef.current) {
+                isImmobileRef.current = false;
                 updateDoc(doc(db, 'users', profile.uid), {
                   isImmobile: false,
                   lastMovementAt: new Date().toISOString()
@@ -97,7 +83,7 @@ export const GhostGuardTracker: React.FC = () => {
 
     startSensor();
 
-    // 3. 무동작 체크 타이머
+    // 무동작 체크 타이머
     checkIntervalRef.current = setInterval(async () => {
       if (!isClockedInRef.current) return;
 
@@ -108,7 +94,7 @@ export const GhostGuardTracker: React.FC = () => {
 
       const timeSinceLastMovement = Date.now() - lastMovementTimeRef.current;
 
-      if (timeSinceLastMovement >= IMMOBILE_THRESHOLD_MS && !profile.isImmobile) {
+      if (timeSinceLastMovement >= IMMOBILE_THRESHOLD_MS && !isImmobileRef.current) {
         try {
           // 1차 경고 (로컬 알림/진동)
           if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
@@ -119,6 +105,7 @@ export const GhostGuardTracker: React.FC = () => {
           });
 
           // 실제 DB 업데이트 (관리자 전송)
+          isImmobileRef.current = true;
           await updateDoc(doc(db, 'users', profile.uid), {
             isImmobile: true,
             lastMovementAt: new Date(lastMovementTimeRef.current).toISOString()
@@ -133,9 +120,8 @@ export const GhostGuardTracker: React.FC = () => {
       if (sensor) sensor.stop();
       if (fallbackCleanup) fallbackCleanup();
       if (checkIntervalRef.current) clearInterval(checkIntervalRef.current);
-      unsubscribeAttendance();
     };
-  }, [profile?.uid, profile?.ghostGuardEnabled, profile?.isImmobile]);
+  }, [profile?.uid, profile?.ghostGuardEnabled]);
 
   return null;
 };

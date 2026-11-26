@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { auth, db } from '@/firebase';
 import { cn } from '@/lib/utils';
 import { CompanyLogo } from './CompanyLogo';
-import { collection, query, where, onSnapshot, getDocs, addDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs, addDoc, orderBy, limit } from 'firebase/firestore';
 import { 
   Dialog,
   DialogContent,
@@ -100,11 +100,12 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   }, [lightTheme, highContrast]);
 
   useEffect(() => {
-    if (!profile) return;
+    if (!profile?.uid) return;
     const q = query(
       collection(db, 'notifications'),
       where('uid', '==', profile.uid),
-      where('isRead', '==', false)
+      where('isRead', '==', false),
+      limit(50)
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setUnreadCount(snapshot.size);
@@ -132,13 +133,23 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       handleFirestoreError(error, OperationType.LIST, 'notifications_unread');
     });
     return () => unsubscribe();
-  }, [profile]);
+  }, [profile?.uid]);
 
   const [hasImportantNotice, setHasImportantNotice] = useState(false);
 
   useEffect(() => {
-    if (!profile) return;
-    const q = query(collection(db, 'notices'));
+    if (location.pathname === '/notices') {
+      setHasImportantNotice(false);
+    }
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!profile?.uid) return;
+    const q = query(
+      collection(db, 'notices'),
+      orderBy('createdAt', 'desc'),
+      limit(5)
+    );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const docs = snapshot.docs.map(doc => doc.data());
       const hasImportant = docs.some(doc => {
@@ -176,7 +187,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       console.error("Error listening to notices for alert pulse:", error);
     });
     return () => unsubscribe();
-  }, [profile, location.pathname]);
+  }, [profile?.uid]);
 
   const handleLogout = async () => {
     await auth.signOut();

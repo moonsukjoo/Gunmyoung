@@ -79,18 +79,15 @@ const PCAdminDashboard: React.FC = () => {
   const fetchDashboardData = async () => {
     setLoadingData(true);
     try {
+      const { getCachedActiveUsers } = await import('@/services/firestoreCacheService');
       const todayStr = new Date().toISOString().split('T')[0];
-      const [usersSnap, attendanceSnap, leavesSnap, beaconsSnap, worklogsSnap] = await Promise.all([
-        getDocs(collection(db, 'users')),
+      const [activeUsers, attendanceSnap, leavesSnap, beaconsSnap, worklogsSnap] = await Promise.all([
+        getCachedActiveUsers(),
         getDocs(query(collection(db, 'attendance'), where('date', '==', todayStr))),
         getDocs(query(collection(db, 'leaveRequests'), limit(100))),
         getDocs(collection(db, 'beacons')),
         getDocs(query(collection(db, 'workLogs'), limit(50)))
       ]);
-
-      const activeUsers = usersSnap.docs
-        .map(d => ({ uid: d.id, ...(d.data() as any) }))
-        .filter(u => u.isActive !== false && u.status !== 'RETIRED');
 
       const presentUids = new Set(attendanceSnap.docs.map(d => d.data().uid));
 
@@ -140,7 +137,7 @@ const PCAdminDashboard: React.FC = () => {
       ];
 
       setStats({
-        totalEmployees: activeUsers.length || usersSnap.size,
+        totalEmployees: activeUsers.length,
         presentToday: attendanceSnap.size,
         pendingLeaves: pendingLeaveDocs.length,
         activeBeacons: beaconsSnap.docs.filter(d => d.data().status === 'ACTIVE').length

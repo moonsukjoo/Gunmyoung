@@ -18,6 +18,7 @@ import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/components/AuthProvider';
 import { handleFirestoreError, OperationType } from '@/firebase';
+import { getCachedActiveUsers, getCachedDepartments } from '@/services/firestoreCacheService';
 
 export const SafetyLeaderboard: React.FC = () => {
   const { profile } = useAuth();
@@ -35,22 +36,21 @@ export const SafetyLeaderboard: React.FC = () => {
       return;
     }
 
-    const unsubscribeUsers = onSnapshot(query(collection(db, 'users')), (snapshot) => {
-      setUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'users');
-    });
-
-    const unsubscribeDepts = onSnapshot(query(collection(db, 'departments'), orderBy('name')), (snapshot) => {
-      setDepartments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Department)));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'departments');
-    });
+    let cancelled = false;
+    Promise.all([getCachedActiveUsers(), getCachedDepartments()])
+      .then(([userList, deptList]) => {
+        if (cancelled) return;
+        setUsers(userList);
+        setDepartments(deptList);
+        setLoading(false);
+      })
+      .catch((error) => {
+        if (!cancelled) setLoading(false);
+        handleFirestoreError(error, OperationType.LIST, 'users');
+      });
 
     return () => {
-      unsubscribeUsers();
-      unsubscribeDepts();
+      cancelled = true;
     };
   }, [isUnauthorized]);
 

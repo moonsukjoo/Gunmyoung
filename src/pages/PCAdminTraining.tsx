@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { collection, onSnapshot, updateDoc, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
+import { getCachedUsers } from '../services/firestoreCacheService';
 import PCAdminLayout from '../components/PCAdminLayout';
 import { toast } from 'sonner';
 import { UserProfile, StatutorySession, StatutoryCompletion } from '../types';
@@ -137,12 +138,15 @@ const PCAdminTraining: React.FC = () => {
       setLoading(false);
     });
 
-    // 2. Fetch all users for statutory table
-    const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
-      setUsers(snap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'users');
-    });
+    // 2. Fetch all users from shared cache for statutory table
+    let cancelled = false;
+    getCachedUsers()
+      .then((userList) => {
+        if (!cancelled) setUsers(userList);
+      })
+      .catch((error) => {
+        handleFirestoreError(error, OperationType.LIST, 'users');
+      });
 
     // 3. Fetch statutory sessions
     const unsubStatSessions = onSnapshot(collection(db, 'statutorySessions'), (snap) => {
@@ -175,8 +179,8 @@ const PCAdminTraining: React.FC = () => {
     });
 
     return () => {
+      cancelled = true;
       unsubRecords();
-      unsubUsers();
       unsubStatSessions();
       unsubComps();
       unsubCats();

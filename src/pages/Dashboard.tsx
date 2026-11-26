@@ -82,6 +82,24 @@ import { Textarea } from '@/components/ui/textarea';
 import { grantRandomShipPart } from '@/services/shipService';
 import { awardDailyAttendancePoints, pointsToKrw, useDailyAttendanceRewardKrw } from '@/services/attendancePointService';
 import { sendPushNotification, requestNotificationPermission } from '@/services/notificationService';
+import {
+  getCachedAccidentsPreview,
+  getCachedActiveUsers,
+  getCachedBanner,
+  getCachedDashboardAdminStats,
+  getCachedMonthlyPraiseKings,
+  getCachedNoticesPreview,
+  getCachedPublishedTrainings,
+  getCachedSpecialDates,
+  getCachedUserAttendanceHistory,
+  getCachedUserSafetyTrend,
+  getCachedUserTasks,
+  getCachedUserTrainingResults,
+  invalidateNoticesCache,
+  invalidateUserAttendanceCache,
+  invalidateUserTasksCache,
+  invalidateUsersCache,
+} from '@/services/firestoreCacheService';
 import { calculateAttendanceHours } from '@/lib/attendance';
 import { checkIsSpecialDay } from '@/lib/holidays';
 import { useSafetySensor } from '@/components/SafetySensorProvider';
@@ -484,48 +502,32 @@ export const Dashboard: React.FC = () => {
     .filter(Boolean) as ShortcutOption[];
 
   useEffect(() => {
+    let cancelled = false;
     const currentMonth = format(new Date(), 'yyyy-MM');
-    const q = query(
-      collection(db, 'users'),
-      where('isActive', '==', true)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const userList = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
-      const sorted = userList
-        .sort((a, b) => {
-          const aMonthKudos = a.kudosMonth === currentMonth ? (a.monthlyKudosCount || 0) : 0;
-          const bMonthKudos = b.kudosMonth === currentMonth ? (b.monthlyKudosCount || 0) : 0;
-          if (bMonthKudos !== aMonthKudos) {
-            return bMonthKudos - aMonthKudos;
-          }
-          return (b.points || 0) - (a.points || 0);
-        })
-        .slice(0, 5);
-
-      setPraiseKings(sorted);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'users');
-    });
-
-    return () => unsubscribe();
+    getCachedMonthlyPraiseKings(currentMonth, 5)
+      .then((top) => {
+        if (!cancelled) setPraiseKings(top);
+      })
+      .catch((error) => {
+        console.warn('Error fetching monthly praise kings:', error);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
-    const q = query(collection(db, 'specialDates'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const dates: Record<string, any> = {};
-      snapshot.docs.forEach(doc => {
-        const data = doc.data();
-        if (data.date) {
-          dates[data.date] = data;
-        }
+    let cancelled = false;
+    getCachedSpecialDates()
+      .then((dates) => {
+        if (!cancelled) setSpecialDates(dates);
+      })
+      .catch((error) => {
+        console.warn('Error fetching special dates:', error);
       });
-      setSpecialDates(dates);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'specialDates');
-    });
-    return () => unsubscribe();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -668,178 +670,122 @@ export const Dashboard: React.FC = () => {
 
   useEffect(() => {
     requestNotificationPermission();
-    if (!profile) return;
+    if (!profile?.uid) return;
 
+    let cancelled = false;
+    const uid = profile.uid;
     const today = format(new Date(), 'yyyy-MM-dd');
 
-    // Fetch up to 45 attendance entries to compute current month count & week view
-    const weeklyQ = query(
-      collection(db, 'attendance'),
-      where('uid', '==', profile.uid),
-      limit(45)
-    );
-    const unsubscribeWeekly = onSnapshot(weeklyQ, (snapshot) => {
-      const map: Record<string, Attendance> = {};
-      snapshot.docs.forEach(doc => {
-        const data = doc.data() as Attendance;
-        map[data.date] = { id: doc.id, ...data };
+    // 1. Attendance history (cached 3 min; today's live state merged from AutoAttendanceProvider)
+    getCachedUserAttendanceHistory(uid, 45)
+      .then((map) => {
+        if (!cancelled) setWeeklyAttendanceMap(map);
+      })
+      .catch((error) => {
+        console.error("Error fetching weekly attendance map:", error);
       });
-      setWeeklyAttendanceMap(map);
-    }, (error) => {
-      console.error("Error fetching weekly attendance map:", error);
-    });
 
-    // Notices for everyone (TTS removed)
-    const noticeQ = query(
-      collection(db, 'notices'),
-      orderBy('createdAt', 'desc'),
-      limit(3)
-    );
+    // 2. Notices preview (cached 3 min)
+    getCachedNoticesPreview(3)
+      .then((list) => {
+        if (!cancelled) {
+          setRecentNotices(list);
+          isInitialNotices.current = false;
+        }
+      })
+      .catch((error) => {
+        console.warn("Error fetching notices preview:", error);
+      });
 
-    const unsubscribeNotices = onSnapshot(noticeQ, (snapshot) => {
-      setRecentNotices(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notice)));
-      isInitialNotices.current = false;
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'notices');
-    });
+    // 3. Accident cases preview (cached 5 min)
+    getCachedAccidentsPreview(3)
+      .then((list) => {
+        if (!cancelled) {
+          setRecentAccidents(list);
+          isInitialAccidents.current = false;
+        }
+      })
+      .catch((error) => {
+        console.warn("Error fetching accidents preview:", error);
+      });
 
-    // Accidents for everyone (TTS removed)
-    const accidentQ = query(
-      collection(db, 'accidentCases'),
-      orderBy('date', 'desc'),
-      limit(3)
-    );
-    const unsubscribeAccidents = onSnapshot(accidentQ, (snapshot) => {
-      setRecentAccidents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AccidentCase)));
-      isInitialAccidents.current = false;
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'accidentCases');
-    });
-
-    let unsubscribeTrend = () => {};
+    // 4. Safety score trend (cached 10 min)
     if (!isExcludedRole) {
-      const trendQ = query(
-        collection(db, 'safetyScoreLogs'),
-        where('targetUid', '==', profile.uid)
-      );
-      unsubscribeTrend = onSnapshot(trendQ, (snapshot) => {
-        const now = new Date();
-        const currentMonthStart = startOfMonth(now);
-        const prevMonthStart = startOfMonth(subMonths(now, 1));
-        
-        let currentMonthDelta = 0;
-        let prevMonthDelta = 0;
-        
-        snapshot.docs.forEach(doc => {
-          const data = doc.data();
-          const logDate = parseSafeDate(data.createdAt);
-          if (!logDate) return;
-          if (logDate >= currentMonthStart) {
-            currentMonthDelta += data.scoreDelta;
-          } else if (logDate >= prevMonthStart && logDate < currentMonthStart) {
-            prevMonthDelta += data.scoreDelta;
-          }
+      getCachedUserSafetyTrend(uid)
+        .then((delta) => {
+          if (!cancelled) setUserTrend(delta);
+        })
+        .catch((error) => {
+          console.warn("Error fetching safety trend:", error);
         });
-        setUserTrend(currentMonthDelta - prevMonthDelta);
-      }, (error) => {
-        handleFirestoreError(error, OperationType.LIST, 'safetyScoreLogs');
-      });
     }
 
-    // Fetch My Tasks for employees
-    const tasksQ = query(
-      collection(db, 'tasks'),
-      where('assignedToUid', '==', profile.uid),
-      where('status', 'in', ['TODO', 'IN_PROGRESS']),
-      orderBy('createdAt', 'desc'),
-      limit(5)
-    );
-    const unsubscribeTasks = onSnapshot(tasksQ, (snapshot) => {
-      setMyTasks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task)));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'tasks');
-    });
+    // 5. My active tasks (cached 2 min, max 5)
+    getCachedUserTasks(uid, 5)
+      .then((tasks) => {
+        if (!cancelled) setMyTasks(tasks);
+      })
+      .catch((error) => {
+        console.warn("Error fetching my tasks:", error);
+      });
 
-    // Fetch training status for employees
-    const trainingQ = query(collection(db, 'trainings'), where('status', '==', 'PUBLISHED'));
-    const resultQ = query(collection(db, 'trainingResults'), where('uid', '==', profile.uid));
-    
-    getDocs(trainingQ).then(tSnap => {
-      getDocs(resultQ).then(rSnap => {
-        const completedIds = new Set(rSnap.docs.map(doc => doc.data().trainingId));
-        const pending = tSnap.docs.filter(doc => !completedIds.has(doc.id)).length;
+    // 6. Pending trainings (cached 15 min trainings + 5 min user results)
+    Promise.all([
+      getCachedPublishedTrainings(),
+      getCachedUserTrainingResults(uid)
+    ])
+      .then(([publishedTrainings, userResults]) => {
+        if (cancelled) return;
+        const completedIds = new Set(userResults.map(r => r.trainingId));
+        const pending = publishedTrainings.filter(t => !completedIds.has(t.id)).length;
         setPendingTrainings(pending);
-      }).catch(err => {
-        handleFirestoreError(err, OperationType.LIST, 'trainingResults');
-      });
-    }).catch(err => {
-      handleFirestoreError(err, OperationType.LIST, 'trainings');
-    });
-
-    // Fetch Admin Stats if manager
-    let unsubscribeAdminStats = () => {};
-    // Ensure we only run these if profile is loaded and role is identified
-    if (isManager && profile?.role && profile.role !== 'EMPLOYEE') {
-      // 1. Total Employees
-      getDocs(collection(db, 'users')).then(snap => {
-        setAdminStats(prev => ({ ...prev, totalEmployees: snap.size }));
-      }).catch(err => {
-        handleFirestoreError(err, OperationType.LIST, 'users');
+      })
+      .catch((err) => {
+        console.warn("Error fetching trainings summary:", err);
       });
 
-      // 2. Present Today
-      const todayInQ = query(collection(db, 'attendance'), where('date', '==', today));
-      const unsubAttendance = onSnapshot(todayInQ, (snap) => {
-        setAdminStats(prev => ({ ...prev, presentToday: snap.size }));
-      }, (err) => {
-        handleFirestoreError(err, OperationType.LIST, 'attendance_stats');
-      });
-
-      // 3. Pending Leaves
-      const leaveQ = query(collection(db, 'leaveRequests'), where('status', '==', 'PENDING'));
-      const unsubLeaves = onSnapshot(leaveQ, (snap) => {
-        setAdminStats(prev => ({ ...prev, pendingLeaves: snap.size }));
-      }, (err) => {
-        handleFirestoreError(err, OperationType.LIST, 'leave_stats');
-      });
-
-      // 4. Open Accident Reports
-      const accidentCheckQ = query(collection(db, 'accidentCases'), orderBy('createdAt', 'desc'), limit(10));
-      const unsubAccidents = onSnapshot(accidentCheckQ, (snap) => {
-        setAdminStats(prev => ({ ...prev, openAccidents: snap.size }));
-      }, (err) => {
-        handleFirestoreError(err, OperationType.LIST, 'accident_stats');
-      });
-
-      unsubscribeAdminStats = () => {
-        unsubAttendance();
-        unsubLeaves();
-        unsubAccidents();
-      };
+    // 7. Admin stats using lightweight getCountFromServer (cached 2 min)
+    if (isManager && profile.role && profile.role !== 'EMPLOYEE') {
+      getCachedDashboardAdminStats(today)
+        .then((stats) => {
+          if (!cancelled) setAdminStats(stats);
+        })
+        .catch((err) => {
+          console.warn("Error fetching admin stats:", err);
+        });
     }
 
-    const unsubscribeBanner = onSnapshot(doc(db, 'settings', 'banner'), (snapshot) => {
-      if (snapshot.exists()) {
-        setBannerText(snapshot.data().text || '안전한 하루가 되세요');
-      }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'settings/banner');
-    });
+    // 8. Banner message (cached 10 min)
+    getCachedBanner()
+      .then((text) => {
+        if (!cancelled) setBannerText(text);
+      })
+      .catch((error) => {
+        console.warn("Error fetching banner:", error);
+      });
 
     return () => {
-      unsubscribeWeekly();
-      unsubscribeNotices();
-      unsubscribeAccidents();
-      unsubscribeTrend();
-      unsubscribeTasks();
-      unsubscribeAdminStats();
-      unsubscribeBanner();
+      cancelled = true;
     };
-  }, [profile, isManager]);
+  }, [profile?.uid, profile?.role, isManager, isExcludedRole]);
+
+  // Merge live todayAttendance from AutoAttendanceProvider into weeklyAttendanceMap without extra Firestore reads
+  useEffect(() => {
+    if (!todayAttendance?.date) return;
+    setWeeklyAttendanceMap(prev => ({
+      ...prev,
+      [todayAttendance.date]: todayAttendance
+    }));
+  }, [todayAttendance]);
 
   const handleUpdateTaskStatus = async (taskId: string, newStatus: 'TODO' | 'IN_PROGRESS' | 'DONE') => {
     try {
       await updateDoc(doc(db, 'tasks', taskId), { status: newStatus });
+      if (profile?.uid) {
+        invalidateUserTasksCache(profile.uid);
+        const refreshed = await getCachedUserTasks(profile.uid, 5, true);
+        setMyTasks(refreshed);
+      }
       toast.success('작업 상태가 업데이트되었습니다.');
     } catch (error) {
       toast.error('상태 업데이트 중 오류가 발생했습니다.');
@@ -984,6 +930,10 @@ export const Dashboard: React.FC = () => {
       // Grant random ship part & daily attendance praise points (once per day)
       grantRandomShipPart(profile.uid, '출근');
       const pointResult = await awardDailyAttendancePoints(profile.uid, today);
+      invalidateUserAttendanceCache(profile.uid);
+      if (pointResult.awarded) {
+        invalidateUsersCache();
+      }
 
       setHealthStatus(selectedHealth);
       await sendHealthNotification(selectedHealth);
@@ -1030,6 +980,7 @@ export const Dashboard: React.FC = () => {
         isImmobile: false
       }).catch(err => console.warn('User ghost guard deactivate warning', err));
 
+      invalidateUserAttendanceCache(profile.uid);
       toast.success('🏁 퇴근 등록 완료!', {
         description: `${format(now, 'HH:mm')} 퇴근 (정규 ${workHours}h / 잔업 ${overtimeHours}h 정산)`
       });
@@ -1045,14 +996,11 @@ export const Dashboard: React.FC = () => {
   const fetchTeamAttendance = async () => {
     try {
       const today = format(new Date(), 'yyyy-MM-dd');
-      const usersSnap = await getDocs(collection(db, 'users'));
-      const attendanceSnap = await getDocs(query(collection(db, 'attendance'), where('date', '==', today)));
-      
-      const allUsers = usersSnap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
-      const todayAttendance = attendanceSnap.docs.map(doc => doc.data() as Attendance);
-      
-      // Filter out users who are NOT active
-      const activeUsers = allUsers.filter(u => u.status === 'ACTIVE' || (u.status === undefined && u.isActive !== false));
+      const [activeUsers, attendanceSnap] = await Promise.all([
+        getCachedActiveUsers(),
+        getDocs(query(collection(db, 'attendance'), where('date', '==', today)))
+      ]);
+      const todayAttendanceList = attendanceSnap.docs.map(doc => doc.data() as Attendance);
 
       const teams: Record<string, typeof teamAttendance[0]> = {};
       
@@ -1069,7 +1017,7 @@ export const Dashboard: React.FC = () => {
         }
         
         teams[teamName].total++;
-        const att = todayAttendance.find(a => a.uid === u.uid);
+        const att = todayAttendanceList.find(a => a.uid === u.uid);
         if (att) {
           teams[teamName].present++;
           teams[teamName].presentList.push({
@@ -1147,10 +1095,10 @@ export const Dashboard: React.FC = () => {
       });
 
       if (newNotice.shouldNotify) {
-        const usersSnap = await getDocs(collection(db, 'users'));
-        const notificationPromises = usersSnap.docs.map(uDoc => 
+        const activeUsers = await getCachedActiveUsers();
+        const notificationPromises = activeUsers.map(u => 
           addDoc(collection(db, 'notifications'), {
-            uid: uDoc.id,
+            uid: u.uid,
             title: newNotice.isImportant ? `🚨 [중요공지] ${newNotice.title}` : `📢 새 공지: ${newNotice.title}`,
             message: newNotice.content.substring(0, 80),
             type: newNotice.isImportant ? 'URGENT_NOTICE' : 'NOTICE',
@@ -1164,6 +1112,8 @@ export const Dashboard: React.FC = () => {
         await Promise.all(notificationPromises);
       }
 
+      invalidateNoticesCache();
+      getCachedNoticesPreview(3, true).then(setRecentNotices).catch(() => {});
       setIsNoticeDialogOpen(false);
       setNewNotice({ title: '', content: '', isImportant: false, shouldNotify: true });
       toast.success('공지사항이 등록되었습니다.');

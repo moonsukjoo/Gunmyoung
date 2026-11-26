@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '@/firebase';
 import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
-import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, orderBy, limit } from 'firebase/firestore';
 import { Training, JobRole, QuizQuestion, UserProfile, TrainingResult } from '@/types';
+import { getCachedJobRoles, getCachedUsers, invalidateTrainingsCache } from '@/services/firestoreCacheService';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -77,8 +78,9 @@ export const TrainingManagement: React.FC = () => {
   );
 
   useEffect(() => {
+    let cancelled = false;
     const minLoadTime = new Promise(resolve => setTimeout(resolve, 800));
-    const unsubscribeT = onSnapshot(query(collection(db, 'trainings'), orderBy('createdAt', 'desc')), async (snap) => {
+    const unsubscribeT = onSnapshot(query(collection(db, 'trainings'), orderBy('createdAt', 'desc'), limit(100)), async (snap) => {
       setTrainings(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Training)));
       await minLoadTime;
       setLoading(false);
@@ -86,19 +88,18 @@ export const TrainingManagement: React.FC = () => {
       handleFirestoreError(error, OperationType.LIST, 'trainings');
       setLoading(false);
     });
-    const unsubscribeJR = onSnapshot(query(collection(db, 'jobRoles'), orderBy('name')), (snap) => {
-      setJobRoles(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as JobRole)));
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'jobRoles'));
-    const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snap) => {
-      setUsers(snap.docs.map(doc => ({ ...doc.data() } as UserProfile)));
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'users'));
-    const unsubscribeResults = onSnapshot(collection(db, 'trainingResults'), (snap) => {
+    getCachedJobRoles()
+      .then((list) => { if (!cancelled) setJobRoles(list); })
+      .catch((error) => handleFirestoreError(error, OperationType.LIST, 'jobRoles'));
+    getCachedUsers()
+      .then((list) => { if (!cancelled) setUsers(list); })
+      .catch((error) => handleFirestoreError(error, OperationType.LIST, 'users'));
+    const unsubscribeResults = onSnapshot(query(collection(db, 'trainingResults'), orderBy('completedAt', 'desc'), limit(300)), (snap) => {
       setAllResults(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as TrainingResult)));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'trainingResults'));
     return () => {
+      cancelled = true;
       unsubscribeT();
-      unsubscribeJR();
-      unsubscribeUsers();
       unsubscribeResults();
     };
   }, []);

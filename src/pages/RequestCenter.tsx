@@ -10,8 +10,10 @@ import {
   orderBy, 
   doc, 
   updateDoc, 
-  getDocs 
+  getDocs,
+  limit
 } from 'firebase/firestore';
+import { getCachedActiveUsers } from '@/services/firestoreCacheService';
 import { UserProfile, WorkRequest } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -94,35 +96,34 @@ export const RequestCenter: React.FC = () => {
     }
   }, [isNewRequestOpen]);
 
-  // Fetch employees
+  // Fetch employees from shared cache instead of holding a real-time users listener
   useEffect(() => {
-    const q = collection(db, 'users');
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const list = snapshot.docs
-        .map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile))
-        .filter(emp => {
-          const isNotMe = emp.uid !== profile?.uid;
-          const isActive = emp.isActive !== false;
-          return isNotMe && isActive;
-        });
-      
-      // Sort alphabetically by displayName
-      list.sort((a, b) => (a.displayName || '').localeCompare(b.displayName || '', 'ko'));
-      setEmployees(list);
-    }, (error) => {
-      console.error("Error fetching employees:", error);
-    });
+    let cancelled = false;
+    getCachedActiveUsers()
+      .then((activeUsers) => {
+        if (cancelled) return;
+        const list = activeUsers
+          .filter((emp) => emp.uid !== profile?.uid)
+          .sort((a, b) => (a.displayName || '').localeCompare(b.displayName || '', 'ko'));
+        setEmployees(list);
+      })
+      .catch((error) => {
+        console.error("Error fetching employees:", error);
+      });
 
-    return () => unsubscribe();
+    return () => {
+      cancelled = true;
+    };
   }, [profile?.uid]);
 
-  // Fetch requests (Real-time listener for ALL requests where sender or receiver is me)
+  // Fetch requests (Real-time listener for recent requests where sender or receiver is me)
   useEffect(() => {
-    if (!profile) return;
+    if (!profile?.uid) return;
 
     const q = query(
       collection(db, 'workRequests'),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
+      limit(150)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -141,7 +142,7 @@ export const RequestCenter: React.FC = () => {
     });
 
     return () => unsubscribe();
-  }, [profile]);
+  }, [profile?.uid]);
 
   // Handle request creation
   const handleCreateRequest = async () => {

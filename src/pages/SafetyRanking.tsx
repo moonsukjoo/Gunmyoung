@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '@/firebase';
-import { collection, query, onSnapshot, updateDoc, doc, addDoc, orderBy } from 'firebase/firestore';
+import { collection, query, onSnapshot, updateDoc, doc, addDoc, orderBy, limit } from 'firebase/firestore';
 import { UserProfile, SafetyScoreLog, Department } from '@/types';
 import { useAuth } from '@/components/AuthProvider';
+import { getCachedDepartments, getCachedUsers, invalidateUsersCache } from '@/services/firestoreCacheService';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -63,28 +64,27 @@ export const SafetyRanking: React.FC = () => {
   const isAdmin = profile && (profile.role === 'CEO');
 
   useEffect(() => {
-    const unsubscribeUsers = onSnapshot(query(collection(db, 'users')), (snapshot) => {
-      setUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'users');
-    });
+    let cancelled = false;
+    Promise.all([getCachedUsers(), getCachedDepartments()])
+      .then(([userList, deptList]) => {
+        if (cancelled) return;
+        setUsers(userList);
+        setDepartments(deptList);
+        setLoading(false);
+      })
+      .catch((error) => {
+        if (!cancelled) setLoading(false);
+        handleFirestoreError(error, OperationType.LIST, 'users');
+      });
 
-    const unsubscribeDepts = onSnapshot(query(collection(db, 'departments'), orderBy('name')), (snapshot) => {
-      setDepartments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Department)));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'departments');
-    });
-
-    const unsubscribeLogs = onSnapshot(query(collection(db, 'safetyScoreLogs'), orderBy('createdAt', 'desc')), (snapshot) => {
+    const unsubscribeLogs = onSnapshot(query(collection(db, 'safetyScoreLogs'), orderBy('createdAt', 'desc'), limit(250)), (snapshot) => {
       setLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SafetyScoreLog)));
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'safetyScoreLogs');
     });
 
     return () => {
-      unsubscribeUsers();
-      unsubscribeDepts();
+      cancelled = true;
       unsubscribeLogs();
     };
   }, []);
@@ -180,6 +180,8 @@ export const SafetyRanking: React.FC = () => {
         createdAt: new Date().toISOString()
       });
 
+      invalidateUsersCache();
+      setUsers(prev => prev.map(u => u.uid === targetUser.uid ? { ...u, safetyScore: newScore } : u));
       toast.success('점수 및 현장 첨부사진이 등록되었습니다.');
       setIsAdjustmentOpen(false);
       setScoreDelta('');

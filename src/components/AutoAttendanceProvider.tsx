@@ -28,6 +28,7 @@ import {
   DEFAULT_EMPLOYEE_SCHEDULE_SETTINGS 
 } from '@/services/employeeScheduleService';
 import { sendPushNotification, requestNotificationPermission } from '@/services/notificationService';
+import { getCachedSpecialDates } from '@/services/firestoreCacheService';
 import { 
   syncAttendanceNotificationSchedules, 
   checkAndTriggerScheduledAttendanceAlerts 
@@ -205,26 +206,26 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
     return () => unsub();
   }, [user]);
 
-  // 2. Listen to special dates (holidays / multipliers) (after auth)
+  const employeeScheduleRef = useRef<EmployeeWorkScheduleSettings | null>(employeeSchedule);
   useEffect(() => {
-    if (!user) return;
-    const q = query(collection(db, 'specialDates'));
-    const unsub = onSnapshot(
-      q,
-      (snapshot) => {
-        const dates: Record<string, any> = {};
-        snapshot.docs.forEach(d => {
-          const data = d.data();
-          if (data.date) dates[data.date] = data;
-        });
-        setSpecialDates(dates);
-      },
-      (err) => {
-        console.warn('Error listening to specialDates', err);
-      }
-    );
-    return () => unsub();
-  }, [user]);
+    employeeScheduleRef.current = employeeSchedule;
+  }, [employeeSchedule]);
+
+  // 2. Load special dates via shared 30-minute TTL cache (instead of global real-time listener)
+  useEffect(() => {
+    if (!user?.uid) return;
+    let cancelled = false;
+    getCachedSpecialDates()
+      .then((dates) => {
+        if (!cancelled) setSpecialDates(dates);
+      })
+      .catch((err) => {
+        console.warn('Error loading specialDates cache', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid]);
 
   // 3. Listen to today's attendance record for current user
   useEffect(() => {
@@ -240,17 +241,17 @@ export const AutoAttendanceProvider: React.FC<{ children: React.ReactNode }> = (
         const att = { id: snap.id, ...snap.data() } as Attendance;
         setTodayAttendance(att);
         // Sync push notification schedules whenever today's attendance changes
-        syncAttendanceNotificationSchedules(att, employeeSchedule).catch(() => {});
+        syncAttendanceNotificationSchedules(att, employeeScheduleRef.current).catch(() => {});
       } else {
         setTodayAttendance(null);
-        syncAttendanceNotificationSchedules(null, employeeSchedule).catch(() => {});
+        syncAttendanceNotificationSchedules(null, employeeScheduleRef.current).catch(() => {});
       }
     }, (err) => {
       console.warn('Error listening to today attendance', err);
     });
 
     return () => unsub();
-  }, [profile?.uid, employeeSchedule]);
+  }, [profile?.uid]);
 
   // 4. Update distance whenever currentLocation or locationSettings change
   useEffect(() => {

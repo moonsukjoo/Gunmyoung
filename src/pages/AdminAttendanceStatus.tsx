@@ -4,6 +4,7 @@ import { useAuth } from '@/components/AuthProvider';
 import PCAdminLayout from '@/components/PCAdminLayout';
 import { db, handleFirestoreError, OperationType } from '@/firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { getCachedUsers } from '@/services/firestoreCacheService';
 import { UserProfile, Attendance, AttendanceLog } from '@/types';
 import { format, subDays } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -105,13 +106,16 @@ export const AdminAttendanceStatus: React.FC = () => {
       setTimeZone(format(new Date(), 'yyyy-MM-dd HH:mm:ss'));
     }, 1000);
 
-    // 1. Fetch raw active rosters
-    const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
-      const roster = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
-      setUsers(roster);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'users');
-    });
+    let cancelled = false;
+
+    // 1. Fetch rosters from shared cache (avoid live users fan-out reads)
+    getCachedUsers()
+      .then((roster) => {
+        if (!cancelled) setUsers(roster);
+      })
+      .catch((error) => {
+        handleFirestoreError(error, OperationType.LIST, 'users');
+      });
 
     // 2. Stream standard check-in attendance lists
     const attQ = query(collection(db, 'attendance'), where('date', '==', todayStr));
@@ -125,8 +129,8 @@ export const AdminAttendanceStatus: React.FC = () => {
     });
 
     return () => {
+      cancelled = true;
       clearInterval(timer);
-      unsubUsers();
       unsubAtt();
     };
   }, [todayStr]);

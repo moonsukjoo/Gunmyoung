@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db, handleFirestoreError, OperationType } from '@/firebase';
-import { collection, onSnapshot, addDoc, query, orderBy, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, query, orderBy, getDocs, deleteDoc, doc, limit } from 'firebase/firestore';
+import { getCachedActiveUsers, invalidateAccidentsCache } from '@/services/firestoreCacheService';
 import { AccidentCase } from '@/types';
 import { useAuth } from '@/components/AuthProvider';
 import { Card, CardContent } from '@/components/ui/card';
@@ -58,7 +59,7 @@ export const AccidentReport: React.FC = () => {
 
   useEffect(() => {
     const minLoadTime = new Promise(resolve => setTimeout(resolve, 800));
-    const q = query(collection(db, 'accidentCases'), orderBy('date', 'desc'));
+    const q = query(collection(db, 'accidentCases'), orderBy('date', 'desc'), limit(50));
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       setCases(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AccidentCase)));
       await minLoadTime;
@@ -84,11 +85,13 @@ export const AccidentReport: React.FC = () => {
         createdAt: new Date().toISOString()
       });
 
+      invalidateAccidentsCache();
+
       if (newCase.severity === 'HIGH' || newCase.severity === 'CRITICAL' || newCase.shouldNotify) {
-        const usersSnap = await getDocs(collection(db, 'users'));
-        const notificationPromises = usersSnap.docs.map(uDoc => 
+        const activeUsers = await getCachedActiveUsers();
+        const notificationPromises = activeUsers.map(u => 
           addDoc(collection(db, 'notifications'), {
-            uid: uDoc.id,
+            uid: u.uid,
             title: `🚨 [사고즉보] ${newCase.title}`,
             message: `[${newCase.location}] ${newCase.description.substring(0, 50)}...`,
             type: 'EMERGENCY',
@@ -124,6 +127,7 @@ export const AccidentReport: React.FC = () => {
   const handleDeleteCase = async (id: string) => {
     try {
       await deleteDoc(doc(db, 'accidentCases', id));
+      invalidateAccidentsCache();
       toast.success('사고 사례가 삭제되었습니다.');
       setIsDeleteOpen(false);
       setCaseToDelete(null);

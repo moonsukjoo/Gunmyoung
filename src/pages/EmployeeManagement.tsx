@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { db, handleFirestoreError, OperationType } from '@/firebase';
 import { collection, onSnapshot, updateDoc, doc, addDoc, deleteDoc, query, orderBy, increment, writeBatch, getDocs } from 'firebase/firestore';
+import { invalidateDepartmentsCache, invalidateJobRolesCache, invalidateUsersCache } from '@/services/firestoreCacheService';
 import { UserProfile, Role, Department, PraiseCoupon, JobRole, UserStatus } from '@/types';
 import { useAuth } from '@/components/AuthProvider';
 import { 
@@ -190,11 +191,11 @@ export const EmployeeManagement: React.FC = () => {
       unsubscribePositions();
       unsubscribeWorkplaces();
     };
-  }, [profile]);
+  }, [profile?.uid]);
 
   // One-time safe background check for default workplaces and user workplace migration
   useEffect(() => {
-    if (!profile) return;
+    if (!profile?.uid) return;
 
     const isHR = (
       ['CEO', 'DIRECTOR', 'GENERAL_AFFAIRS', 'GENERAL_MANAGER', 'CLERK'].includes(profile.role) || 
@@ -202,6 +203,13 @@ export const EmployeeManagement: React.FC = () => {
       profile.email === 'tjrwnfjqm1@gmail.com'
     );
     if (!isHR) return;
+
+    const SESSION_KEY = 'emp_workplace_migrated_v1';
+    try {
+      if (sessionStorage.getItem(SESSION_KEY) === '1') return;
+    } catch {
+      // ignore storage errors
+    }
 
     const performSeedingAndMigration = async () => {
       try {
@@ -241,7 +249,13 @@ export const EmployeeManagement: React.FC = () => {
 
         if (migratedCount > 0) {
           await batch.commit();
+          invalidateUsersCache();
           toast.success(`기존 사원 ${migratedCount}명의 사업장을 '함정선체생산부'로 일괄 지정했습니다.`);
+        }
+        try {
+          sessionStorage.setItem(SESSION_KEY, '1');
+        } catch {
+          // ignore
         }
       } catch (err) {
         console.warn("Auto-seeding or migration failed in background:", err);
@@ -249,11 +263,12 @@ export const EmployeeManagement: React.FC = () => {
     };
 
     performSeedingAndMigration();
-  }, [profile]);
+  }, [profile?.uid]);
 
   const handleRoleChange = async (uid: string, newRole: Role) => {
     try {
       await updateDoc(doc(db, 'users', uid), { role: newRole });
+      invalidateUsersCache();
       const user = users.find(u => u.uid === uid);
       toast.success('권한 변경 완료', {
         description: `${user?.displayName}님의 권한을 '${ROLE_LABELS[newRole]}'로 변경했습니다.`

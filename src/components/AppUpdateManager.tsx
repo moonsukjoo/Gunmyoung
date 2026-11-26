@@ -210,11 +210,16 @@ export const AppUpdateManager: React.FC = () => {
     };
   }, [settings, evaluateUpdateStatus]);
 
-  // Re-check gently when user returns to the app/tab
+  const lastFocusEvalRef = useRef<number>(0);
+
+  // Re-check gently when user returns to the app/tab (throttled to min 5 min intervals)
   useEffect(() => {
     const handleFocusOrVisible = () => {
       if (document.visibilityState && document.visibilityState !== 'visible') return;
       if (settings && settings.autoCheckEnabled === false) return;
+      const now = Date.now();
+      if (now - lastFocusEvalRef.current < 5 * 60 * 1000) return;
+      lastFocusEvalRef.current = now;
       evaluateUpdateStatus(settings, { forceRemote: false });
     };
 

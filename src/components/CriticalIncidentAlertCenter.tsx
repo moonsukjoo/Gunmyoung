@@ -59,10 +59,10 @@ export const CriticalIncidentAlertCenter: React.FC = () => {
   const [historySearchTerm, setHistorySearchTerm] = useState('');
 
   // Soni-siren or audio alert for supervisors when pending alerts appear
-  const [audioPlayed, setAudioPlayed] = useState(false);
+  const audioPlayedRef = React.useRef(false);
 
   // Check if current user is an authorized superior/manager
-  const isSupervisor = profile && [
+  const isSupervisor = !!(profile && [
     'CEO', 
     'DIRECTOR', 
     'GENERAL_MANAGER', 
@@ -71,16 +71,17 @@ export const CriticalIncidentAlertCenter: React.FC = () => {
     'GROUP_LEADER', 
     'GENERAL_AFFAIRS', 
     'CLERK'
-  ].includes(profile.role);
+  ].includes(profile.role));
 
   // 1. Listen for PENDING critical incidents in real-time
   useEffect(() => {
-    if (!profile || !isSupervisor) return;
+    if (!profile?.uid || !isSupervisor) return;
 
     const q = query(
       collection(db, 'criticalIncidents'),
       where('status', '==', 'PENDING'),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
+      limit(30)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -94,18 +95,18 @@ export const CriticalIncidentAlertCenter: React.FC = () => {
       setPendingIncidents(incidentsList);
 
       // Play alert sound if new pending incident arrives and not yet played
-      if (incidentsList.length > 0 && !audioPlayed) {
+      if (incidentsList.length > 0 && !audioPlayedRef.current) {
         playBeepAlert();
-        setAudioPlayed(true);
+        audioPlayedRef.current = true;
       } else if (incidentsList.length === 0) {
-        setAudioPlayed(false);
+        audioPlayedRef.current = false;
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'criticalIncidents');
     });
 
     return () => unsubscribe();
-  }, [profile, isSupervisor, audioPlayed]);
+  }, [profile?.uid, isSupervisor]);
 
   // Play synthetic soft alarm sound to capture supervisor's attention
   const playBeepAlert = () => {

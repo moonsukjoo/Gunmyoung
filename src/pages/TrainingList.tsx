@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '@/firebase';
-import { collection, onSnapshot, query, where, addDoc, setDoc, doc, getDoc, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, addDoc, setDoc, doc, getDoc, getDocs, limit } from 'firebase/firestore';
 import { Training, TrainingResult, QuizQuestion, StatutorySession, StatutoryCompletion } from '@/types';
 import { useAuth } from '@/components/AuthProvider';
+import { getCachedAllTrainings, getCachedStatutorySessions } from '@/services/firestoreCacheService';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -198,46 +199,52 @@ export const TrainingList: React.FC = () => {
 
   // Sync Listeners
   useEffect(() => {
-    if (!profile) return;
-    
-    // 1. Regular job trainings list
-    const unsubscribeT = onSnapshot(collection(db, 'trainings'), (snap) => {
-      const all = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Training));
-      const filtered = all.filter(t => 
-        (t.status === 'PUBLISHED' || !t.status) && 
-        (!t.targetJobRole || t.targetJobRole === profile.jobRole || t.targetJobRole === 'ALL')
-      );
-      setTrainings(filtered);
-    }, (error) => console.error("Trainings listener error:", error));
+    if (!profile?.uid) return;
+    let cancelled = false;
 
-    const qResults = query(collection(db, 'trainingResults'), where('uid', '==', profile.uid));
+    // 1. Regular job trainings list (cached 10 min)
+    getCachedAllTrainings()
+      .then((all) => {
+        if (cancelled) return;
+        const filtered = all.filter(t => 
+          (t.status === 'PUBLISHED' || !t.status) && 
+          (!t.targetJobRole || t.targetJobRole === profile.jobRole || t.targetJobRole === 'ALL')
+        );
+        setTrainings(filtered);
+      })
+      .catch((error) => console.error("Trainings fetch error:", error));
+
+    const qResults = query(collection(db, 'trainingResults'), where('uid', '==', profile.uid), limit(100));
     const unsubscribeR = onSnapshot(qResults, (snap) => {
       setResults(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as TrainingResult)));
     }, (error) => console.error("Training results listener error:", error));
 
-    // 2. Statutory safety sessions
-    const unsubStatSessions = onSnapshot(collection(db, 'statutorySessions'), (snap) => {
-      const all = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as StatutorySession));
-      setStatutorySessions(all);
-    }, (err) => console.error("Statutory sessions listener error:", err));
+    // 2. Statutory safety sessions (cached 10 min)
+    getCachedStatutorySessions()
+      .then((all) => {
+        if (!cancelled) setStatutorySessions(all);
+      })
+      .catch((err) => console.error("Statutory sessions fetch error:", err));
 
     // 3. Statutory completions for current user
-    const qComps = query(collection(db, 'statutoryCompletions'), where('uid', '==', profile.uid));
+    const qComps = query(collection(db, 'statutoryCompletions'), where('uid', '==', profile.uid), limit(100));
     const unsubStatCompletions = onSnapshot(qComps, (snap) => {
       setStatutoryCompletions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as StatutoryCompletion)));
     }, (err) => console.error("Statutory completions listener error:", err));
 
     return () => { 
-      unsubscribeT(); 
+      cancelled = true;
       unsubscribeR(); 
-      unsubStatSessions();
       unsubStatCompletions();
     };
-  }, [profile]);
+  }, [profile?.uid, profile?.jobRole]);
 
-  // Seeding default statutory templates
+  // Seeding default statutory templates (checked at most once per browser storage)
   useEffect(() => {
-    if (!profile) return;
+    if (!profile?.uid) return;
+    try {
+      if (localStorage.getItem('statutory_seeding_checked_v1') === '1') return;
+    } catch {}
 
     const seedStatutorySessions = async () => {
       try {
@@ -246,12 +253,14 @@ export const TrainingList: React.FC = () => {
         
         // If already marked as seeded in Firestore, do not run template seeding
         if (seedSnap.exists() && seedSnap.data()?.seeded) {
+          try { localStorage.setItem('statutory_seeding_checked_v1', '1'); } catch {}
           return;
         }
 
         // Additional safeguard: if sessions already exist in DB, mark as seeded and skip
-        const existingSnap = await getDocs(collection(db, 'statutorySessions'));
+        const existingSnap = await getDocs(query(collection(db, 'statutorySessions'), limit(1)));
         if (!existingSnap.empty) {
+          try { localStorage.setItem('statutory_seeding_checked_v1', '1'); } catch {}
           try {
             await setDoc(seedRef, { seeded: true, timestamp: new Date().toISOString() });
           } catch (writeErr) {

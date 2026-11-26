@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { collection, query, getDocs, orderBy, limit, addDoc, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { getCachedUsers } from '../services/firestoreCacheService';
 import PCAdminLayout from '../components/PCAdminLayout';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -57,8 +58,7 @@ const PCAdminNotifications: React.FC = () => {
 
   const fetchSystemEntities = async () => {
     try {
-      const snap = await getDocs(collection(db, 'users'));
-      let list: any[] = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+      let list: any[] = await getCachedUsers();
       
       if (list.length === 0) {
         list = [

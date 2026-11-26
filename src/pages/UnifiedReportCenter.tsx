@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { getCachedDepartments, getCachedUsers } from '../services/firestoreCacheService';
 import { 
   FileBox, 
   Search, 
@@ -49,11 +50,7 @@ const UnifiedReportCenter: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const fetchDepts = async () => {
-      const snap = await getDocs(collection(db, 'departments'));
-      setDepartments(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    };
-    fetchDepts();
+    getCachedDepartments().then(setDepartments).catch(() => {});
   }, []);
 
   const handleExport = async (formatType: 'EXCEL' | 'PDF') => {
@@ -126,9 +123,8 @@ const UnifiedReportCenter: React.FC = () => {
       if (reportType === 'EVACUATION') {
         const fullEvacuationData: any[] = [];
         
-        // Fetch all users to know who is unconfirmed
-        const usersSnap = await getDocs(collection(db, 'users'));
-        const allUsers = usersSnap.docs.map(doc => doc.data());
+        // Fetch all users via shared cache to know who is unconfirmed
+        const allUsers = await getCachedUsers();
 
         // Sort events by date descending
         const sortedEvents = [...events].sort((a,b) => (b.activatedAt || b.createdAt || '').localeCompare(a.activatedAt || a.createdAt || ''));

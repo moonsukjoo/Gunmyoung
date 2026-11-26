@@ -212,12 +212,19 @@ export default function MobileStatutoryTraining() {
 
   // Sync data from Firestore
   useEffect(() => {
-    const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
-      setUsers(snap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
-      setLoading(false);
-    }, (error) => {
-      console.error("unsubUsers onSnapshot error: ", error);
-    });
+    let cancelled = false;
+    import('@/services/firestoreCacheService')
+      .then(({ getCachedUsers }) => getCachedUsers())
+      .then((list) => {
+        if (!cancelled) {
+          setUsers(list);
+          setLoading(false);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) setLoading(false);
+        console.error("getCachedUsers error: ", error);
+      });
 
     const unsubSessions = onSnapshot(collection(db, 'statutorySessions'), (snap) => {
       setStatutorySessions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as StatutorySession)));
@@ -245,7 +252,7 @@ export default function MobileStatutoryTraining() {
     });
 
     return () => {
-      unsubUsers();
+      cancelled = true;
       unsubSessions();
       unsubCompletions();
       unsubCats();

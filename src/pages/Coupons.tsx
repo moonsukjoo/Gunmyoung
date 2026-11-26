@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { db } from '@/firebase';
-import { collection, query, onSnapshot, addDoc, updateDoc, doc, increment } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, updateDoc, doc, increment, where, orderBy, limit } from 'firebase/firestore';
 import { UserProfile, PraiseCoupon } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -74,7 +74,7 @@ export const Coupons: React.FC = () => {
   }, [couponHistory, selectedMonth]);
 
   useEffect(() => {
-    if (!profile) return;
+    if (!profile?.uid) return;
     
     const isAuth = profile.role === 'CEO' || 
                    profile.role === 'SAFETY_MANAGER' || 
@@ -82,19 +82,25 @@ export const Coupons: React.FC = () => {
                    profile.email === 'tjrwnfjqm1@gmail.com';
     setIsAuthorizedToGive(isAuth);
     
-    const unsubscribeUsers = onSnapshot(
-      collection(db, 'users'), 
-      (snapshot) => {
-        setUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
-      },
-      (error) => {
-        console.error("Users list sync error:", error);
-        toast.error("사원 정보를 불러올 수 없습니다. 연결 상태를 확인해주세요.");
-      }
-    );
+    let cancelled = false;
+    if (isAuth) {
+      import('@/services/firestoreCacheService')
+        .then(({ getCachedUsers }) => getCachedUsers())
+        .then((list) => {
+          if (!cancelled) setUsers(list);
+        })
+        .catch((error) => {
+          console.error("Users list sync error:", error);
+          toast.error("사원 정보를 불러올 수 없습니다. 연결 상태를 확인해주세요.");
+        });
+    }
+
+    const couponsQuery = isAuth
+      ? query(collection(db, 'praiseCoupons'), orderBy('createdAt', 'desc'), limit(200))
+      : query(collection(db, 'praiseCoupons'), where('receiverUid', '==', profile.uid), limit(50));
 
     const unsubscribeHistory = onSnapshot(
-      collection(db, 'praiseCoupons'), 
+      couponsQuery, 
       (snapshot) => {
         const history = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as PraiseCoupon));
         setCouponHistory(history.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
@@ -108,10 +114,10 @@ export const Coupons: React.FC = () => {
     );
 
     return () => {
-      unsubscribeUsers();
+      cancelled = true;
       unsubscribeHistory();
     };
-  }, [profile]);
+  }, [profile?.uid, profile?.role, profile?.email]);
 
   const exportCouponsToExcel = () => {
     try {

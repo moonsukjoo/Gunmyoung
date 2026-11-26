@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, query, getDocs, setDoc, doc, deleteDoc, where } from 'firebase/firestore';
 import { db } from '../firebase';
+import { getCachedUsers } from '../services/firestoreCacheService';
 import { Payslip, PayslipExtraItem, UserProfile } from '../types';
 import { read, utils, write } from 'xlsx';
 import { 
@@ -134,13 +135,7 @@ const PayslipManagement: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
-      const q = query(collection(db, 'users'));
-      const snapshot = await getDocs(q);
-      const list: UserProfile[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data() as UserProfile;
-        list.push({ ...data, uid: docSnap.id });
-      });
+      const list = await getCachedUsers();
       setAllUsers(list);
     } catch (error) {
       console.error('Error fetching users:', error);

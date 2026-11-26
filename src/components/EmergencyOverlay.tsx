@@ -84,7 +84,7 @@ export const EmergencyOverlay: React.FC = () => {
   }, [user, status?.isActive]);
 
   useEffect(() => {
-    if (status?.isActive && profile) {
+    if (status?.isActive && profile?.uid) {
       const checkinRef = doc(db, 'evacuations', status.id, 'checkins', profile.uid);
       const unsubscribeAuto = onSnapshot(checkinRef, (snap) => {
         setHasConfirmed(snap.exists());
@@ -99,7 +99,7 @@ export const EmergencyOverlay: React.FC = () => {
       setHasConfirmed(false);
       setShowStats(false);
     }
-  }, [status?.isActive, status?.id, profile]);
+  }, [status?.isActive, status?.id, profile?.uid]);
 
   const handleConfirmSafety = async () => {
     if (!profile || !status?.isActive || hasConfirmed) return;

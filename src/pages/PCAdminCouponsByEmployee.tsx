@@ -22,8 +22,9 @@ import {
   Coins,
   Save
 } from 'lucide-react';
-import { collection, query, getDocs, addDoc, updateDoc, deleteDoc, doc, increment, setDoc } from 'firebase/firestore';
+import { collection, query, getDocs, addDoc, updateDoc, deleteDoc, doc, increment, setDoc, orderBy, limit } from 'firebase/firestore';
 import { db } from '../firebase';
+import { getCachedUsers } from '../services/firestoreCacheService';
 import { useAuth } from '../components/AuthProvider';
 import { UserProfile, PraiseCoupon } from '../types';
 import PCAdminLayout from '../components/PCAdminLayout';
@@ -85,11 +86,12 @@ const PCAdminCouponsByEmployee: React.FC = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const usersSnap = await getDocs(collection(db, 'users'));
-      const usersList = usersSnap.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile));
+      const [usersList, couponsSnap] = await Promise.all([
+        getCachedUsers(),
+        getDocs(query(collection(db, 'praiseCoupons'), orderBy('createdAt', 'desc'), limit(300))),
+      ]);
       setUsers(usersList);
 
-      const couponsSnap = await getDocs(collection(db, 'praiseCoupons'));
       const couponsList = couponsSnap.docs.map(d => ({ ...d.data(), id: d.id } as PraiseCoupon));
       setCoupons(couponsList);
 

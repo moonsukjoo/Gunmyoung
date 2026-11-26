@@ -62,7 +62,7 @@ import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { updatePassword, signOut } from 'firebase/auth';
 import { auth, db, handleFirestoreError, OperationType } from '@/firebase';
-import { doc, updateDoc, collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { doc, updateDoc, collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { TrainingResult } from '@/types';
 import { format } from 'date-fns';
@@ -165,24 +165,31 @@ export const MyPage: React.FC = () => {
   };
 
   React.useEffect(() => {
-    if (!profile) return;
+    if (!profile?.uid) return;
+    let unsubscribeCheckin: (() => void) | null = null;
     const unsubStatus = onSnapshot(doc(db, 'evacuation', 'status'), (snap) => {
+      if (unsubscribeCheckin) {
+        unsubscribeCheckin();
+        unsubscribeCheckin = null;
+      }
       if (snap.exists()) {
         const data = snap.data();
         setEvacuationStatus(data);
         if (data.isActive) {
           const checkinRef = doc(db, 'evacuations', data.id, 'checkins', profile.uid);
-          const unsubscribeCheckin = onSnapshot(checkinRef, (checkSnap) => {
+          unsubscribeCheckin = onSnapshot(checkinRef, (checkSnap) => {
             setHasConfirmed(checkSnap.exists());
           }, (error) => handleFirestoreError(error, OperationType.GET, `evacuations/${data.id}/checkins/${profile.uid}`));
-          return () => unsubscribeCheckin();
         }
       } else {
         setEvacuationStatus(null);
       }
     }, (error) => handleFirestoreError(error, OperationType.GET, 'evacuation/status'));
-    return () => unsubStatus();
-  }, [profile]);
+    return () => {
+      unsubStatus();
+      if (unsubscribeCheckin) unsubscribeCheckin();
+    };
+  }, [profile?.uid]);
 
   const checkPermission = async () => {
     const capacitor = (window as any).Capacitor;
@@ -233,29 +240,20 @@ export const MyPage: React.FC = () => {
   };
 
   React.useEffect(() => {
-    if (!profile) return;
+    if (!profile?.uid) return;
     const q = query(
       collection(db, 'trainingResults'), 
       where('uid', '==', profile.uid),
-      orderBy('completedAt', 'desc')
+      orderBy('completedAt', 'desc'),
+      limit(50)
     );
     const unsubscribe = onSnapshot(q, (snap) => {
-      setExamHistory(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as TrainingResult)));
+      const myRows = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as TrainingResult));
+      setExamHistory(myRows);
+      setAllResults(myRows);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'trainingResults_history'));
     return () => unsubscribe();
-  }, [profile]);
-
-  React.useEffect(() => {
-    const q = query(
-      collection(db, 'trainingResults'), 
-      orderBy('score', 'desc'),
-      orderBy('completedAt', 'asc')
-    );
-    const unsubscribe = onSnapshot(q, (snap) => {
-      setAllResults(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as TrainingResult)));
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'trainingResults_all'));
-    return () => unsubscribe();
-  }, []);
+  }, [profile?.uid]);
 
   const getRanking = (resId: string, trainingId: string) => {
     const trainingResults = allResults.filter(r => r.trainingId === trainingId);

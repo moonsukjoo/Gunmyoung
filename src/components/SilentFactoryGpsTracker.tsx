@@ -1,9 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
-import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { db } from '../firebase';
 import { useAuth } from './AuthProvider';
 import { getAveragedGpsPosition } from '../lib/geolocationHelper';
 import {
@@ -11,6 +9,7 @@ import {
   requestNativeBackgroundPermissions,
   syncNativeBackgroundGpsConfig
 } from '../lib/nativeBgGpsBridge';
+import { getCachedFactoryJigsAndCalibration } from '../services/firestoreCacheService';
 import {
   DEFAULT_FACTORY_JIGS,
   FACTORY_CALIBRATION_DOC_ID,
@@ -20,7 +19,6 @@ import {
   recordWorkerScheduledSlotGps,
   resolveWorkerAssignedJigId
 } from '../services/factoryTrackingService';
-import { FactoryBoundaryCalibration, FactoryJig } from '../types';
 
 const getSlotLockKey = (uid: string, dateStr: string, slot: string) =>
   `factory_gps_slot_done_${uid}_${dateStr}_${slot}`;
@@ -73,21 +71,11 @@ export const SilentFactoryGpsTracker: React.FC = () => {
 
     const syncNativeSchedule = async () => {
       try {
-        const [calSnap, jigsSnap] = await Promise.all([
-          getDoc(doc(db, 'factoryCalibration', FACTORY_CALIBRATION_DOC_ID)).catch(() => null),
-          getDocs(collection(db, 'factoryJigs')).catch(() => null)
-        ]);
+        const { calibration, jigs } = await getCachedFactoryJigsAndCalibration(
+          FACTORY_CALIBRATION_DOC_ID,
+          DEFAULT_FACTORY_JIGS
+        );
         if (cancelled) return;
-
-        const calibration = calSnap?.exists()
-          ? (calSnap.data() as FactoryBoundaryCalibration)
-          : null;
-        const jigs: FactoryJig[] =
-          jigsSnap && !jigsSnap.empty
-            ? jigsSnap.docs
-                .map(d => ({ ...d.data() } as FactoryJig))
-                .sort((a, b) => a.jigNumber - b.jigNumber)
-            : DEFAULT_FACTORY_JIGS;
 
         const assignedJigId = resolveWorkerAssignedJigId(
           {
@@ -297,7 +285,16 @@ export const SilentFactoryGpsTracker: React.FC = () => {
         capAppListener.remove();
       }
     };
-  }, [user, profile, isCEO]);
+  }, [
+    user?.uid,
+    profile?.uid,
+    profile?.displayName,
+    profile?.employeeId,
+    profile?.departmentName,
+    profile?.jobRole,
+    profile?.assignedJigId,
+    isCEO
+  ]);
 
   return null;
 };

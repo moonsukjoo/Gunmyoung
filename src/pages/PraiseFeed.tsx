@@ -49,6 +49,11 @@ import { cn } from '@/lib/utils';
 import confetti from 'canvas-confetti';
 import { MarineSubpageHero } from '@/components/MarineSubpageHero';
 import { Icon3DPraise } from '@/components/icons/Marine3DIcons';
+import {
+  getCachedActiveUsers,
+  getCachedMonthlyPraiseKings,
+  invalidateUsersCache,
+} from '@/services/firestoreCacheService';
 
 const RankingSection: React.FC<{
   rankings: UserProfile[];
@@ -158,7 +163,8 @@ const CommentSection: React.FC<{
 
     const q = query(
       collection(db, 'praises', praiseId, 'comments'),
-      orderBy('createdAt', 'asc')
+      orderBy('createdAt', 'asc'),
+      limit(50)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -324,46 +330,32 @@ export const PraiseFeed: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // Ranking listener (Top 3 monthly)
+    let cancelled = false;
     const currentMonth = format(new Date(), 'yyyy-MM');
-    const rankingQ = query(
-      collection(db, 'users'),
-      where('isActive', '==', true),
-      where('kudosMonth', '==', currentMonth)
-    );
+    getCachedMonthlyPraiseKings(currentMonth, 3)
+      .then((top3) => {
+        if (!cancelled) setRankings(top3);
+      })
+      .catch((error) => handleFirestoreError(error, OperationType.LIST, 'users_rankings'));
 
-    const unsubscribe = onSnapshot(rankingQ, (snapshot) => {
-      const top3 = snapshot.docs
-        .map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile))
-        .filter(u => (u.monthlyKudosCount || 0) > 0)
-        .sort((a, b) => (b.monthlyKudosCount || 0) - (a.monthlyKudosCount || 0))
-        .slice(0, 3);
-      setRankings(top3);
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'users_rankings'));
-
-    return () => unsubscribe();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
-    // Fetch all active users once to allow fast searching
-    const fetchAllUsers = async () => {
-      try {
-        const q = query(
-          collection(db, 'users'),
-          where('isActive', '==', true),
-          limit(200) // Support up to 200 users for local search
-        );
-        const snap = await getDocs(q);
-        const users = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
-        setAllUsers(users);
-      } catch (err) {
+    if (!isWriteOpen) return;
+    let cancelled = false;
+    getCachedActiveUsers()
+      .then((users) => {
+        if (!cancelled) setAllUsers(users);
+      })
+      .catch((err) => {
         console.error("Fetch users error:", err);
-      }
+      });
+    return () => {
+      cancelled = true;
     };
-
-    if (isWriteOpen) {
-      fetchAllUsers();
-    }
   }, [isWriteOpen]);
 
   useEffect(() => {
@@ -452,6 +444,8 @@ export const PraiseFeed: React.FC = () => {
         origin: { y: 0.6 }
       });
 
+      invalidateUsersCache();
+      getCachedMonthlyPraiseKings(currentMonth, 3, true).then(setRankings).catch(() => {});
       toast.success('칭찬이 전달되었습니다!');
       setIsWriteOpen(false);
       setSelectedUser(null);

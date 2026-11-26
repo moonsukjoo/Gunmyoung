@@ -1,5 +1,10 @@
 import { collection, doc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, orderBy, getDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
+import {
+  getCachedFactoryJigsAndCalibration,
+  getCachedActiveUsers,
+  invalidateFactoryTrackingCache,
+} from './firestoreCacheService';
 import { 
   FactoryJig, 
   FactoryGpsRecord, 
@@ -486,6 +491,7 @@ export const fetchFactoryJigs = async (): Promise<FactoryJig[]> => {
 export const updateFactoryJig = async (jigId: string, updates: Partial<FactoryJig>): Promise<void> => {
   try {
     await setDoc(doc(db, 'factoryJigs', jigId), updates, { merge: true });
+    invalidateFactoryTrackingCache();
   } catch (err) {
     console.error('Error updating jig:', err);
     handleFirestoreError(err, OperationType.UPDATE, `factoryJigs/${jigId}`);
@@ -497,6 +503,7 @@ export const updateFactoryJig = async (jigId: string, updates: Partial<FactoryJi
 export const deleteFactoryJig = async (jigId: string): Promise<void> => {
   try {
     await deleteDoc(doc(db, 'factoryJigs', jigId));
+    invalidateFactoryTrackingCache();
   } catch (err) {
     console.error('Error deleting jig:', err);
     handleFirestoreError(err, OperationType.DELETE, `factoryJigs/${jigId}`);
@@ -1650,6 +1657,7 @@ export const saveFactoryCalibration = async (calibration: FactoryBoundaryCalibra
       calibration,
       { merge: true }
     );
+    invalidateFactoryTrackingCache();
   } catch (err) {
     console.error('Error saving factory calibration:', err);
     handleFirestoreError(err, OperationType.WRITE, `factoryCalibration/${FACTORY_CALIBRATION_DOC_ID}`);
@@ -1991,18 +1999,8 @@ export const recordWorkerScheduledSlotGps = async (params: {
   sampleCount: number;
   spreadMeters: number;
 }): Promise<FactoryGpsRecord> => {
-  const [fetchedJigs, fetchedCalibration] = await Promise.all([
-    (async () => {
-      try {
-        const snap = await getDocs(collection(db, 'factoryJigs'));
-        if (snap.empty) return DEFAULT_FACTORY_JIGS;
-        return snap.docs.map(d => ({ ...d.data() } as FactoryJig)).sort((a, b) => a.jigNumber - b.jigNumber);
-      } catch {
-        return DEFAULT_FACTORY_JIGS;
-      }
-    })(),
-    fetchFactoryCalibration()
-  ]);
+  const { jigs: fetchedJigs, calibration: fetchedCalibration } =
+    await getCachedFactoryJigsAndCalibration(FACTORY_CALIBRATION_DOC_ID, DEFAULT_FACTORY_JIGS);
 
   const effectiveJigs = reconcileJigsWithCalibration(
     fetchedJigs.length > 0 ? fetchedJigs : DEFAULT_FACTORY_JIGS,
@@ -2062,18 +2060,16 @@ export const recordWorkerScheduledSlotGps = async (params: {
 
 export const fetchActiveWorkersRoster = async (): Promise<BlockAssignedWorker[]> => {
   try {
-    const snap = await getDocs(collection(db, 'users'));
+    const activeUsers = await getCachedActiveUsers();
     const list: BlockAssignedWorker[] = [];
-    snap.docs.forEach(d => {
-      const u = d.data() as Partial<UserProfile>;
-      if (u.isActive === false || u.status === 'RETIRED') return;
+    activeUsers.forEach(u => {
       if (u.role === 'CEO' || u.email?.toLowerCase() === 'tjrwnfjqm1@gmail.com') return;
-      const uid = u.uid || d.id;
+      const uid = u.uid;
       if (!uid || !u.displayName) return;
       list.push({
         uid,
         displayName: u.displayName,
-        employeeId: u.employeeId || d.id.slice(0, 6),
+        employeeId: u.employeeId || uid.slice(0, 6),
         teamName: u.departmentName || '미지정팀',
         jobRole: u.jobRole || u.position || '작업자'
       });

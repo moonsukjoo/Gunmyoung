@@ -8,9 +8,11 @@ import {
   updateDoc, 
   deleteDoc, 
   addDoc, 
-  getDoc 
+  getDoc,
+  limit 
 } from 'firebase/firestore';
 import { db } from '../firebase';
+import { getCachedDepartments, getCachedUsers, invalidateUsersCache } from '../services/firestoreCacheService';
 import PCAdminLayout from '../components/PCAdminLayout';
 import { useAuth } from '../components/AuthProvider';
 import { UserProfile, SafetyScoreLog, Department } from '../types';
@@ -102,30 +104,32 @@ export const PCAdminSafety: React.FC = () => {
   const [editLogPhotoUrl, setEditLogPhotoUrl] = useState('');
   const [rollbackScoreOnDelete, setRollbackScoreOnDelete] = useState(true);
 
-  // Real-time Firestore subscriptions
+  // Cached directory reads + bounded real-time safetyScoreLogs
   useEffect(() => {
-    const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
-      setUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile)));
-      setLoading(false);
-    }, (err) => {
-      console.error('Failed to load users:', err);
-      toast.error('사용자 목록을 불러오지 못했습니다.');
-    });
+    let cancelled = false;
 
-    const unsubLogs = onSnapshot(query(collection(db, 'safetyScoreLogs'), orderBy('createdAt', 'desc')), (snap) => {
+    Promise.all([getCachedUsers(), getCachedDepartments()])
+      .then(([userList, deptList]) => {
+        if (cancelled) return;
+        setUsers(userList);
+        setDepartments(deptList);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error('Failed to load users/departments:', err);
+        if (!cancelled) setLoading(false);
+        toast.error('사용자 목록을 불러오지 못했습니다.');
+      });
+
+    const unsubLogs = onSnapshot(query(collection(db, 'safetyScoreLogs'), orderBy('createdAt', 'desc'), limit(300)), (snap) => {
       setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() } as SafetyScoreLog)));
     }, (err) => {
       console.error('Failed to load safetyScoreLogs:', err);
     });
 
-    const unsubDepts = onSnapshot(query(collection(db, 'departments'), orderBy('name')), (snap) => {
-      setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Department)));
-    });
-
     return () => {
-      unsubUsers();
+      cancelled = true;
       unsubLogs();
-      unsubDepts();
     };
   }, []);
 
@@ -292,6 +296,8 @@ export const PCAdminSafety: React.FC = () => {
         createdAt: new Date().toISOString()
       });
 
+      invalidateUsersCache();
+      setUsers(prev => prev.map(u => u.uid === targetUser.uid ? { ...u, safetyScore: newScore } : u));
       toast.success(`${targetUser.displayName} 님의 안전지수가 ${actualDelta > 0 ? `+${actualDelta}` : actualDelta}점 반영되었습니다.`);
       setIsNewAdjustmentOpen(false);
       setTargetUser(null);
@@ -339,6 +345,8 @@ export const PCAdminSafety: React.FC = () => {
         createdAt: new Date().toISOString()
       });
 
+      invalidateUsersCache();
+      setUsers(prev => prev.map(u => u.uid === targetUser.uid ? { ...u, safetyScore: newScoreNum } : u));
       toast.success(`${targetUser.displayName} 님의 안전지수가 ${newScoreNum}점으로 직접 수정되었습니다.`);
       setIsDirectEditOpen(false);
       setTargetUser(null);
@@ -382,6 +390,8 @@ export const PCAdminSafety: React.FC = () => {
           const currentScore = userSnap.data().safetyScore ?? 100;
           const adjustedScore = Math.max(0, currentScore + deltaDiff);
           await updateDoc(userRef, { safetyScore: adjustedScore });
+          invalidateUsersCache();
+          setUsers(prev => prev.map(u => u.uid === targetLog.targetUid ? { ...u, safetyScore: adjustedScore } : u));
         }
       }
 
@@ -428,6 +438,8 @@ export const PCAdminSafety: React.FC = () => {
           const currentScore = userSnap.data().safetyScore ?? 100;
           const revertedScore = Math.max(0, currentScore - targetLog.scoreDelta);
           await updateDoc(userRef, { safetyScore: revertedScore });
+          invalidateUsersCache();
+          setUsers(prev => prev.map(u => u.uid === targetLog.targetUid ? { ...u, safetyScore: revertedScore } : u));
         }
       }
 
